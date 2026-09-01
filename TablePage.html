@@ -1,0 +1,1316 @@
+<script>
+
+let currentServerView =
+  'active';
+
+function renderTablePage(
+  data
+) {
+
+  currentTableData =
+    data;
+
+
+  currentHeaders =
+    data.headers || [];
+
+
+  /*
+   * Servers always opens to Active.
+   */
+  if (
+    data.pageKey === 'servers' &&
+    data.serverViews
+  ) {
+
+    currentServerView =
+      'active';
+
+  }
+
+
+  const subtitle =
+    data.pageKey === 'servers' &&
+    data.serverViews
+      ? `${data.serverViews.active} active · ${data.serverViews.offline} offline`
+      : `${data.totalCount} records`;
+
+
+  setPageHeader(
+    data.label,
+    subtitle
+  );
+
+
+  renderTablePageActions(
+    data
+  );
+
+
+  const serverViewSelector =
+    data.pageKey === 'servers' &&
+    data.serverViews
+      ? `
+
+        <div
+          class="btn-group btn-group-sm me-2"
+          role="group"
+          aria-label="Server view"
+        >
+
+          <button
+            id="serverViewActive"
+            type="button"
+            class="btn btn-sheridan"
+            onclick="setServerView('active')"
+          >
+            <i class="fa-solid fa-circle-check me-1"></i>
+            Active
+            <span class="ms-1">
+              ${data.serverViews.active}
+            </span>
+          </button>
+
+
+          <button
+            id="serverViewOffline"
+            type="button"
+            class="btn btn-light border"
+            onclick="setServerView('offline')"
+          >
+            <i class="fa-solid fa-circle-xmark me-1"></i>
+            Offline
+            <span class="ms-1">
+              ${data.serverViews.offline}
+            </span>
+          </button>
+
+
+          <button
+            id="serverViewAll"
+            type="button"
+            class="btn btn-light border"
+            onclick="setServerView('all')"
+          >
+            All
+            <span class="ms-1">
+              ${data.serverViews.all}
+            </span>
+          </button>
+
+        </div>
+
+      `
+      : '';
+
+
+  document.getElementById(
+    'pageContent'
+  ).innerHTML = `
+
+    <div class="table-toolbar">
+
+      <div class="table-toolbar-left">
+
+        ${serverViewSelector}
+
+
+        <div class="input-group input-group-sm table-search">
+
+          <span class="input-group-text bg-white">
+
+            <i class="fa-solid fa-magnifying-glass"></i>
+
+          </span>
+
+          <input
+            id="tableSearch"
+            type="search"
+            class="form-control"
+            placeholder="Search records..."
+            oninput="applyTableSearch()"
+          >
+
+        </div>
+
+
+        <div class="dropdown">
+
+          <button
+            class="btn btn-sm btn-light border dropdown-toggle"
+            data-bs-toggle="dropdown"
+          >
+
+            <i class="fa-solid fa-table-columns me-2"></i>
+
+            Columns
+
+          </button>
+
+
+          <div
+            id="columnMenu"
+            class="dropdown-menu p-2 shadow"
+            style="
+              min-width:250px;
+              max-height:400px;
+              overflow:auto;
+            "
+          ></div>
+
+        </div>
+
+
+        <button
+          class="btn btn-sm btn-light border"
+          onclick="clearTableFilters()"
+        >
+
+          <i class="fa-solid fa-filter-circle-xmark me-2"></i>
+
+          Clear
+
+        </button>
+
+      </div>
+
+
+      <div class="table-toolbar-right">
+
+        <span
+          id="recordCount"
+          class="record-count"
+        >
+          ${data.pageKey === 'servers'
+            ? data.serverViews.active
+            : data.totalCount} records
+        </span>
+
+
+        <select
+          id="pageSizeSelect"
+          class="form-select form-select-sm"
+          style="width:80px;"
+          onchange="changePageSize(this.value)"
+        >
+
+          <option value="15">
+            15
+          </option>
+
+          <option
+            value="25"
+            selected
+          >
+            25
+          </option>
+
+          <option value="50">
+            50
+          </option>
+
+          <option value="100">
+            100
+          </option>
+
+        </select>
+
+      </div>
+
+    </div>
+
+
+    <div id="tabulatorTable"></div>
+
+  `;
+
+
+  buildTabulator(
+    data
+  );
+
+
+  if (
+    data.pageKey === 'servers' &&
+    data.serverViews
+  ) {
+
+    applyTableSearch();
+
+  }
+
+}
+
+function setServerView(
+  view
+) {
+
+  if (
+    ![
+      'active',
+      'offline',
+      'all'
+    ].includes(view)
+  ) {
+
+    return;
+
+  }
+
+
+  currentServerView =
+    view;
+
+
+  const activeButton =
+    document.getElementById(
+      'serverViewActive'
+    );
+
+
+  const offlineButton =
+    document.getElementById(
+      'serverViewOffline'
+    );
+
+
+  const allButton =
+    document.getElementById(
+      'serverViewAll'
+    );
+
+
+  [
+    activeButton,
+    offlineButton,
+    allButton
+  ].forEach(
+    button => {
+
+      if (!button) {
+        return;
+      }
+
+
+      button.classList.remove(
+        'btn-sheridan'
+      );
+
+
+      button.classList.add(
+        'btn-light',
+        'border'
+      );
+
+    }
+  );
+
+
+  const selectedButton =
+    view === 'active'
+      ? activeButton
+      : view === 'offline'
+        ? offlineButton
+        : allButton;
+
+
+  if (selectedButton) {
+
+    selectedButton.classList.remove(
+      'btn-light',
+      'border'
+    );
+
+
+    selectedButton.classList.add(
+      'btn-sheridan'
+    );
+
+  }
+
+
+  applyTableSearch();
+}
+
+
+function renderTablePageActions(
+  data
+) {
+
+  const canEdit =
+    data.permission === 'edit';
+
+
+  const centralButton =
+    data.centralSync
+      ? `
+
+        <button
+          class="btn btn-sm btn-gold"
+          onclick="runCentralSync()"
+        >
+
+          <i class="fa-solid fa-cloud-arrow-down me-2"></i>
+
+          Sync Central
+
+        </button>
+
+      `
+      : '';
+
+
+  const addButton =
+    canEdit
+      ? `
+
+        <button
+          class="btn btn-sm btn-sheridan"
+          onclick="openAddRecord()"
+        >
+
+          <i class="fa-solid fa-plus me-2"></i>
+
+          Add Record
+
+        </button>
+
+      `
+      : '';
+
+
+  document.getElementById(
+    'pageActions'
+  ).innerHTML = `
+
+    ${centralButton}
+
+    ${addButton}
+
+
+    <button
+      class="btn btn-sm btn-light border"
+      onclick="exportCurrentTable()"
+    >
+
+      <i class="fa-solid fa-file-export me-2"></i>
+
+      Export
+
+    </button>
+
+
+    <button
+      class="btn btn-sm btn-light border"
+      onclick="refreshCurrentPage()"
+    >
+
+      <i class="fa-solid fa-rotate me-2"></i>
+
+      Refresh
+
+    </button>
+
+  `;
+}
+
+
+function buildTabulator(data) {
+
+  if (tableInstance) {
+    tableInstance.destroy();
+    tableInstance = null;
+  }
+
+
+  const canEdit =
+    data.permission === 'edit';
+
+
+  const defaults =
+    new Set(
+      data.defaultColumns || []
+    );
+
+
+  const visibleHeaders =
+    data.headers.filter(
+      header =>
+        defaults.size === 0 ||
+        defaults.has(header)
+    );
+
+
+  const columns =
+    data.headers.map(
+      header => {
+
+        const normalized =
+          String(header || '')
+            .trim()
+            .toLowerCase();
+
+
+        /*
+         * Every visible data column participates in
+         * filling the available table width.
+         *
+         * Do NOT assign fixed widths here.
+         */
+        const column = {
+
+          title: header,
+
+          field: header,
+
+          visible:
+            defaults.size === 0 ||
+            defaults.has(header),
+
+          headerSort: true,
+
+          tooltip: true,
+
+          minWidth: 90,
+
+          widthGrow: 1,
+
+          widthShrink: 1
+
+        };
+
+
+        /*
+         * Give naturally larger fields a larger
+         * share of the available width.
+         */
+
+        if (
+          normalized === 'device label' ||
+          normalized === 'server name' ||
+          normalized === 'destination'
+        ) {
+
+          column.widthGrow = 1.35;
+          column.minWidth = 120;
+
+        }
+
+
+        if (
+          normalized === 'model' ||
+          normalized.includes('note') ||
+          normalized === 'backup job name' ||
+          normalized === 'target location' ||
+          normalized === 'wasabi job' ||
+          normalized === 'wasabi schedule'
+        ) {
+
+          column.widthGrow = 1.65;
+          column.minWidth = 130;
+
+        }
+
+
+        if (
+          normalized === 'ip' ||
+          normalized === 'ip address'
+        ) {
+
+          column.widthGrow = 1.1;
+          column.minWidth = 115;
+
+        }
+
+
+        if (
+          normalized === 'status'
+        ) {
+
+          column.widthGrow = .8;
+          column.minWidth = 100;
+
+        }
+
+
+        if (
+          normalized === 'vlan' ||
+          normalized === 'metric' ||
+          normalized === 'dist'
+        ) {
+
+          column.widthGrow = .65;
+          column.minWidth = 70;
+
+        }
+
+
+        if (
+          isStatusColumn(header)
+        ) {
+
+          column.formatter =
+            function(cell) {
+
+              return statusPill(
+                cell.getValue()
+              );
+
+            };
+
+        }
+
+
+        return column;
+
+      }
+    );
+
+
+  /*
+   * ACTION MENU
+   *
+   * Dedicated column on EVERY table.
+   * Exactly 56px.
+   * Never grows.
+   * Never shrinks.
+   */
+
+  columns.push({
+
+    title:
+      'Actions',
+
+    field:
+      '_actions',
+
+    width:
+      82,
+
+    minWidth:
+      82,
+
+    maxWidth:
+      82,
+
+    widthGrow:
+      0,
+
+    widthShrink:
+      0,
+
+    resizable:
+      false,
+
+    movable:
+      false,
+
+    frozen:
+      false,
+
+    hozAlign:
+      'center',
+
+    headerHozAlign:
+      'center',
+
+    headerSort:
+      false,
+
+    download:
+      false,
+
+    formatter:
+      function(cell) {
+
+        const rowData =
+          cell
+            .getRow()
+            .getData();
+
+
+        const wrapper =
+          document.createElement(
+            'div'
+          );
+
+
+        wrapper.className =
+          'table-row-actions';
+
+
+        /*
+        * EDIT
+        */
+        if (canEdit) {
+
+          const edit =
+            document.createElement(
+              'button'
+            );
+
+
+          edit.type =
+            'button';
+
+
+          edit.className =
+            'table-row-action table-row-action-edit';
+
+
+          edit.title =
+            'Edit record';
+
+
+          edit.innerHTML =
+            '<i class="fa-solid fa-pen"></i>';
+
+
+          edit.addEventListener(
+            'click',
+            function(event) {
+
+              event.stopPropagation();
+
+
+              openEditRecord(
+                rowData
+              );
+
+            }
+          );
+
+
+          wrapper.appendChild(
+            edit
+          );
+
+
+          /*
+          * DELETE
+          */
+          const remove =
+            document.createElement(
+              'button'
+            );
+
+
+          remove.type =
+            'button';
+
+
+          remove.className =
+            'table-row-action table-row-action-delete';
+
+
+          remove.title =
+            'Delete record';
+
+
+          remove.innerHTML =
+            '<i class="fa-regular fa-trash-can"></i>';
+
+
+          remove.addEventListener(
+            'click',
+            function(event) {
+
+              event.stopPropagation();
+
+              confirmDeleteRecord(
+                rowData
+              );
+
+            }
+          );
+
+
+          wrapper.appendChild(
+            remove
+          );
+
+        }
+
+
+        return wrapper;
+
+    }
+
+  });
+
+
+  tableInstance =
+    new Tabulator(
+      '#tabulatorTable',
+      {
+
+        data:
+          data.rows,
+
+        columns:
+          columns,
+
+        /*
+        * Data columns share the available width.
+        * Actions remains fixed-width.
+        *
+        * No fixed table height:
+        * the browser window handles vertical scrolling.
+        */
+        layout:
+          'fitColumns',
+
+        pagination:
+          true,
+
+        paginationMode:
+          'local',
+
+        paginationSize:
+          25,
+
+        movableColumns:
+          true,
+
+        placeholder:
+          'No records found',
+
+        columnDefaults: {
+
+          vertAlign:
+            'middle'
+
+        }
+
+      }
+    );
+
+
+  tableInstance.on(
+    'dataFiltered',
+    updateFilteredRecordCount
+  );
+
+
+  /*
+   * Force a redraw after Tabulator has actually
+   * been mounted and knows its container width.
+   */
+  requestAnimationFrame(
+    function() {
+
+      if (tableInstance) {
+
+        tableInstance.redraw(
+          true
+        );
+
+      }
+
+    }
+  );
+
+
+  buildColumnMenu(
+    data
+  );
+}
+
+
+function buildColumnMenu(
+  data
+) {
+
+  const menu =
+    document.getElementById(
+      'columnMenu'
+    );
+
+
+  if (!menu) {
+    return;
+  }
+
+
+  menu.innerHTML =
+    '';
+
+
+  data.headers.forEach(
+    header => {
+
+      const column =
+        tableInstance.getColumn(
+          header
+        );
+
+
+      const wrapper =
+        document.createElement(
+          'label'
+        );
+
+
+      wrapper.className =
+        'dropdown-item d-flex align-items-center gap-2';
+
+
+      const checkbox =
+        document.createElement(
+          'input'
+        );
+
+
+      checkbox.type =
+        'checkbox';
+
+
+      checkbox.className =
+        'form-check-input m-0';
+
+
+      checkbox.checked =
+        !!(
+          column &&
+          column.isVisible()
+        );
+
+
+      checkbox.addEventListener(
+        'change',
+        function() {
+
+          if (this.checked) {
+
+            tableInstance.showColumn(
+              header
+            );
+
+          } else {
+
+            tableInstance.hideColumn(
+              header
+            );
+
+          }
+
+        }
+      );
+
+
+      const text =
+        document.createElement(
+          'span'
+        );
+
+
+      text.textContent =
+        header;
+
+
+      wrapper.appendChild(
+        checkbox
+      );
+
+
+      wrapper.appendChild(
+        text
+      );
+
+
+      menu.appendChild(
+        wrapper
+      );
+
+    }
+  );
+}
+
+
+function applyTableSearch() {
+
+  if (!tableInstance) {
+    return;
+  }
+
+
+  const searchElement =
+    document.getElementById(
+      'tableSearch'
+    );
+
+
+  const query =
+    String(
+      searchElement
+        ? searchElement.value
+        : ''
+    )
+      .trim()
+      .toLowerCase();
+
+
+  const isServers =
+    currentPageKey === 'servers' &&
+    currentTableData &&
+    currentTableData.serverViews;
+
+
+  /*
+   * No filters at all on ordinary tables.
+   */
+  if (
+    !query &&
+    !isServers
+  ) {
+
+    tableInstance.clearFilter();
+
+    return;
+
+  }
+
+
+  tableInstance.setFilter(
+    function(data) {
+
+      /*
+       * First apply the Servers logical view.
+       */
+      if (
+        isServers &&
+        currentServerView !== 'all' &&
+        data._serverView !==
+          currentServerView
+      ) {
+
+        return false;
+
+      }
+
+
+      /*
+       * If there is no search query, the server
+       * view filter alone determines visibility.
+       */
+      if (!query) {
+        return true;
+      }
+
+
+      /*
+       * Search only actual displayed data fields.
+       * Internal fields such as _sourceSheet and
+       * _serverView are intentionally ignored.
+       */
+      return currentHeaders.some(
+        header =>
+
+          String(
+            data[header] || ''
+          )
+            .toLowerCase()
+            .includes(
+              query
+            )
+
+      );
+
+    }
+  );
+}
+
+
+function clearTableFilters() {
+
+  const search =
+    document.getElementById(
+      'tableSearch'
+    );
+
+
+  if (search) {
+
+    search.value =
+      '';
+
+  }
+
+
+  /*
+   * Servers retains the selected Active / Offline / All
+   * view. We only clear the search filter.
+   */
+  if (
+    currentPageKey === 'servers' &&
+    currentTableData &&
+    currentTableData.serverViews
+  ) {
+
+    applyTableSearch();
+
+    return;
+
+  }
+
+
+  if (
+    tableInstance
+  ) {
+
+    tableInstance.clearFilter();
+
+  }
+}
+
+
+function updateFilteredRecordCount(
+  filters,
+  rows
+) {
+
+  const element =
+    document.getElementById(
+      'recordCount'
+    );
+
+
+  if (!element) {
+    return;
+  }
+
+
+  const count =
+    rows ? rows.length : 0;
+
+
+  element.textContent =
+    `${count} record${count === 1 ? '' : 's'}`;
+}
+
+
+function changePageSize(
+  value
+) {
+
+  if (!tableInstance) {
+    return;
+  }
+
+
+  tableInstance.setPageSize(
+    Number(value)
+  );
+}
+
+
+function exportCurrentTable() {
+
+  if (!tableInstance) {
+    return;
+  }
+
+
+  tableInstance.download(
+    'csv',
+    `${currentTableData.label}.csv`
+  );
+}
+
+
+/*******************************************************
+ * ROW MENU
+ *******************************************************/
+
+function openRowActionMenu(
+  event,
+  rowData,
+  canEdit
+) {
+
+  closeRowActionMenu();
+
+
+  const menu =
+    document.createElement(
+      'div'
+    );
+
+
+  menu.id =
+    'rowActionMenu';
+
+
+  menu.className =
+    'dropdown-menu show shadow';
+
+
+  menu.style.position =
+    'fixed';
+
+
+  menu.style.zIndex =
+    '99999';
+
+
+  menu.style.left =
+    Math.min(
+      event.clientX,
+      window.innerWidth - 220
+    ) + 'px';
+
+
+  menu.style.top =
+    Math.min(
+      event.clientY,
+      window.innerHeight - 180
+    ) + 'px';
+
+
+  const serial =
+    rowData['Serial Number'] || '';
+
+
+  if (
+    currentPageKey === 'switches' &&
+    serial &&
+    !String(serial).includes('/')
+  ) {
+
+    menu.appendChild(
+      createActionMenuItem(
+        'fa-file-code',
+        'View Running Config',
+        function() {
+
+          viewRunningConfig(
+            serial
+          );
+
+        }
+      )
+    );
+
+  }
+
+
+  if (canEdit) {
+
+    menu.appendChild(
+      createActionMenuItem(
+        'fa-pen-to-square',
+        'Edit Record',
+        function() {
+
+          openEditRecord(
+            rowData
+          );
+
+        }
+      )
+    );
+
+
+    menu.appendChild(
+      createActionMenuItem(
+        'fa-trash',
+        'Delete Record',
+        function() {
+
+          confirmDeleteRecord(
+            rowData
+          );
+
+        },
+        true
+      )
+    );
+
+  }
+
+
+  document.body.appendChild(
+    menu
+  );
+
+
+  setTimeout(
+    function() {
+
+      document.addEventListener(
+        'click',
+        closeRowActionMenu,
+        {
+          once: true
+        }
+      );
+
+    },
+    0
+  );
+}
+
+
+function createActionMenuItem(
+  icon,
+  label,
+  handler,
+  danger
+) {
+
+  const button =
+    document.createElement(
+      'button'
+    );
+
+
+  button.className =
+    'dropdown-item small' +
+    (
+      danger
+        ? ' text-danger'
+        : ''
+    );
+
+
+  button.innerHTML = `
+
+    <i class="fa-solid ${icon} me-2"></i>
+
+    ${escapeHtml(label)}
+
+  `;
+
+
+  button.addEventListener(
+    'click',
+    function(event) {
+
+      event.stopPropagation();
+
+      closeRowActionMenu();
+
+      handler();
+
+    }
+  );
+
+
+  return button;
+}
+
+
+function closeRowActionMenu() {
+
+  const menu =
+    document.getElementById(
+      'rowActionMenu'
+    );
+
+
+  if (menu) {
+    menu.remove();
+  }
+}
+
+</script>

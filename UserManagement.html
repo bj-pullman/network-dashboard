@@ -1,0 +1,495 @@
+<script>
+
+function renderUsersPage(data) {
+
+  setPageHeader(
+    'Users & Permissions',
+    'Control access to the Sheridan infrastructure portal'
+  );
+
+  document.getElementById('pageActions').innerHTML = `
+
+    <button
+      class="btn btn-sm btn-sheridan"
+      onclick="openUserEditor()"
+    >
+      <i class="fa-solid fa-user-plus me-2"></i>
+      Add User
+    </button>
+
+    <button
+      class="btn btn-sm btn-light border"
+      onclick="refreshCurrentPage()"
+    >
+      <i class="fa-solid fa-rotate me-2"></i>
+      Refresh
+    </button>
+  `;
+
+
+  const breakglass =
+    data.breakglass || [];
+
+
+  document.getElementById('pageContent').innerHTML = `
+
+    <div
+      class="alert mb-4"
+      style="
+        background:#fff8dd;
+        border:1px solid #f0d875;
+        color:#705b00;
+      "
+    >
+
+      <div class="fw-bold mb-1">
+        <i class="fa-solid fa-shield-halved me-2"></i>
+        Break-glass Administrators
+      </div>
+
+      <div class="small">
+        ${breakglass.map(escapeHtml).join(' &nbsp;•&nbsp; ')}
+      </div>
+
+    </div>
+
+
+    <div class="app-card">
+
+      <div class="card-header-clean">
+
+        <h2 class="card-title-clean">
+          Authorized Users
+        </h2>
+
+        <span class="record-count">
+          ${data.users.length} configured
+        </span>
+
+      </div>
+
+
+      <div class="table-responsive">
+
+        <table class="table table-hover align-middle mb-0">
+
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Status</th>
+              <th>Default Access</th>
+              <th class="text-end">Actions</th>
+            </tr>
+          </thead>
+
+          <tbody>
+
+            ${
+              data.users.length
+                ? data.users.map(user => `
+
+                  <tr>
+
+                    <td class="fw-semibold">
+                      ${escapeHtml(user.name || '—')}
+                    </td>
+
+                    <td>
+                      ${escapeHtml(user.email)}
+                    </td>
+
+                    <td>
+                      ${
+                        user.active
+                          ? statusPill('Active')
+                          : statusPill('Inactive')
+                      }
+                    </td>
+
+                    <td>
+                      ${permissionPill(user.defaultPermission)}
+                    </td>
+
+                    <td class="text-end">
+
+                      <button
+                        class="btn btn-sm btn-light border"
+                        onclick='openUserEditor(${safeJson(user)})'
+                      >
+                        <i class="fa-solid fa-pen"></i>
+                      </button>
+
+                      <button
+                        class="btn btn-sm btn-light border text-danger"
+                        onclick='removeAppUser(${JSON.stringify(user.email)})'
+                      >
+                        <i class="fa-solid fa-trash"></i>
+                      </button>
+
+                    </td>
+
+                  </tr>
+
+                `).join('')
+
+                : `
+                  <tr>
+                    <td
+                      colspan="5"
+                      class="text-center text-muted py-5"
+                    >
+                      No additional users configured.
+                    </td>
+                  </tr>
+                `
+            }
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+    </div>
+  `;
+}
+
+
+function permissionPill(permission) {
+
+  if (permission === 'edit') {
+    return `
+      <span class="status-pill status-success">
+        Edit
+      </span>
+    `;
+  }
+
+  if (permission === 'view') {
+    return `
+      <span class="status-pill status-info">
+        View
+      </span>
+    `;
+  }
+
+  return `
+    <span class="status-pill status-neutral">
+      None
+    </span>
+  `;
+}
+
+
+function openUserEditor(user) {
+
+  user = user || {
+    email: '',
+    name: '',
+    active: true,
+    defaultPermission: 'view',
+    permissions: {}
+  };
+
+  const data =
+    currentPageData;
+
+  const pages =
+    data.pages || [];
+
+
+  document.getElementById('recordModalTitle')
+    .textContent =
+      user.email
+        ? 'Edit User'
+        : 'Add User';
+
+
+  document.getElementById('recordModalBody')
+    .innerHTML = `
+
+      <div class="row g-3">
+
+        <div class="col-md-6">
+
+          <label class="form-label">
+            NAME
+          </label>
+
+          <input
+            id="userName"
+            class="form-control"
+            value="${escapeAttribute(user.name || '')}"
+          >
+
+        </div>
+
+
+        <div class="col-md-6">
+
+          <label class="form-label">
+            GOOGLE WORKSPACE EMAIL
+          </label>
+
+          <input
+            id="userEmail"
+            type="email"
+            class="form-control"
+            value="${escapeAttribute(user.email || '')}"
+            ${user.email ? 'readonly' : ''}
+          >
+
+        </div>
+
+
+        <div class="col-md-6">
+
+          <label class="form-label">
+            DEFAULT PERMISSION
+          </label>
+
+          <select
+            id="userDefaultPermission"
+            class="form-select"
+          >
+            <option
+              value="view"
+              ${user.defaultPermission === 'view' ? 'selected' : ''}
+            >
+              View
+            </option>
+
+            <option
+              value="edit"
+              ${user.defaultPermission === 'edit' ? 'selected' : ''}
+            >
+              Edit
+            </option>
+
+            <option
+              value="none"
+              ${user.defaultPermission === 'none' ? 'selected' : ''}
+            >
+              None
+            </option>
+          </select>
+
+        </div>
+
+
+        <div class="col-md-6">
+
+          <label class="form-label">
+            STATUS
+          </label>
+
+          <select
+            id="userActive"
+            class="form-select"
+          >
+            <option
+              value="true"
+              ${user.active ? 'selected' : ''}
+            >
+              Active
+            </option>
+
+            <option
+              value="false"
+              ${!user.active ? 'selected' : ''}
+            >
+              Disabled
+            </option>
+          </select>
+
+        </div>
+
+      </div>
+
+
+      <hr class="my-4">
+
+
+      <div class="mb-2 fw-bold">
+        Page Overrides
+      </div>
+
+      <div class="text-muted small mb-3">
+        Leave a page on Default to inherit the user's default permission.
+      </div>
+
+
+      <div class="row g-2">
+
+        ${pages.map(page => {
+
+          const selected =
+            user.permissions &&
+            user.permissions[page.key]
+              ? user.permissions[page.key]
+              : '';
+
+          return `
+
+            <div class="col-md-6">
+
+              <div
+                class="border rounded p-2 d-flex align-items-center justify-content-between gap-3"
+              >
+
+                <span class="small fw-semibold">
+                  ${escapeHtml(page.label)}
+                </span>
+
+                <select
+                  class="form-select form-select-sm permission-override"
+                  data-page="${escapeAttribute(page.key)}"
+                  style="width:110px;"
+                >
+                  <option
+                    value=""
+                    ${selected === '' ? 'selected' : ''}
+                  >
+                    Default
+                  </option>
+
+                  <option
+                    value="view"
+                    ${selected === 'view' ? 'selected' : ''}
+                  >
+                    View
+                  </option>
+
+                  <option
+                    value="edit"
+                    ${selected === 'edit' ? 'selected' : ''}
+                  >
+                    Edit
+                  </option>
+
+                  <option
+                    value="none"
+                    ${selected === 'none' ? 'selected' : ''}
+                  >
+                    None
+                  </option>
+                </select>
+
+              </div>
+
+            </div>
+          `;
+
+        }).join('')}
+
+      </div>
+    `;
+
+
+  document.getElementById('saveRecordButton')
+    .onclick =
+      saveUserFromModal;
+
+
+  recordModal.show();
+}
+
+
+function saveUserFromModal() {
+
+  const permissions = {};
+
+  document
+    .querySelectorAll('.permission-override')
+    .forEach(select => {
+
+      if (select.value) {
+        permissions[
+          select.dataset.page
+        ] = select.value;
+      }
+
+    });
+
+
+  const user = {
+
+    name:
+      document
+        .getElementById('userName')
+        .value,
+
+    email:
+      document
+        .getElementById('userEmail')
+        .value,
+
+    active:
+      document
+        .getElementById('userActive')
+        .value === 'true',
+
+    defaultPermission:
+      document
+        .getElementById('userDefaultPermission')
+        .value,
+
+    permissions:
+      permissions
+  };
+
+
+  google.script.run
+
+    .withSuccessHandler(function() {
+
+      recordModal.hide();
+
+      invalidateClientPage('users');
+
+      loadPage('users', true);
+
+      showToast(
+        'User permissions saved.'
+      );
+
+    })
+
+    .withFailureHandler(handleFailure)
+
+    .saveAppUser(user);
+}
+
+
+function removeAppUser(email) {
+
+  if (
+    !confirm(
+      `Remove portal access for ${email}?`
+    )
+  ) {
+    return;
+  }
+
+
+  google.script.run
+
+    .withSuccessHandler(function() {
+
+      invalidateClientPage('users');
+
+      loadPage('users', true);
+
+      showToast(
+        'User removed.'
+      );
+
+    })
+
+    .withFailureHandler(handleFailure)
+
+    .deleteAppUser(email);
+}
+
+</script>

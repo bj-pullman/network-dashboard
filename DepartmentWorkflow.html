@@ -1,0 +1,1176 @@
+<script>
+
+function renderWorkflowPage(data) {
+
+  setPageHeader(
+    'Department Workflow',
+    'Technology ownership, triage, escalation, SLA and workflow responsibilities'
+  );
+
+
+  document.getElementById('pageActions').innerHTML = `
+
+    <button
+      class="btn btn-sm btn-light border"
+      onclick="refreshCurrentPage()"
+    >
+      <i class="fa-solid fa-rotate me-2"></i>
+      Refresh
+    </button>
+
+  `;
+
+
+  document.getElementById('pageContent').innerHTML = `
+
+    <!-- =====================================================
+         SUPPORT TIERS
+         ===================================================== -->
+
+    <div class="app-card workflow-section-card mb-4">
+
+      <div class="card-header-clean workflow-section-header">
+
+        <div>
+
+          <h2 class="card-title-clean">
+            Support Tiers
+          </h2>
+
+          <div class="workflow-section-subtitle">
+            Technical ownership levels used to classify and route support requests.
+          </div>
+
+        </div>
+
+
+        <div class="workflow-header-note">
+
+          <i class="fa-solid fa-route"></i>
+
+          <span>
+            Tickets may enter at any appropriate tier
+          </span>
+
+        </div>
+
+      </div>
+
+
+      <div class="workflow-tier-strip">
+
+        ${data.tiers.map((tier, index) => {
+
+          const tierNumber =
+            getWorkflowTierNumber(
+              tier.tier,
+              index + 1
+            );
+
+
+          return `
+
+            <div
+              class="
+                workflow-tier-card
+                workflow-tier-${tierNumber}
+              "
+            >
+
+              <div class="workflow-tier-top">
+
+                <div
+                  class="
+                    workflow-tier-icon
+                    workflow-tier-bg-${tierNumber}
+                  "
+                >
+                  T${tierNumber}
+                </div>
+
+
+                <div>
+
+                  <div class="workflow-tier-label">
+                    SUPPORT LEVEL
+                  </div>
+
+                  <div class="workflow-tier-name">
+                    ${escapeHtml(tier.tier)}
+                  </div>
+
+                </div>
+
+              </div>
+
+
+              <div class="workflow-tier-description">
+                ${escapeHtml(tier.definition)}
+              </div>
+
+            </div>
+
+          `;
+
+        }).join('')}
+
+      </div>
+
+    </div>
+
+
+    <!-- =====================================================
+         INTAKE / TRIAGE / ESCALATION
+         ===================================================== -->
+
+    <div class="app-card workflow-section-card mb-4">
+
+      <div class="card-header-clean workflow-section-header">
+
+        <div>
+
+          <h2 class="card-title-clean">
+            Intake, Triage & Escalation
+          </h2>
+
+          <div class="workflow-section-subtitle">
+            Classify the request, determine its priority and route it to the correct technical tier.
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <div class="workflow-routing-area">
+
+
+        <!-- STEP 1 -->
+
+        <div class="workflow-intake-card">
+
+          <div class="workflow-intake-icon">
+
+            <i class="fa-solid fa-inbox"></i>
+
+          </div>
+
+
+          <div class="workflow-intake-copy">
+
+            <div class="workflow-intake-eyebrow">
+              STEP 1
+            </div>
+
+            <div class="workflow-intake-title">
+              Intake & Triage
+            </div>
+
+            <div class="workflow-intake-owner">
+
+              ${
+                data.ticketSteps &&
+                data.ticketSteps.length
+                  ? escapeHtml(
+                      data.ticketSteps[0].responsible
+                    )
+                  : 'Technology Department'
+              }
+
+            </div>
+
+          </div>
+
+        </div>
+
+
+        <div class="workflow-routing-arrow">
+
+          <i class="fa-solid fa-arrow-right"></i>
+
+        </div>
+
+
+        <!-- STEP 2 -->
+
+        <div class="workflow-classify-card">
+
+          <div class="workflow-classify-heading">
+
+            <div class="workflow-classify-icon">
+
+              <i class="fa-solid fa-code-branch"></i>
+
+            </div>
+
+
+            <div>
+
+              <div class="workflow-intake-eyebrow">
+                STEP 2
+              </div>
+
+              <div class="workflow-classify-title">
+                Classify & Route
+              </div>
+
+            </div>
+
+          </div>
+
+
+          <div class="workflow-classify-grid">
+
+            <div class="workflow-classify-item">
+
+              <i class="fa-solid fa-layer-group"></i>
+
+              <div>
+
+                <strong>
+                  Scope
+                </strong>
+
+                <span>
+                  User, classroom, building, district or core infrastructure?
+                </span>
+
+              </div>
+
+            </div>
+
+
+            <div class="workflow-classify-item">
+
+              <i class="fa-solid fa-triangle-exclamation"></i>
+
+              <div>
+
+                <strong>
+                  Impact
+                </strong>
+
+                <span>
+                  Determine how many users or critical services are affected.
+                </span>
+
+              </div>
+
+            </div>
+
+
+            <div class="workflow-classify-item">
+
+              <i class="fa-solid fa-screwdriver-wrench"></i>
+
+              <div>
+
+                <strong>
+                  Technical Domain
+                </strong>
+
+                <span>
+                  Identify the workflow and appropriate starting support tier.
+                </span>
+
+              </div>
+
+            </div>
+
+
+            <div class="workflow-classify-item">
+
+              <i class="fa-solid fa-gauge-high"></i>
+
+              <div>
+
+                <strong>
+                  Priority
+                </strong>
+
+                <span>
+                  Assign P1-P4 based on impact and urgency.
+                </span>
+
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <!-- ESCALATION -->
+
+      <div class="workflow-escalation-bar">
+
+        <div class="workflow-escalation-label">
+
+          <i class="fa-solid fa-arrow-trend-up"></i>
+
+          <div>
+
+            <strong>
+              Escalate when needed
+            </strong>
+
+            <span>
+              Move upward when the issue exceeds the current tier's ownership,
+              access, expertise, impact or authority.
+            </span>
+
+          </div>
+
+        </div>
+
+
+        <div class="workflow-escalation-path">
+
+          <span class="workflow-mini-tier workflow-tier-bg-1">
+            T1
+          </span>
+
+          <i class="fa-solid fa-arrow-right"></i>
+
+          <span class="workflow-mini-tier workflow-tier-bg-2">
+            T2
+          </span>
+
+          <i class="fa-solid fa-arrow-right"></i>
+
+          <span class="workflow-mini-tier workflow-tier-bg-3">
+            T3
+          </span>
+
+          <i class="fa-solid fa-arrow-right"></i>
+
+          <span class="workflow-mini-tier workflow-tier-bg-4">
+            T4
+          </span>
+
+        </div>
+
+      </div>
+
+
+      <!-- TRIAGE RULE -->
+
+      <div class="workflow-triage-callout">
+
+        <div class="workflow-triage-callout-icon">
+
+          <i class="fa-solid fa-circle-info"></i>
+
+        </div>
+
+
+        <div>
+
+          <strong>
+            Triage determines the starting tier
+          </strong>
+
+          <p>
+            Do not automatically route every ticket through Tier 1.
+            Use the Workflow Ownership Matrix to identify the technical
+            domain and expected tier. Known network, systems, security,
+            infrastructure or other advanced issues may begin directly
+            at T2, T3 or T4.
+          </p>
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <!-- =====================================================
+         OWNERSHIP GROUPS
+         ===================================================== -->
+
+    <div class="app-card workflow-section-card mb-4">
+
+      <div class="card-header-clean workflow-section-header">
+
+        <div>
+
+          <h2 class="card-title-clean">
+            Ownership Groups
+          </h2>
+
+          <div class="workflow-section-subtitle">
+            Department groups used to define responsibility and support coverage.
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <div class="table-responsive">
+
+        <table class="table table-hover mb-0 align-middle workflow-group-table">
+
+          <thead>
+
+            <tr>
+              <th>Group</th>
+              <th>Members</th>
+              <th>Purpose</th>
+            </tr>
+
+          </thead>
+
+
+          <tbody>
+
+            ${data.groups.map((group, index) => {
+
+              const groupColor =
+                getWorkflowGroupColor(
+                  group.group,
+                  index
+                );
+
+
+              return `
+
+                <tr>
+
+                  <td>
+
+                    <span
+                      class="
+                        workflow-group-table-pill
+                        workflow-group-soft-${groupColor}
+                      "
+                    >
+
+                      <i class="fa-solid fa-users me-2"></i>
+
+                      ${escapeHtml(group.group)}
+
+                    </span>
+
+                  </td>
+
+
+                  <td class="workflow-group-members-cell">
+                    ${escapeHtml(group.members)}
+                  </td>
+
+
+                  <td class="text-muted">
+                    ${escapeHtml(group.purpose)}
+                  </td>
+
+                </tr>
+
+              `;
+
+            }).join('')}
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+    </div>
+
+
+    <!-- =====================================================
+         PRIORITY / SLA
+         ===================================================== -->
+
+    <div class="app-card mb-4">
+
+      <div class="card-header-clean workflow-section-header">
+
+        <div>
+
+          <h2 class="card-title-clean">
+            Priority & SLA Matrix
+          </h2>
+
+          <div class="workflow-section-subtitle">
+            Priority describes business impact and urgency; tier describes technical ownership.
+          </div>
+
+        </div>
+
+
+        <div class="workflow-sla-definition">
+
+          <div class="workflow-sla-icon">
+            <i class="fa-solid fa-clock"></i>
+          </div>
+
+          <div>
+
+            <strong>
+              SLA
+            </strong>
+
+            <span>
+              Service Level Agreement
+            </span>
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <div class="workflow-sla-explanation">
+
+        <i class="fa-solid fa-circle-info"></i>
+
+        <span>
+          An SLA defines the target response and resolution timeframe
+          for a ticket based on its assigned priority.
+        </span>
+
+      </div>
+
+
+      <div class="table-responsive">
+
+        <table class="table table-hover mb-0 align-middle">
+
+          <thead>
+
+            <tr>
+              <th>Priority</th>
+              <th>Response</th>
+              <th>Resolution</th>
+              <th>Definition</th>
+              <th>Escalation</th>
+            </tr>
+
+          </thead>
+
+
+          <tbody>
+
+            ${data.priorities.map(priority => `
+
+              <tr>
+
+                <td>
+                  ${priorityPill(priority.priority)}
+                </td>
+
+                <td class="fw-semibold">
+                  ${escapeHtml(priority.responseSla)}
+                </td>
+
+                <td>
+                  ${escapeHtml(priority.resolutionSla)}
+                </td>
+
+                <td class="text-muted">
+                  ${escapeHtml(priority.definition)}
+                </td>
+
+                <td>
+                  ${escapeHtml(priority.escalation)}
+                </td>
+
+              </tr>
+
+            `).join('')}
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+    </div>
+
+
+    <!-- =====================================================
+         WORKFLOW OWNERSHIP MATRIX
+         ===================================================== -->
+
+    <div class="app-card">
+
+      <div class="card-header-clean workflow-matrix-header">
+
+        <div>
+
+          <h2 class="card-title-clean">
+            Workflow Ownership Matrix
+          </h2>
+
+          <div class="workflow-section-subtitle">
+            Search this reference during triage to determine technical tier and ownership.
+          </div>
+
+        </div>
+
+
+        <span
+          id="workflowRecordCount"
+          class="record-count"
+        >
+          ${data.workflows.length} workflows
+        </span>
+
+      </div>
+
+
+      <div class="workflow-matrix-toolbar">
+
+        <div class="input-group input-group-sm workflow-matrix-search">
+
+          <span class="input-group-text bg-white">
+
+            <i class="fa-solid fa-magnifying-glass"></i>
+
+          </span>
+
+          <input
+            id="workflowMatrixSearch"
+            type="search"
+            class="form-control"
+            placeholder="Search workflows, owners, systems..."
+            oninput="applyWorkflowMatrixSearch()"
+          >
+
+        </div>
+
+
+        <select
+          id="workflowTierFilter"
+          class="form-select form-select-sm workflow-filter-select"
+          onchange="applyWorkflowMatrixSearch()"
+        >
+
+          <option value="">
+            All Tiers
+          </option>
+
+          ${data.tiers.map(tier => `
+
+            <option value="${escapeHtml(tier.tier)}">
+              ${escapeHtml(tier.tier)}
+            </option>
+
+          `).join('')}
+
+        </select>
+
+
+        <button
+          class="btn btn-sm btn-light border"
+          onclick="clearWorkflowMatrixFilters()"
+        >
+
+          <i class="fa-solid fa-filter-circle-xmark me-2"></i>
+
+          Clear
+
+        </button>
+
+      </div>
+
+
+      <div id="workflowMatrixTable"></div>
+
+    </div>
+
+  `;
+
+
+  buildWorkflowMatrixTable(
+    data
+  );
+
+}
+
+function getWorkflowTierNumber(
+  tier,
+  fallback
+) {
+
+  const value =
+    String(tier || '');
+
+
+  const match =
+    value.match(/\d+/);
+
+
+  if (match) {
+
+    return Math.min(
+      Math.max(
+        Number(match[0]),
+        1
+      ),
+      4
+    );
+
+  }
+
+
+  return fallback || 1;
+}
+
+function getWorkflowGroupColor(
+  groupName,
+  index
+) {
+
+  const name =
+    String(groupName || '')
+      .toLowerCase();
+
+
+  if (
+    name.includes('network')
+  ) {
+    return 'orange';
+  }
+
+
+  if (
+    name.includes('system') ||
+    name.includes('server') ||
+    name.includes('integration')
+  ) {
+    return 'blue';
+  }
+
+
+  if (
+    name.includes('security')
+  ) {
+    return 'red';
+  }
+
+
+  if (
+    name.includes('device') ||
+    name.includes('endpoint')
+  ) {
+    return 'green';
+  }
+
+
+  if (
+    name.includes('admin') ||
+    name.includes('management') ||
+    name.includes('leadership')
+  ) {
+    return 'purple';
+  }
+
+
+  const colors = [
+    'orange',
+    'blue',
+    'green',
+    'purple',
+    'red',
+    'gold'
+  ];
+
+
+  return colors[
+    index % colors.length
+  ];
+}
+
+
+function priorityPill(priority) {
+
+  const value =
+    String(priority || '');
+
+  let cls =
+    'status-neutral';
+
+  if (value.startsWith('P1')) {
+    cls = 'status-danger';
+  }
+
+  if (value.startsWith('P2')) {
+    cls = 'status-warning';
+  }
+
+  if (value.startsWith('P3')) {
+    cls = 'status-info';
+  }
+
+  return `
+    <span class="status-pill ${cls}">
+      ${escapeHtml(value)}
+    </span>
+  `;
+}
+
+function workflowTierPill(
+  tier
+) {
+
+  const value =
+    String(tier || '');
+
+
+  const tierNumber =
+    getWorkflowTierNumber(
+      value,
+      1
+    );
+
+
+  return `
+
+    <span
+      class="
+        workflow-table-tier
+        workflow-tier-bg-${tierNumber}
+      "
+    >
+      ${escapeHtml(value)}
+    </span>
+
+  `;
+}
+
+function workflowGroupPill(
+  groupName
+) {
+
+  const value =
+    String(groupName || '');
+
+
+  if (!value) {
+    return '';
+  }
+
+
+  const groupColor =
+    getWorkflowGroupColor(
+      value,
+      0
+    );
+
+
+  return `
+
+    <span
+      class="
+        workflow-table-group
+        workflow-group-soft-${groupColor}
+      "
+    >
+      ${escapeHtml(value)}
+    </span>
+
+  `;
+}
+
+
+function buildWorkflowMatrixTable(
+  data
+) {
+
+  const tableElement =
+    document.getElementById(
+      'workflowMatrixTable'
+    );
+
+
+  if (!tableElement) {
+    return;
+  }
+
+
+  if (
+    window.workflowMatrixInstance
+  ) {
+
+    try {
+
+      window.workflowMatrixInstance.destroy();
+
+    } catch (error) {}
+
+  }
+
+
+  window.workflowMatrixInstance =
+    new Tabulator(
+      tableElement,
+      {
+
+        data:
+          data.workflows || [],
+
+        layout:
+          'fitColumns',
+
+        pagination:
+          true,
+
+        paginationMode:
+          'local',
+
+        paginationSize:
+          25,
+
+        paginationSizeSelector:
+          [
+            15,
+            25,
+            50,
+            100
+          ],
+
+        movableColumns:
+          false,
+
+        placeholder:
+          'No workflows found.',
+
+        columns: [
+
+          {
+            title: 'Category',
+            field: 'category',
+            minWidth: 160,
+            widthGrow: 1.1
+          },
+
+          {
+            title: 'Workflow / System',
+            field: 'workflow',
+            minWidth: 220,
+            widthGrow: 1.5
+          },
+
+          {
+            title: 'Tier',
+            field: 'tier',
+            width: 105,
+            minWidth: 105,
+
+            formatter:
+              function(cell) {
+
+                return workflowTierPill(
+                  cell.getValue()
+                );
+
+              }
+          },
+
+          {
+            title: 'Primary Owner',
+            field: 'primaryOwner',
+            minWidth: 165,
+            widthGrow: 1.1
+          },
+
+          {
+            title: 'Backup',
+            field: 'backup',
+            minWidth: 145,
+            widthGrow: 1
+          },
+
+          {
+            title: 'Support',
+            field: 'support',
+            minWidth: 145,
+            widthGrow: 1
+          },
+
+          {
+            title: 'Notes',
+            field: 'notes',
+            minWidth: 230,
+            widthGrow: 1.6
+          }
+
+        ]
+
+      }
+    );
+
+
+  window.workflowMatrixInstance.on(
+    'dataFiltered',
+    function(filters, rows) {
+
+      const count =
+        document.getElementById(
+          'workflowRecordCount'
+        );
+
+
+      if (count) {
+
+        count.textContent =
+          `${rows.length} workflows`;
+
+      }
+
+    }
+  );
+
+}
+
+function applyWorkflowMatrixSearch() {
+
+  const table =
+    window.workflowMatrixInstance;
+
+
+  if (!table) {
+    return;
+  }
+
+
+  const searchElement =
+    document.getElementById(
+      'workflowMatrixSearch'
+    );
+
+
+  const tierElement =
+    document.getElementById(
+      'workflowTierFilter'
+    );
+
+
+  const query =
+    String(
+      searchElement
+        ? searchElement.value
+        : ''
+    )
+      .trim()
+      .toLowerCase();
+
+
+  const tier =
+    String(
+      tierElement
+        ? tierElement.value
+        : ''
+    )
+      .trim()
+      .toLowerCase();
+
+
+  if (
+    !query &&
+    !tier
+  ) {
+
+    table.clearFilter();
+
+    return;
+
+  }
+
+
+  table.setFilter(
+    function(row) {
+
+      const rowTier =
+        String(
+          row.tier || ''
+        )
+          .trim()
+          .toLowerCase();
+
+
+      if (
+        tier &&
+        rowTier !== tier
+      ) {
+
+        return false;
+
+      }
+
+
+      if (!query) {
+        return true;
+      }
+
+
+      const searchableValues = [
+
+        row.category,
+        row.workflow,
+        row.tier,
+        row.primaryOwner,
+        row.backup,
+        row.support,
+        row.notes
+
+      ];
+
+
+      return searchableValues.some(
+        value =>
+
+          String(value || '')
+            .toLowerCase()
+            .includes(query)
+
+      );
+
+    }
+  );
+
+}
+
+function clearWorkflowMatrixFilters() {
+
+  const search =
+    document.getElementById(
+      'workflowMatrixSearch'
+    );
+
+
+  const tier =
+    document.getElementById(
+      'workflowTierFilter'
+    );
+
+
+  if (search) {
+    search.value = '';
+  }
+
+
+  if (tier) {
+    tier.value = '';
+  }
+
+
+  if (
+    window.workflowMatrixInstance
+  ) {
+
+    window.workflowMatrixInstance.clearFilter();
+
+  }
+
+}
+
+</script>

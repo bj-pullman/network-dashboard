@@ -1,0 +1,4383 @@
+/*******************************************************
+ * SHERIDAN IT INFRASTRUCTURE PORTAL
+ * Application / RBAC / Data Layer
+ *******************************************************/
+
+const APP_BREAKGLASS_ADMINS = [
+  'bjpullman@sheridanschools.org',
+  'chancebaughman@sheridanschools.org'
+];
+
+const APP_USERS_SHEET = 'App Users';
+
+/*******************************************************
+ * SENSITIVE FIELD CLASSIFICATION
+ *******************************************************/
+
+const APP_USERNAME_HEADERS = new Set([
+  'user',
+  'users',
+  'username',
+  'usernames',
+  'login',
+  'logins',
+  'loginname',
+  'loginusername',
+  'account',
+  'accounts',
+  'accountname'
+]);
+
+
+const APP_PASSWORD_HEADERS = new Set([
+  'password',
+  'passwords',
+  'pass',
+  'passwd',
+  'pw',
+  'pword',
+  'pwd',
+  'passcode',
+  'passcodes',
+  'secret',
+  'secrets',
+  'credential',
+  'credentials'
+]);
+
+
+const APP_PAGE_CONFIG = {
+
+  dashboard: {
+    key: 'dashboard',
+    label: 'Dashboard',
+    sheet: 'Server Dashboard',
+    type: 'dashboard',
+    icon: 'fa-gauge-high',
+    group: 'Overview'
+  },
+
+  workflow: {
+    key: 'workflow',
+    label: 'Department Workflow',
+    sheet: 'Department Workflow',
+    type: 'workflow',
+    icon: 'fa-diagram-project',
+    group: 'Overview'
+  },
+
+  switches: {
+    key: 'switches',
+    label: 'Switches',
+    sheet: 'Switches',
+    type: 'table',
+    icon: 'fa-network-wired',
+    group: 'Infrastructure',
+    centralSync: true,
+
+    defaultColumns: [
+      'Status',
+      'Device Label',
+      'Model',
+      'IP Address',
+      'Role',
+      'Stack Info',
+      'Port Capacity (Active)',
+      'Campus'
+    ]
+  },
+
+  accessPoints: {
+    key: 'accessPoints',
+    label: 'Access Points',
+    sheet: 'Access Points',
+    type: 'table',
+    icon: 'fa-wifi',
+    group: 'Infrastructure',
+    centralSync: true,
+
+    defaultColumns: [
+      'Status',
+      'Device Label',
+      'Model',
+      'IP Address',
+      'Active Clients',
+      'Campus',
+      'Management Mode'
+    ]
+  },
+
+  servers: {
+    key: 'servers',
+    label: 'Servers',
+    sheet: 'Servers',
+    offlineSheet: 'Offline Servers',
+    type: 'table',
+    icon: 'fa-server',
+    group: 'Infrastructure',
+    combinedServerPage: true,
+
+    defaultColumns: [
+      'Server Name',
+      'IP Address',
+      'Type',
+      'Status',
+      'Location',
+      'Threatdown Installed',
+      'Wazuh Installed',
+      'Notes'
+    ]
+  },
+
+  routes: {
+    key: 'routes',
+    label: 'IP Route Tables',
+    sheet: 'IP Route Tables',
+    type: 'table',
+    icon: 'fa-route',
+    group: 'Infrastructure',
+
+    defaultColumns: [
+      'Destination',
+      'Gateway',
+      'VLAN',
+      'Type',
+      'SubType',
+      'Metric',
+      'Dist'
+    ]
+  },
+
+  securityCameras: {
+
+    key:
+      'securityCameras',
+
+    label:
+      'Security Cameras',
+
+    sheet:
+      'Security Cameras - District Wide',
+
+    type:
+      'structured',
+
+    icon:
+      'fa-video',
+
+    group:
+      'Physical Systems',
+
+    sections: [
+
+      {
+        key:
+          'sheridan',
+
+        title:
+          'Sheridan',
+
+        subtitle:
+          'District camera infrastructure',
+
+        type:
+          'table',
+
+        headerRow:
+          1,
+
+        startColumn:
+          1,
+
+        endColumn:
+          6,
+
+        endRow:
+          12,
+
+        defaultColumns: [
+          'Site',
+          'IP',
+          'User',
+          'Password',
+          'Server Location',
+          'Notes'
+        ]
+      },
+
+      {
+        key:
+          'eastEnd',
+
+        title:
+          'East End',
+
+        subtitle:
+          'East End camera infrastructure',
+
+        type:
+          'table',
+
+        headerRow:
+          13,
+
+        startColumn:
+          1,
+
+        endColumn:
+          6,
+
+        endRow:
+          18,
+
+        defaultColumns: [
+          'Site',
+          'IP',
+          'User',
+          'Password',
+          'Server Location',
+          'Notes'
+        ]
+      },
+
+      {
+        key:
+          'legacy',
+
+        title:
+          'Old Software',
+
+        subtitle:
+          'Legacy camera systems and reference information',
+
+        type:
+          'table',
+
+        headerRow:
+          19,
+
+        startColumn:
+          1,
+
+        endColumn:
+          6,
+
+        defaultColumns: [
+          'Site',
+          'IP',
+          'Type',
+          'User',
+          'Server Location',
+          'Notes'
+        ]
+      }
+
+    ]
+
+  },
+
+  busCameras: {
+    key: 'busCameras',
+    label: 'Bus Cameras',
+    sheet: 'Bus Camera Information',
+    type: 'structured',
+    icon: 'fa-bus',
+    group: 'Physical Systems',
+
+    sections: [
+      {
+        key: 'reference',
+        title: 'System Reference',
+        subtitle: 'Bus camera network and system information',
+        type: 'metadata',
+        startRow: 1,
+        endRow: 5,
+        startColumn: 1
+      },
+
+      {
+        key: 'buses',
+        title: 'Bus Inventory',
+        subtitle: 'Bus camera and network assignments',
+        type: 'table',
+        headerRow: 7,
+        startColumn: 1,
+        endColumn: 6,
+
+        defaultColumns: [
+          'Bus Name/Number',
+          'DVR IP',
+          'Bridge IP',
+          'Bridge Mac',
+          'Bus Type'
+        ]
+      }
+    ]
+  },
+
+  intercom: {
+    key: 'intercom',
+    label: 'Intercom & Bell',
+    sheet: 'Intercom/Bell System Info',
+    type: 'structured',
+    icon: 'fa-bullhorn',
+    group: 'Physical Systems',
+
+    sections: [
+      {
+        key: 'intercomSystems',
+        title: 'Intercom & Bell Systems',
+        subtitle: 'Intercom, bell, gateway and VLAN infrastructure',
+        type: 'table',
+        headerRow: 1,
+        startColumn: 1,
+
+        defaultColumns: [
+          'Location',
+          'IP Address',
+          'VLAN Name',
+          'VLAN ID',
+          'Username',
+          'Password'
+        ]
+      }
+    ]
+  },
+
+  backups: {
+    key: 'backups',
+    label: 'Backup Schedule',
+    sheet: 'Backup Schedule',
+    type: 'table',
+    icon: 'fa-database',
+    group: 'Operations',
+
+    defaultColumns: [
+      'Server Name',
+      'Size',
+      'Backup Time',
+      'Backup Job Name',
+      'Target Location',
+      'Wasabi Job',
+      'Wasabi Schedule'
+    ]
+  },
+
+  users: {
+    key: 'users',
+    label: 'Users & Permissions',
+    sheet: APP_USERS_SHEET,
+    type: 'users',
+    icon: 'fa-users-gear',
+    group: 'Administration',
+    adminOnly: true
+  }
+
+};
+
+
+/*******************************************************
+ * HTML
+ *******************************************************/
+
+function include(filename) {
+  return HtmlService
+    .createHtmlOutputFromFile(filename)
+    .getContent();
+}
+
+
+/*******************************************************
+ * USER
+ *******************************************************/
+
+function getCurrentUserEmail_() {
+  return String(
+    Session.getActiveUser().getEmail() || ''
+  )
+    .trim()
+    .toLowerCase();
+}
+
+
+function isBreakglassAdmin_(email) {
+  return APP_BREAKGLASS_ADMINS.includes(
+    String(email || '')
+      .trim()
+      .toLowerCase()
+  );
+}
+
+
+/*******************************************************
+ * APP USERS
+ *******************************************************/
+
+function ensureAppUsersSheet_() {
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  let sheet = ss.getSheetByName(APP_USERS_SHEET);
+
+  if (sheet) {
+    return sheet;
+  }
+
+
+  sheet = ss.insertSheet(APP_USERS_SHEET);
+
+  sheet.getRange(1, 1, 1, 5).setValues([[
+    'Email',
+    'Name',
+    'Active',
+    'Default Permission',
+    'Page Permissions'
+  ]]);
+
+
+  sheet.setFrozenRows(1);
+
+
+  sheet.getRange('A1:E1')
+    .setFontWeight('bold')
+    .setBackground('#17345f')
+    .setFontColor('#ffffff');
+
+
+  sheet.autoResizeColumns(1, 5);
+
+  return sheet;
+}
+
+
+/*******************************************************
+ * ACCESS
+ *******************************************************/
+
+function getUserAccess_(email) {
+
+  email = String(email || '')
+    .trim()
+    .toLowerCase();
+
+
+  if (!email) {
+
+    return {
+      authorized: false,
+      admin: false,
+      email: '',
+      permissions: {}
+    };
+
+  }
+
+
+  /*
+   * Breakglass accounts do not need a Sheet lookup.
+   */
+  if (isBreakglassAdmin_(email)) {
+
+    const permissions = {};
+
+    Object.keys(APP_PAGE_CONFIG)
+      .forEach(key => {
+        permissions[key] = 'edit';
+      });
+
+
+    return {
+      authorized: true,
+      admin: true,
+      breakglass: true,
+      email: email,
+      name: email.split('@')[0],
+      permissions: permissions
+    };
+
+  }
+
+
+  /*
+   * Cache the resolved permission object.
+   *
+   * This avoids rereading App Users every time somebody
+   * clicks a password eye or loads another page.
+   */
+  const cache =
+    CacheService.getScriptCache();
+
+
+  const cacheKey =
+    'app_access_' + email;
+
+
+  const cached =
+    cache.get(cacheKey);
+
+
+  if (cached) {
+
+    try {
+
+      return JSON.parse(
+        cached
+      );
+
+    } catch (error) {}
+
+  }
+
+
+  const sheet =
+    ensureAppUsersSheet_();
+
+
+  if (sheet.getLastRow() < 2) {
+
+    return {
+      authorized: false,
+      admin: false,
+      email: email,
+      permissions: {}
+    };
+
+  }
+
+
+  const values =
+    sheet
+      .getRange(
+        2,
+        1,
+        sheet.getLastRow() - 1,
+        5
+      )
+      .getValues();
+
+
+  const match =
+    values.find(
+      row =>
+        String(row[0] || '')
+          .trim()
+          .toLowerCase() === email
+    );
+
+
+  if (!match) {
+
+    return {
+      authorized: false,
+      admin: false,
+      email: email,
+      permissions: {}
+    };
+
+  }
+
+
+  const activeText =
+    String(match[2] || '')
+      .trim()
+      .toLowerCase();
+
+
+  const active =
+    match[2] === true ||
+    activeText === 'true' ||
+    activeText === 'yes' ||
+    activeText === 'active';
+
+
+  if (!active) {
+
+    return {
+      authorized: false,
+      admin: false,
+      email: email,
+      permissions: {}
+    };
+
+  }
+
+
+  const defaultPermission =
+    normalizePermission_(
+      match[3] || 'view'
+    );
+
+
+  let overrides = {};
+
+
+  try {
+
+    overrides =
+      match[4]
+        ? JSON.parse(
+            String(match[4])
+          )
+        : {};
+
+  } catch (error) {
+
+    overrides = {};
+
+  }
+
+
+  const permissions = {};
+
+
+  Object.keys(APP_PAGE_CONFIG)
+    .forEach(
+      key => {
+
+        const config =
+          APP_PAGE_CONFIG[key];
+
+
+        if (config.adminOnly) {
+
+          permissions[key] =
+            'none';
+
+          return;
+
+        }
+
+
+        permissions[key] =
+          normalizePermission_(
+            overrides[key] ||
+            defaultPermission
+          );
+
+      }
+    );
+
+
+  const result = {
+
+    authorized: true,
+
+    admin: false,
+
+    breakglass: false,
+
+    email: email,
+
+    name:
+      String(
+        match[1] ||
+        email.split('@')[0]
+      ),
+
+    permissions:
+      permissions
+
+  };
+
+
+  cacheJson_(
+    cacheKey,
+    result,
+    300
+  );
+
+
+  return result;
+}
+
+
+function normalizePermission_(permission) {
+
+  const value = String(permission || '')
+    .trim()
+    .toLowerCase();
+
+  if (value === 'edit') return 'edit';
+  if (value === 'view') return 'view';
+
+  return 'none';
+}
+
+
+function getPagePermission_(pageKey) {
+
+  const access =
+    getUserAccess_(getCurrentUserEmail_());
+
+  if (access.admin) {
+    return 'edit';
+  }
+
+  return access.permissions[pageKey] || 'none';
+}
+
+
+function requirePagePermission_(pageKey, level) {
+
+  const access =
+    getUserAccess_(getCurrentUserEmail_());
+
+
+  if (!access.authorized) {
+    throw new Error('Unauthorized access.');
+  }
+
+
+  if (access.admin) {
+    return access;
+  }
+
+
+  const permission =
+    access.permissions[pageKey] || 'none';
+
+
+  if (
+    level === 'view' &&
+    permission !== 'view' &&
+    permission !== 'edit'
+  ) {
+    throw new Error(
+      'You do not have permission to view this page.'
+    );
+  }
+
+
+  if (
+    level === 'edit' &&
+    permission !== 'edit'
+  ) {
+    throw new Error(
+      'You do not have permission to modify this page.'
+    );
+  }
+
+
+  return access;
+}
+
+
+function requireAdmin_() {
+
+  const email = getCurrentUserEmail_();
+
+  if (!isBreakglassAdmin_(email)) {
+    throw new Error(
+      'Administrator access is required.'
+    );
+  }
+
+  return true;
+}
+
+
+/*******************************************************
+ * BOOTSTRAP
+ *******************************************************/
+
+function getAppBootstrap() {
+
+  const access =
+    getUserAccess_(getCurrentUserEmail_());
+
+
+  if (!access.authorized) {
+    throw new Error('Unauthorized access.');
+  }
+
+
+  const pages = [];
+
+
+  Object.keys(APP_PAGE_CONFIG)
+    .forEach(key => {
+
+      const config =
+        APP_PAGE_CONFIG[key];
+
+
+      if (
+        config.adminOnly &&
+        !access.admin
+      ) {
+        return;
+      }
+
+
+      const permission =
+        access.admin
+          ? 'edit'
+          : access.permissions[key] || 'none';
+
+
+      if (permission === 'none') {
+        return;
+      }
+
+
+      pages.push({
+        key: config.key,
+        label: config.label,
+        type: config.type,
+        icon: config.icon,
+        group: config.group,
+        centralSync: !!config.centralSync,
+        permission: permission
+      });
+
+    });
+
+
+  return {
+
+    user: {
+      email: access.email,
+      name: access.name,
+      admin: access.admin,
+      breakglass: access.breakglass
+    },
+
+    pages: pages
+
+  };
+}
+
+
+/*******************************************************
+ * PAGE ROUTER
+ *******************************************************/
+
+function appGetPageData(pageKey, forceRefresh) {
+
+  const config =
+    APP_PAGE_CONFIG[pageKey];
+
+
+  if (!config) {
+    throw new Error(
+      'Unknown application page.'
+    );
+  }
+
+
+  requirePagePermission_(
+    pageKey,
+    'view'
+  );
+
+
+  if (config.type === 'dashboard') {
+    return getAppDashboardData_(
+      forceRefresh
+    );
+  }
+
+
+  if (config.type === 'workflow') {
+    return getDepartmentWorkflowData_(
+      forceRefresh
+    );
+  }
+
+
+  if (config.type === 'users') {
+    return getAppUsers_();
+  }
+
+
+  if (config.type === 'structured') {
+    return getStructuredPageData_(
+      pageKey,
+      forceRefresh
+    );
+  }
+
+
+  return getAppTableData_(
+    pageKey,
+    forceRefresh
+  );
+}
+
+
+/*******************************************************
+ * CREDENTIAL DETECTION
+ *******************************************************/
+
+function normalizeSensitiveHeader_(header) {
+
+  return String(header || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_\-]+/g, '');
+
+}
+
+
+function isUsernameHeader_(header) {
+
+  return APP_USERNAME_HEADERS.has(
+    normalizeSensitiveHeader_(header)
+  );
+
+}
+
+
+function isPasswordHeader_(header) {
+
+  return APP_PASSWORD_HEADERS.has(
+    normalizeSensitiveHeader_(header)
+  );
+
+}
+
+
+/*
+ * A credential is something we actually restrict.
+ *
+ * Usernames are intentionally NOT credentials here.
+ */
+function isCredentialHeader_(header) {
+
+  return isPasswordHeader_(header);
+
+}
+
+
+function sanitizeHeaders_(headers) {
+
+  return headers.filter(
+    header => !isCredentialHeader_(header)
+  );
+}
+
+
+/*******************************************************
+ * GENERIC TABLE
+ *******************************************************/
+
+function getAppTableData_(
+  pageKey,
+  forceRefresh
+) {
+
+  const config =
+    APP_PAGE_CONFIG[pageKey];
+
+
+  if (!config) {
+    throw new Error(
+      'Unknown application page.'
+    );
+  }
+
+
+  /*
+   * Servers is a combined logical page backed by
+   * two physical Google Sheet tabs.
+   */
+  if (
+    pageKey === 'servers' &&
+    config.combinedServerPage
+  ) {
+
+    return getCombinedServersData_(
+      pageKey,
+      config,
+      forceRefresh
+    );
+
+  }
+
+
+  const cache =
+    CacheService.getScriptCache();
+
+
+  const cacheKey =
+    'app_page_' + pageKey;
+
+
+  if (!forceRefresh) {
+
+    const cached =
+      cache.get(cacheKey);
+
+
+    if (cached) {
+
+      try {
+
+        return JSON.parse(
+          cached
+        );
+
+      } catch (error) {}
+
+    }
+
+  }
+
+
+  const sheet =
+    SpreadsheetApp
+      .getActiveSpreadsheet()
+      .getSheetByName(
+        config.sheet
+      );
+
+
+  if (!sheet) {
+
+    return emptyTableResult_(
+      pageKey,
+      config
+    );
+
+  }
+
+
+  const values =
+    sheet
+      .getDataRange()
+      .getDisplayValues();
+
+
+  if (!values.length) {
+
+    return emptyTableResult_(
+      pageKey,
+      config
+    );
+
+  }
+
+
+  const rawHeaders =
+    values[0]
+      .map(
+        value =>
+          String(value || '').trim()
+      );
+
+
+  const columns =
+    [];
+
+
+  rawHeaders.forEach(
+    (header, index) => {
+
+      if (
+        header &&
+        !isCredentialHeader_(header)
+      ) {
+
+        columns.push({
+          header: header,
+          sourceIndex: index
+        });
+
+      }
+
+    }
+  );
+
+
+  const headers =
+    columns.map(
+      column =>
+        column.header
+    );
+
+
+  const rows =
+    [];
+
+
+  for (
+    let rowIndex = 1;
+    rowIndex < values.length;
+    rowIndex++
+  ) {
+
+    const sourceRow =
+      values[rowIndex];
+
+
+    if (
+      !rowHasMeaningfulData_(
+        sourceRow,
+        rawHeaders
+      )
+    ) {
+      continue;
+    }
+
+
+    const row = {
+
+      _row:
+        rowIndex + 1,
+
+      _sourceSheet:
+        config.sheet
+
+    };
+
+
+    let hasData =
+      false;
+
+
+    columns.forEach(
+      column => {
+
+        const value =
+          String(
+            sourceRow[
+              column.sourceIndex
+            ] || ''
+          );
+
+
+        row[
+          column.header
+        ] =
+          value;
+
+
+        if (
+          value.trim()
+        ) {
+
+          hasData =
+            true;
+
+        }
+
+      }
+    );
+
+
+    if (!hasData) {
+      continue;
+    }
+
+
+    const firstValue =
+      String(
+        sourceRow[0] || ''
+      )
+        .trim()
+        .toLowerCase();
+
+
+    if (
+      firstValue.includes(
+        'color legend'
+      ) ||
+      firstValue.startsWith(
+        'count ='
+      )
+    ) {
+      continue;
+    }
+
+
+    rows.push(
+      row
+    );
+
+  }
+
+
+  let defaultColumns =
+    config.defaultColumns ||
+    headers.slice(0, 8);
+
+
+  defaultColumns =
+    defaultColumns.filter(
+      header =>
+        headers.includes(header)
+    );
+
+
+  const result = {
+
+    pageKey:
+      pageKey,
+
+    type:
+      'table',
+
+    label:
+      config.label,
+
+    sheetName:
+      config.sheet,
+
+    headers:
+      headers,
+
+    rows:
+      rows,
+
+    totalCount:
+      rows.length,
+
+    defaultColumns:
+      defaultColumns,
+
+    centralSync:
+      !!config.centralSync,
+
+    permission:
+      getPagePermission_(pageKey),
+
+    hasCredentials:
+      rawHeaders.some(
+        isCredentialHeader_
+      )
+
+  };
+
+
+  cacheJson_(
+    cacheKey,
+    result,
+    300
+  );
+
+
+  return result;
+}
+
+
+function getCombinedServersData_(
+  pageKey,
+  config,
+  forceRefresh
+) {
+
+  const cache =
+    CacheService.getScriptCache();
+
+
+  const cacheKey =
+    'app_page_' + pageKey;
+
+
+  if (!forceRefresh) {
+
+    const cached =
+      cache.get(
+        cacheKey
+      );
+
+
+    if (cached) {
+
+      try {
+
+        return JSON.parse(
+          cached
+        );
+
+      } catch (error) {}
+
+    }
+
+  }
+
+
+  const ss =
+    SpreadsheetApp
+      .getActiveSpreadsheet();
+
+
+  const activeSheet =
+    ss.getSheetByName(
+      config.sheet
+    );
+
+
+  const offlineSheet =
+    ss.getSheetByName(
+      config.offlineSheet
+    );
+
+
+  const activeData =
+    readServerSourceSheet_(
+      activeSheet,
+      'active'
+    );
+
+
+  const offlineData =
+    readServerSourceSheet_(
+      offlineSheet,
+      'offline'
+    );
+
+
+  /*
+   * Build a union of both sheet schemas.
+   *
+   * The Servers sheet gets first priority for column
+   * order. Columns that exist only on Offline Servers
+   * are appended afterward.
+   */
+  const headers =
+    [];
+
+
+  activeData.headers.forEach(
+    header => {
+
+      if (
+        !headers.includes(
+          header
+        )
+      ) {
+
+        headers.push(
+          header
+        );
+
+      }
+
+    }
+  );
+
+
+  offlineData.headers.forEach(
+    header => {
+
+      if (
+        !headers.includes(
+          header
+        )
+      ) {
+
+        headers.push(
+          header
+        );
+
+      }
+
+    }
+  );
+
+
+  const rows = [
+    ...activeData.rows,
+    ...offlineData.rows
+  ];
+
+
+  /*
+   * Normalize every record against the union schema.
+   *
+   * This allows a column to exist on Servers but not
+   * Offline Servers, or vice versa.
+   */
+  rows.forEach(
+    row => {
+
+      headers.forEach(
+        header => {
+
+          if (
+            !Object.prototype
+              .hasOwnProperty
+              .call(
+                row,
+                header
+              )
+          ) {
+
+            row[header] =
+              '';
+
+          }
+
+        }
+      );
+
+    }
+  );
+
+
+  let defaultColumns =
+    config.defaultColumns ||
+    headers.slice(
+      0,
+      8
+    );
+
+
+  defaultColumns =
+    defaultColumns.filter(
+      header =>
+        headers.includes(
+          header
+        )
+    );
+
+
+  const activeCount =
+    activeData.rows.length;
+
+
+  const offlineCount =
+    offlineData.rows.length;
+
+
+  const result = {
+
+    pageKey:
+      pageKey,
+
+    type:
+      'table',
+
+    label:
+      config.label,
+
+    sheetName:
+      config.sheet,
+
+    headers:
+      headers,
+
+    rows:
+      rows,
+
+    totalCount:
+      rows.length,
+
+    defaultColumns:
+      defaultColumns,
+
+    centralSync:
+      false,
+
+    permission:
+      getPagePermission_(
+        pageKey
+      ),
+
+    hasCredentials:
+      activeData.hasCredentials ||
+      offlineData.hasCredentials,
+
+    serverViews: {
+
+      active:
+        activeCount,
+
+      offline:
+        offlineCount,
+
+      all:
+        activeCount +
+        offlineCount
+
+    }
+
+  };
+
+
+  cacheJson_(
+    cacheKey,
+    result,
+    300
+  );
+
+
+  return result;
+}
+
+function readServerSourceSheet_(
+  sheet,
+  serverView
+) {
+
+  if (!sheet) {
+
+    return {
+      headers: [],
+      rows: [],
+      hasCredentials: false
+    };
+
+  }
+
+
+  const values =
+    sheet
+      .getDataRange()
+      .getDisplayValues();
+
+
+  if (!values.length) {
+
+    return {
+      headers: [],
+      rows: [],
+      hasCredentials: false
+    };
+
+  }
+
+
+  const rawHeaders =
+    values[0]
+      .map(
+        value =>
+          String(value || '').trim()
+      );
+
+
+  const columns =
+    [];
+
+
+  rawHeaders.forEach(
+    (header, index) => {
+
+      if (
+        header &&
+        !isCredentialHeader_(
+          header
+        )
+      ) {
+
+        columns.push({
+
+          header:
+            header,
+
+          sourceIndex:
+            index
+
+        });
+
+      }
+
+    }
+  );
+
+
+  const headers =
+    columns.map(
+      column =>
+        column.header
+    );
+
+
+  const rows =
+    [];
+
+
+  for (
+    let rowIndex = 1;
+    rowIndex < values.length;
+    rowIndex++
+  ) {
+
+    const sourceRow =
+      values[
+        rowIndex
+      ];
+
+
+    if (
+      !rowHasMeaningfulData_(
+        sourceRow,
+        rawHeaders
+      )
+    ) {
+
+      continue;
+
+    }
+
+
+    const firstValue =
+      String(
+        sourceRow[0] || ''
+      )
+        .trim();
+
+
+    const normalizedFirst =
+      firstValue
+        .toLowerCase();
+
+
+    if (
+      !firstValue ||
+      normalizedFirst.includes(
+        'color legend'
+      ) ||
+      normalizedFirst.startsWith(
+        'count ='
+      )
+    ) {
+
+      continue;
+
+    }
+
+
+    const row = {
+
+      /*
+       * Physical row on the source sheet.
+       */
+      _row:
+        rowIndex + 1,
+
+      /*
+       * Critical for Edit/Delete.
+       */
+      _sourceSheet:
+        sheet.getName(),
+
+      /*
+       * Used only by the Servers UI filter.
+       */
+      _serverView:
+        serverView
+
+    };
+
+
+    let hasData =
+      false;
+
+
+    columns.forEach(
+      column => {
+
+        const value =
+          String(
+            sourceRow[
+              column.sourceIndex
+            ] || ''
+          );
+
+
+        row[
+          column.header
+        ] =
+          value;
+
+
+        if (
+          value.trim()
+        ) {
+
+          hasData =
+            true;
+
+        }
+
+      }
+    );
+
+
+    if (
+      hasData
+    ) {
+
+      rows.push(
+        row
+      );
+
+    }
+
+  }
+
+
+  return {
+
+    headers:
+      headers,
+
+    rows:
+      rows,
+
+    hasCredentials:
+      rawHeaders.some(
+        isCredentialHeader_
+      )
+
+  };
+}
+
+
+function emptyTableResult_(
+  pageKey,
+  config
+) {
+
+  return {
+    pageKey: pageKey,
+    type: 'table',
+    label: config.label,
+    sheetName: config.sheet,
+    headers: [],
+    rows: [],
+    totalCount: 0,
+    defaultColumns: [],
+    centralSync:
+      !!config.centralSync,
+    permission:
+      getPagePermission_(pageKey),
+    hasCredentials: false
+  };
+}
+
+
+/*******************************************************
+ * STRUCTURED PAGES
+ *******************************************************/
+
+function getStructuredPageData_(
+  pageKey,
+  forceRefresh
+) {
+
+  const config =
+    APP_PAGE_CONFIG[pageKey];
+
+
+  const cache =
+    CacheService.getScriptCache();
+
+
+  const cacheKey =
+    'app_structured_' + pageKey;
+
+
+  if (!forceRefresh) {
+
+    const cached =
+      cache.get(cacheKey);
+
+    if (cached) {
+
+      try {
+        return JSON.parse(cached);
+      } catch (error) {}
+
+    }
+
+  }
+
+
+  const sheet =
+    SpreadsheetApp
+      .getActiveSpreadsheet()
+      .getSheetByName(config.sheet);
+
+
+  if (!sheet) {
+    throw new Error(
+      'Sheet not found: ' + config.sheet
+    );
+  }
+
+
+  /*
+   * ONE read for the entire sheet.
+   *
+   * This is considerably faster than making separate
+   * Spreadsheet service calls for every section.
+   */
+  const values =
+    sheet.getDataRange().getDisplayValues();
+
+
+  const sections =
+    (config.sections || [])
+      .map(section => {
+
+        if (section.type === 'metadata') {
+
+          return parseMetadataSection_(
+            values,
+            section
+          );
+
+        }
+
+
+        if (section.type === 'table') {
+
+          return parseStructuredTable_(
+            values,
+            section
+          );
+
+        }
+
+
+        return null;
+
+      })
+      .filter(Boolean);
+
+
+  const result = {
+
+    pageKey: pageKey,
+
+    type: 'structured',
+
+    label: config.label,
+
+    sheetName: config.sheet,
+
+    permission:
+      getPagePermission_(pageKey),
+
+    sections: sections
+
+  };
+
+
+  cacheJson_(
+    cacheKey,
+    result,
+    300
+  );
+
+
+  return result;
+}
+
+
+function parseStructuredTable_(
+  values,
+  section
+) {
+
+  const headerIndex =
+    Number(section.headerRow) - 1;
+
+
+  if (
+    headerIndex < 0 ||
+    headerIndex >= values.length
+  ) {
+
+    return {
+      key: section.key,
+      type: 'table',
+      title: section.title,
+      subtitle: section.subtitle || '',
+      columns: [],
+      headers: [],
+      rows: [],
+      totalCount: 0,
+      defaultColumns: [],
+      defaultColumnTitles: [],
+      hasCredentials: false
+    };
+
+  }
+
+
+  const startColumn =
+    Math.max(
+      0,
+      Number(section.startColumn || 1) - 1
+    );
+
+
+  const configuredEndColumn =
+    section.endColumn
+      ? Number(section.endColumn)
+      : values[headerIndex].length;
+
+
+  const endColumn =
+    Math.min(
+      configuredEndColumn,
+      values[headerIndex].length
+    );
+
+
+  /*
+   * Read the physical headers from this section.
+   */
+  const sourceHeaders =
+    values[headerIndex]
+      .slice(
+        startColumn,
+        endColumn
+      )
+      .map(
+        value =>
+          String(value || '').trim()
+      );
+
+
+  /*
+   * Build unique internal fields.
+   *
+   * We DO NOT use the header text as the data key.
+   *
+   * This allows:
+   *
+   * Notes | Notes
+   *
+   * or any other duplicate display header to exist
+   * without the columns overwriting each other.
+   *
+   * Password/secret columns are intentionally excluded
+   * from the normal payload.
+   */
+  const columns =
+    [];
+
+
+  sourceHeaders.forEach(
+    (header, localIndex) => {
+
+      if (!header) {
+        return;
+      }
+
+
+      if (
+        isCredentialHeader_(
+          header
+        )
+      ) {
+        return;
+      }
+
+
+      const sourceIndex =
+        startColumn +
+        localIndex;
+
+
+      columns.push({
+
+        title:
+          header,
+
+        field:
+          '__col_' +
+          (sourceIndex + 1),
+
+        sourceIndex:
+          sourceIndex
+
+      });
+
+    }
+  );
+
+
+  const endRow =
+    section.endRow
+      ? Math.min(
+          Number(section.endRow),
+          values.length
+        )
+      : values.length;
+
+
+  const rows =
+    [];
+
+
+  for (
+    let rowIndex =
+      headerIndex + 1;
+
+    rowIndex < endRow;
+
+    rowIndex++
+  ) {
+
+    const sourceRow =
+      values[rowIndex] || [];
+
+
+    /*
+     * Check the complete physical section row,
+     * including protected columns, to determine
+     * whether this is actually a populated record.
+     */
+    const meaningfulRow =
+      sourceRow.slice(
+        startColumn,
+        endColumn
+      );
+
+
+    if (
+      !rowHasMeaningfulData_(
+        meaningfulRow,
+        sourceHeaders
+      )
+    ) {
+      continue;
+    }
+
+
+    const row = {
+
+      _row:
+        rowIndex + 1,
+
+      _section:
+        section.key
+
+    };
+
+
+    let hasNormalData =
+      false;
+
+
+    columns.forEach(
+      column => {
+
+        const value =
+          String(
+            sourceRow[
+              column.sourceIndex
+            ] || ''
+          );
+
+
+        row[
+          column.field
+        ] =
+          value;
+
+
+        if (
+          value.trim()
+        ) {
+
+          hasNormalData =
+            true;
+
+        }
+
+      }
+    );
+
+
+    /*
+     * Normally there will be at least one ordinary
+     * value on the row.
+     *
+     * If not, don't send a blank-looking record.
+     */
+    if (
+      !hasNormalData
+    ) {
+      continue;
+    }
+
+
+    rows.push(
+      row
+    );
+
+  }
+
+
+  /*
+   * section.defaultColumns contains HUMAN-READABLE
+   * configured titles:
+   *
+   * Site
+   * IP
+   * User
+   * Password
+   * Server Location
+   * Notes
+   *
+   * Convert normal columns to their unique internal
+   * fields for Tabulator visibility.
+   *
+   * Password is virtual and therefore intentionally
+   * does not have a __col_X field here.
+   */
+  const configuredDefaults =
+    new Set(
+      section.defaultColumns || []
+    );
+
+
+  const defaultFields =
+    columns
+      .filter(
+        column =>
+          configuredDefaults.size === 0 ||
+          configuredDefaults.has(
+            column.title
+          )
+      )
+      .map(
+        column =>
+          column.field
+      );
+
+
+  const hasCredentials =
+    sourceHeaders.some(
+      header =>
+        isCredentialHeader_(
+          header
+        )
+    );
+
+
+  return {
+
+    key:
+      section.key,
+
+    type:
+      'table',
+
+    title:
+      section.title,
+
+    subtitle:
+      section.subtitle || '',
+
+
+    /*
+     * Authoritative physical column definitions.
+     */
+    columns:
+      columns.map(
+        column => ({
+
+          title:
+            column.title,
+
+          field:
+            column.field,
+
+          sourceIndex:
+            column.sourceIndex
+
+        })
+      ),
+
+
+    /*
+     * Retained for compatibility with edit-related
+     * code that may still need display headers.
+     */
+    headers:
+      columns.map(
+        column =>
+          column.title
+      ),
+
+
+    rows:
+      rows,
+
+    totalCount:
+      rows.length,
+
+
+    /*
+     * Internal Tabulator fields.
+     */
+    defaultColumns:
+      defaultFields,
+
+
+    /*
+     * Human-readable configured defaults.
+     *
+     * This is especially important for virtual
+     * Password because Password has no normal
+     * __col_X field.
+     */
+    defaultColumnTitles:
+      Array.from(
+        configuredDefaults
+      ),
+
+
+    hasCredentials:
+      hasCredentials
+
+  };
+
+}
+
+
+function parseMetadataSection_(
+  values,
+  section
+) {
+
+  const startRow =
+    Math.max(
+      0,
+      Number(section.startRow || 1) - 1
+    );
+
+
+  const endRow =
+    Math.min(
+      Number(section.endRow || values.length),
+      values.length
+    );
+
+
+  const startColumn =
+    Math.max(
+      0,
+      Number(section.startColumn || 1) - 1
+    );
+
+
+  const endColumn =
+    section.endColumn
+      ? Number(section.endColumn)
+      : (
+          values[0]
+            ? values[0].length
+            : 0
+        );
+
+
+  const items = [];
+
+  let hasCredentials = false;
+
+
+  for (
+    let rowIndex = startRow;
+    rowIndex < endRow;
+    rowIndex++
+  ) {
+
+    const row =
+      values[rowIndex] || [];
+
+
+    /*
+     * Metadata often looks like:
+     *
+     * Label | Value | Label | Value
+     *
+     * This processes each pair.
+     */
+    for (
+      let columnIndex = startColumn;
+      columnIndex < endColumn;
+      columnIndex += 2
+    ) {
+
+      const label =
+        String(
+          row[columnIndex] || ''
+        ).trim();
+
+
+      const value =
+        String(
+          row[columnIndex + 1] || ''
+        ).trim();
+
+
+      if (!label) {
+        continue;
+      }
+
+
+      if (isCredentialHeader_(label)) {
+
+        hasCredentials = true;
+
+        /*
+         * IMPORTANT:
+         * Do not send credential value.
+         */
+        continue;
+
+      }
+
+
+      /*
+       * Ignore obvious blank/meta decoration.
+       */
+      if (
+        !value &&
+        label.length > 60
+      ) {
+        continue;
+      }
+
+
+      items.push({
+        label: label,
+        value: value
+      });
+
+    }
+
+  }
+
+
+  return {
+
+    key: section.key,
+
+    type: 'metadata',
+
+    title: section.title,
+
+    subtitle:
+      section.subtitle || '',
+
+    items: items,
+
+    hasCredentials:
+      hasCredentials
+
+  };
+}
+
+
+/*******************************************************
+ * CREDENTIAL RETRIEVAL
+ *******************************************************/
+
+function appGetCredentials(
+  pageKey,
+  sectionKey
+) {
+
+  /*
+   * THIS IS THE SECURITY BOUNDARY.
+   *
+   * View-only users cannot call this successfully.
+   */
+  requirePagePermission_(
+    pageKey,
+    'edit'
+  );
+
+
+  const config =
+    APP_PAGE_CONFIG[pageKey];
+
+
+  if (!config) {
+    throw new Error(
+      'Unknown page.'
+    );
+  }
+
+
+  const sheet =
+    SpreadsheetApp
+      .getActiveSpreadsheet()
+      .getSheetByName(config.sheet);
+
+
+  if (!sheet) {
+    throw new Error(
+      'Sheet not found.'
+    );
+  }
+
+
+  const values =
+    sheet.getDataRange().getDisplayValues();
+
+
+  /*
+   * Structured page credentials.
+   */
+  if (config.type === 'structured') {
+
+    const section =
+      (config.sections || [])
+        .find(item =>
+          item.key === sectionKey
+        );
+
+
+    if (!section) {
+      throw new Error(
+        'Unknown page section.'
+      );
+    }
+
+
+    if (section.type === 'metadata') {
+
+      return getMetadataCredentials_(
+        values,
+        section
+      );
+
+    }
+
+
+    if (section.type === 'table') {
+
+      return getTableCredentials_(
+        values,
+        section
+      );
+
+    }
+
+  }
+
+
+  /*
+   * Generic table credentials.
+   */
+  if (config.type === 'table') {
+
+    return getTableCredentials_(
+      values,
+      {
+        key: 'main',
+        headerRow: 1,
+        startColumn: 1
+      }
+    );
+
+  }
+
+
+  return [];
+}
+
+function appGetRowCredential(
+  pageKey,
+  sectionKey,
+  rowNumber,
+  fieldName
+) {
+
+  /*
+   * THIS is the security boundary.
+   *
+   * Never rely on the browser to decide whether
+   * somebody can retrieve a password.
+   */
+  requirePagePermission_(
+    pageKey,
+    'edit'
+  );
+
+
+  const config =
+    APP_PAGE_CONFIG[
+      pageKey
+    ];
+
+
+  if (!config) {
+    throw new Error(
+      'Unknown page.'
+    );
+  }
+
+
+  const requestedRow =
+    Number(rowNumber);
+
+
+  if (
+    !Number.isInteger(requestedRow) ||
+    requestedRow < 1
+  ) {
+
+    throw new Error(
+      'Invalid spreadsheet row.'
+    );
+
+  }
+
+
+  const sheet =
+    SpreadsheetApp
+      .getActiveSpreadsheet()
+      .getSheetByName(
+        config.sheet
+      );
+
+
+  if (!sheet) {
+
+    throw new Error(
+      'Sheet not found: ' +
+      config.sheet
+    );
+
+  }
+
+
+  /*
+   * Structured page.
+   */
+  if (
+    config.type === 'structured'
+  ) {
+
+    const section =
+      (config.sections || [])
+        .find(
+          item =>
+            item.key === sectionKey
+        );
+
+
+    if (
+      !section ||
+      section.type !== 'table'
+    ) {
+
+      throw new Error(
+        'Invalid credential section.'
+      );
+
+    }
+
+
+    const headerRow =
+      Number(
+        section.headerRow || 1
+      );
+
+
+    const startColumn =
+      Number(
+        section.startColumn || 1
+      );
+
+
+    const endColumn =
+      section.endColumn
+        ? Number(section.endColumn)
+        : sheet.getLastColumn();
+
+
+    if (
+      requestedRow <= headerRow ||
+      (
+        section.endRow &&
+        requestedRow >
+          Number(section.endRow)
+      )
+    ) {
+
+      throw new Error(
+        'Requested row is outside this section.'
+      );
+
+    }
+
+
+    const headers =
+      sheet
+        .getRange(
+          headerRow,
+          startColumn,
+          1,
+          endColumn -
+            startColumn +
+            1
+        )
+        .getDisplayValues()[0]
+        .map(
+          value =>
+            String(value || '').trim()
+        );
+
+
+    const requestedNormalized =
+      normalizeSensitiveHeader_(
+        fieldName
+      );
+
+
+    let relativeColumn =
+      -1;
+
+
+    for (
+      let index = 0;
+      index < headers.length;
+      index++
+    ) {
+
+      if (
+        normalizeSensitiveHeader_(
+          headers[index]
+        ) === requestedNormalized
+      ) {
+
+        relativeColumn =
+          index;
+
+        break;
+
+      }
+
+    }
+
+
+    if (relativeColumn < 0) {
+
+      /*
+       * The UI uses "Password" as the normalized
+       * display name. If the sheet actually calls
+       * it PW, Pass, Pword, etc., find the first
+       * password-classified field.
+       */
+      if (
+        isPasswordHeader_(
+          fieldName
+        )
+      ) {
+
+        relativeColumn =
+          headers.findIndex(
+            header =>
+              isPasswordHeader_(
+                header
+              )
+          );
+
+      }
+
+    }
+
+
+    if (relativeColumn < 0) {
+
+      throw new Error(
+        'Credential field not found.'
+      );
+
+    }
+
+
+    const actualHeader =
+      headers[
+        relativeColumn
+      ];
+
+
+    if (
+      !isPasswordHeader_(
+        actualHeader
+      )
+    ) {
+
+      throw new Error(
+        'Requested field is not a restricted credential.'
+      );
+
+    }
+
+
+    const actualColumn =
+      startColumn +
+      relativeColumn;
+
+
+    return {
+
+      row:
+        requestedRow,
+
+      field:
+        'Password',
+
+      value:
+        sheet
+          .getRange(
+            requestedRow,
+            actualColumn
+          )
+          .getDisplayValue()
+
+    };
+
+  }
+
+
+  /*
+   * Standard table page.
+   */
+  const headerRow =
+    Number(
+      config.headerRow || 1
+    );
+
+
+  const startColumn =
+    Number(
+      config.startColumn || 1
+    );
+
+
+  const endColumn =
+    config.endColumn
+      ? Number(config.endColumn)
+      : sheet.getLastColumn();
+
+
+  const headers =
+    sheet
+      .getRange(
+        headerRow,
+        startColumn,
+        1,
+        endColumn -
+          startColumn +
+          1
+      )
+      .getDisplayValues()[0]
+      .map(
+        value =>
+          String(value || '').trim()
+      );
+
+
+  const relativeColumn =
+    headers.findIndex(
+      header =>
+        isPasswordHeader_(
+          header
+        )
+    );
+
+
+  if (relativeColumn < 0) {
+
+    throw new Error(
+      'Password field not found.'
+    );
+
+  }
+
+
+  return {
+
+    row:
+      requestedRow,
+
+    field:
+      'Password',
+
+    value:
+      sheet
+        .getRange(
+          requestedRow,
+          startColumn +
+            relativeColumn
+        )
+        .getDisplayValue()
+
+  };
+}
+
+
+function getMetadataCredentials_(
+  values,
+  section
+) {
+
+  const credentials = [];
+
+
+  const startRow =
+    Math.max(
+      0,
+      Number(section.startRow || 1) - 1
+    );
+
+
+  const endRow =
+    Math.min(
+      Number(section.endRow || values.length),
+      values.length
+    );
+
+
+  const startColumn =
+    Math.max(
+      0,
+      Number(section.startColumn || 1) - 1
+    );
+
+
+  const endColumn =
+    section.endColumn
+      ? Number(section.endColumn)
+      : (
+          values[0]
+            ? values[0].length
+            : 0
+        );
+
+
+  for (
+    let rowIndex = startRow;
+    rowIndex < endRow;
+    rowIndex++
+  ) {
+
+    const row =
+      values[rowIndex] || [];
+
+
+    for (
+      let columnIndex = startColumn;
+      columnIndex < endColumn;
+      columnIndex += 2
+    ) {
+
+      const label =
+        String(
+          row[columnIndex] || ''
+        ).trim();
+
+
+      const value =
+        String(
+          row[columnIndex + 1] || ''
+        ).trim();
+
+
+      if (
+        label &&
+        isCredentialHeader_(label)
+      ) {
+
+        credentials.push({
+          label: label,
+          value: value,
+          row: rowIndex + 1
+        });
+
+      }
+
+    }
+
+  }
+
+
+  return credentials;
+}
+
+
+function getTableCredentials_(
+  values,
+  section
+) {
+
+  const headerIndex =
+    Number(section.headerRow || 1) - 1;
+
+  if (
+    headerIndex < 0 ||
+    headerIndex >= values.length
+  ) {
+    return {
+      headers: [],
+      rows: []
+    };
+  }
+
+
+  const startColumn =
+    Math.max(
+      0,
+      Number(section.startColumn || 1) - 1
+    );
+
+
+  const endColumn =
+    section.endColumn
+      ? Number(section.endColumn)
+      : values[headerIndex].length;
+
+
+  const headers =
+    values[headerIndex]
+      .slice(
+        startColumn,
+        endColumn
+      )
+      .map(value =>
+        String(value || '').trim()
+      );
+
+
+  const credentialColumns = [];
+
+
+  headers.forEach(
+    (header, index) => {
+
+      if (isCredentialHeader_(header)) {
+
+        credentialColumns.push({
+          header: header,
+          sourceIndex:
+            startColumn + index
+        });
+
+      }
+
+    }
+  );
+
+
+  const endRow =
+    section.endRow
+      ? Math.min(
+          Number(section.endRow),
+          values.length
+        )
+      : values.length;
+
+
+  const rows = [];
+
+
+  for (
+    let rowIndex =
+      headerIndex + 1;
+
+    rowIndex < endRow;
+
+    rowIndex++
+  ) {
+
+    const sourceRow =
+      values[rowIndex] || [];
+
+
+    const record = {
+      _row: rowIndex + 1
+    };
+
+
+    let hasCredential = false;
+
+
+    credentialColumns.forEach(
+      column => {
+
+        const value =
+          String(
+            sourceRow[column.sourceIndex] || ''
+          ).trim();
+
+
+        record[column.header] =
+          value;
+
+
+        if (value) {
+          hasCredential = true;
+        }
+
+      }
+    );
+
+
+    if (hasCredential) {
+      rows.push(record);
+    }
+
+  }
+
+
+  return {
+
+    headers:
+      credentialColumns.map(
+        column => column.header
+      ),
+
+    rows: rows
+
+  };
+}
+
+
+/*******************************************************
+ * DASHBOARD
+ *******************************************************/
+
+function getAppDashboardData_(
+  forceRefresh
+) {
+
+  const cache =
+    CacheService.getScriptCache();
+
+
+  const cacheKey =
+    'app_dashboard';
+
+
+  if (!forceRefresh) {
+
+    const cached =
+      cache.get(cacheKey);
+
+    if (cached) {
+
+      try {
+        return JSON.parse(cached);
+      } catch (error) {}
+
+    }
+
+  }
+
+
+  const ss =
+    SpreadsheetApp.getActiveSpreadsheet();
+
+
+  /*
+   * Pull counts using lightweight reads.
+   */
+  const metrics = {
+
+    switches:
+      countAppRowsFromSheet_(
+        ss.getSheetByName('Switches')
+      ),
+
+    accessPoints:
+      countAppRowsFromSheet_(
+        ss.getSheetByName('Access Points')
+      ),
+
+    servers:
+      countAppRowsFromSheet_(
+        ss.getSheetByName('Servers')
+      ),
+
+    offlineServers:
+      countAppRowsFromSheet_(
+        ss.getSheetByName('Offline Servers')
+      ),
+
+    backups:
+      countAppRowsFromSheet_(
+        ss.getSheetByName('Backup Schedule')
+      )
+
+  };
+
+
+  const switchSheet =
+    ss.getSheetByName('Switches');
+
+
+  const apSheet =
+    ss.getSheetByName('Access Points');
+
+
+  const switchValues =
+    switchSheet
+      ? switchSheet
+          .getDataRange()
+          .getDisplayValues()
+      : [];
+
+
+  const apValues =
+    apSheet
+      ? apSheet
+          .getDataRange()
+          .getDisplayValues()
+      : [];
+
+
+  const workflow =
+    getDepartmentWorkflowData_(
+      false
+    );
+
+
+  const result = {
+
+    metrics: metrics,
+
+    switchStatus:
+      countColumnValuesFromData_(
+        switchValues,
+        'Status'
+      ),
+
+    apStatus:
+      countColumnValuesFromData_(
+        apValues,
+        'Status'
+      ),
+
+    campusDistribution:
+      countColumnValuesFromData_(
+        switchValues,
+        'Campus'
+      ),
+
+    workflow: {
+      groups:
+        workflow.groups.length,
+
+      tiers:
+        workflow.tiers.length,
+
+      ticketSteps:
+        workflow.ticketSteps.length,
+
+      priorities:
+        workflow.priorities.length,
+
+      workflows:
+        workflow.workflows.length
+    }
+
+  };
+
+
+  cacheJson_(
+    cacheKey,
+    result,
+    300
+  );
+
+
+  return result;
+}
+
+
+function countAppRowsFromSheet_(sheet) {
+
+  if (
+    !sheet ||
+    sheet.getLastRow() < 2
+  ) {
+    return 0;
+  }
+
+
+  const values =
+    sheet
+      .getRange(
+        2,
+        1,
+        sheet.getLastRow() - 1,
+        1
+      )
+      .getDisplayValues();
+
+
+  return values.filter(row => {
+
+    const value =
+      String(row[0] || '')
+        .trim();
+
+
+    return (
+      value &&
+      !value
+        .toLowerCase()
+        .includes('color legend')
+    );
+
+  }).length;
+}
+
+
+function countColumnValuesFromData_(
+  data,
+  headerName
+) {
+
+  if (!data || !data.length) {
+    return {};
+  }
+
+
+  const headers =
+    data[0].map(value =>
+      String(value || '').trim()
+    );
+
+
+  const index =
+    headers.indexOf(headerName);
+
+
+  if (index === -1) {
+    return {};
+  }
+
+
+  const result = {};
+
+
+  for (
+    let rowIndex = 1;
+    rowIndex < data.length;
+    rowIndex++
+  ) {
+
+    const value =
+      String(
+        data[rowIndex][index] || ''
+      ).trim();
+
+
+    if (!value) {
+      continue;
+    }
+
+
+    result[value] =
+      (result[value] || 0) + 1;
+
+  }
+
+
+  return result;
+}
+
+
+/*******************************************************
+ * WORKFLOW
+ *******************************************************/
+
+function getDepartmentWorkflowData_(
+  forceRefresh
+) {
+
+  const cache =
+    CacheService.getScriptCache();
+
+
+  const cacheKey =
+    'app_department_workflow';
+
+
+  if (!forceRefresh) {
+
+    const cached =
+      cache.get(cacheKey);
+
+    if (cached) {
+
+      try {
+        return JSON.parse(cached);
+      } catch (error) {}
+
+    }
+
+  }
+
+
+  const sheet =
+    SpreadsheetApp
+      .getActiveSpreadsheet()
+      .getSheetByName(
+        'Department Workflow'
+      );
+
+
+  const result = {
+    groups: [],
+    tiers: [],
+    ticketSteps: [],
+    priorities: [],
+    workflows: []
+  };
+
+
+  if (!sheet) {
+    return result;
+  }
+
+
+  const data =
+    sheet
+      .getDataRange()
+      .getDisplayValues();
+
+
+  let section = '';
+
+
+  data.forEach(row => {
+
+    const first =
+      String(row[0] || '')
+        .trim();
+
+
+    if (!first) {
+      return;
+    }
+
+
+    if (first === 'Group') {
+      section = 'groups';
+      return;
+    }
+
+
+    if (first === 'Tier') {
+      section = 'tiers';
+      return;
+    }
+
+
+    if (first === 'Ticket Step') {
+      section = 'ticketSteps';
+      return;
+    }
+
+
+    if (first === 'Priority Level') {
+      section = 'priorities';
+      return;
+    }
+
+
+    if (first === 'Category') {
+      section = 'workflows';
+      return;
+    }
+
+
+    if (section === 'groups') {
+
+      result.groups.push({
+        group: row[0],
+        members: row[1],
+        purpose: row[2]
+      });
+
+    }
+
+
+    if (section === 'tiers') {
+
+      result.tiers.push({
+        tier: row[0],
+        definition: row[1]
+      });
+
+    }
+
+
+    if (section === 'ticketSteps') {
+
+      result.ticketSteps.push({
+        step: row[0],
+        stage: row[1],
+        responsible: row[2],
+        criteria: row[3]
+      });
+
+    }
+
+
+    if (section === 'priorities') {
+
+      result.priorities.push({
+        priority: row[0],
+        responseSla: row[1],
+        resolutionSla: row[2],
+        definition: row[3],
+        escalation: row[4]
+      });
+
+    }
+
+
+    if (section === 'workflows') {
+
+      result.workflows.push({
+        category: row[0],
+        workflow: row[1],
+        tier: row[2],
+        primaryOwner: row[3],
+        backup: row[4],
+        support: row[5],
+        notes: row[6]
+      });
+
+    }
+
+  });
+
+
+  cacheJson_(
+    cacheKey,
+    result,
+    600
+  );
+
+
+  return result;
+}
+
+
+/*******************************************************
+ * CRUD
+ *******************************************************/
+
+function appUpdateRecord(
+  pageKey,
+  rowNumber,
+  record,
+  sourceSheetName
+) {
+
+  requirePagePermission_(
+    pageKey,
+    'edit'
+  );
+
+
+  const config =
+    APP_PAGE_CONFIG[
+      pageKey
+    ];
+
+
+  if (
+    !config ||
+    (
+      config.type !== 'table' &&
+      config.type !== 'structured'
+    )
+  ) {
+
+    throw new Error(
+      'This page cannot be edited this way.'
+    );
+
+  }
+
+
+  let targetSheetName =
+    config.sheet;
+
+
+  /*
+   * Servers may originate from either physical sheet.
+   *
+   * Do NOT accept arbitrary sheet names from the browser.
+   */
+  if (
+    pageKey === 'servers' &&
+    config.combinedServerPage
+  ) {
+
+    const allowedSheets = [
+      config.sheet,
+      config.offlineSheet
+    ];
+
+
+    if (
+      sourceSheetName &&
+      allowedSheets.includes(
+        sourceSheetName
+      )
+    ) {
+
+      targetSheetName =
+        sourceSheetName;
+
+    } else if (
+      sourceSheetName
+    ) {
+
+      throw new Error(
+        'Invalid server source.'
+      );
+
+    }
+
+  }
+
+
+  const sheet =
+    SpreadsheetApp
+      .getActiveSpreadsheet()
+      .getSheetByName(
+        targetSheetName
+      );
+
+
+  if (!sheet) {
+
+    throw new Error(
+      'Sheet not found.'
+    );
+
+  }
+
+
+  rowNumber =
+    Number(
+      rowNumber
+    );
+
+
+  if (
+    !Number.isInteger(
+      rowNumber
+    ) ||
+    rowNumber < 1 ||
+    rowNumber >
+      sheet.getLastRow()
+  ) {
+
+    throw new Error(
+      'Invalid row.'
+    );
+
+  }
+
+
+  const lastColumn =
+    sheet.getLastColumn();
+
+
+  const current =
+    sheet
+      .getRange(
+        rowNumber,
+        1,
+        1,
+        lastColumn
+      )
+      .getValues()[0];
+
+
+  let headerRow =
+    1;
+
+
+  if (
+    config.type === 'structured' &&
+    record._section
+  ) {
+
+    const section =
+      config.sections.find(
+        item =>
+          item.key ===
+          record._section
+      );
+
+
+    if (
+      section &&
+      section.headerRow
+    ) {
+
+      headerRow =
+        Number(
+          section.headerRow
+        );
+
+    }
+
+  }
+
+
+  const headers =
+    sheet
+      .getRange(
+        headerRow,
+        1,
+        1,
+        lastColumn
+      )
+      .getDisplayValues()[0];
+
+
+  const output =
+    current.slice();
+
+
+  headers.forEach(
+    (header, index) => {
+
+      const name =
+        String(
+          header || ''
+        ).trim();
+
+
+      if (
+        name &&
+        !isCredentialHeader_(
+          name
+        ) &&
+        Object.prototype
+          .hasOwnProperty
+          .call(
+            record,
+            name
+          )
+      ) {
+
+        output[index] =
+          record[name];
+
+      }
+
+    }
+  );
+
+
+  sheet
+    .getRange(
+      rowNumber,
+      1,
+      1,
+      output.length
+    )
+    .setValues([
+      output
+    ]);
+
+
+  invalidateAppPage_(
+    pageKey
+  );
+
+
+  return {
+    status: 'success'
+  };
+}
+
+
+function appAddRecord(
+  pageKey,
+  record
+) {
+
+  requirePagePermission_(
+    pageKey,
+    'edit'
+  );
+
+
+  const config =
+    APP_PAGE_CONFIG[pageKey];
+
+
+  /*
+   * For now Add Record remains for standard tables only.
+   *
+   * Structured tables often have metadata/secondary tables,
+   * so blindly appending to the bottom can put the record in
+   * the wrong section.
+   */
+  if (
+    !config ||
+    config.type !== 'table'
+  ) {
+    throw new Error(
+      'Adding records is not available for this structured page.'
+    );
+  }
+
+
+  const sheet =
+    SpreadsheetApp
+      .getActiveSpreadsheet()
+      .getSheetByName(config.sheet);
+
+
+  if (!sheet) {
+    throw new Error(
+      'Sheet not found.'
+    );
+  }
+
+
+  const headers =
+    sheet
+      .getRange(
+        1,
+        1,
+        1,
+        sheet.getLastColumn()
+      )
+      .getDisplayValues()[0];
+
+
+  const row =
+    headers.map(header => {
+
+      const name =
+        String(header || '').trim();
+
+
+      if (
+        !name ||
+        isCredentialHeader_(name)
+      ) {
+        return '';
+      }
+
+
+      return Object.prototype
+        .hasOwnProperty
+        .call(record, name)
+          ? record[name]
+          : '';
+
+    });
+
+
+  sheet.appendRow(row);
+
+
+  invalidateAppPage_(
+    pageKey
+  );
+
+
+  return {
+    status: 'success'
+  };
+}
+
+
+function appDeleteRecord(
+  pageKey,
+  rowNumber,
+  sourceSheetName
+) {
+
+  requirePagePermission_(
+    pageKey,
+    'edit'
+  );
+
+
+  const config =
+    APP_PAGE_CONFIG[
+      pageKey
+    ];
+
+
+  if (!config) {
+
+    throw new Error(
+      'Unknown page.'
+    );
+
+  }
+
+
+  let targetSheetName =
+    config.sheet;
+
+
+  /*
+   * Combined Servers page may delete from either
+   * physical source sheet.
+   */
+  if (
+    pageKey === 'servers' &&
+    config.combinedServerPage
+  ) {
+
+    const allowedSheets = [
+      config.sheet,
+      config.offlineSheet
+    ];
+
+
+    if (
+      sourceSheetName &&
+      allowedSheets.includes(
+        sourceSheetName
+      )
+    ) {
+
+      targetSheetName =
+        sourceSheetName;
+
+    } else if (
+      sourceSheetName
+    ) {
+
+      throw new Error(
+        'Invalid server source.'
+      );
+
+    }
+
+  }
+
+
+  const sheet =
+    SpreadsheetApp
+      .getActiveSpreadsheet()
+      .getSheetByName(
+        targetSheetName
+      );
+
+
+  rowNumber =
+    Number(
+      rowNumber
+    );
+
+
+  if (
+    !sheet ||
+    !Number.isInteger(
+      rowNumber
+    ) ||
+    rowNumber < 2 ||
+    rowNumber >
+      sheet.getLastRow()
+  ) {
+
+    throw new Error(
+      'Invalid row.'
+    );
+
+  }
+
+
+  sheet.deleteRow(
+    rowNumber
+  );
+
+
+  invalidateAppPage_(
+    pageKey
+  );
+
+
+  return {
+    status: 'success'
+  };
+}
+
+
+/*******************************************************
+ * CACHE
+ *******************************************************/
+
+function cacheJson_(
+  key,
+  value,
+  seconds
+) {
+
+  try {
+
+    const json =
+      JSON.stringify(value);
+
+
+    /*
+     * Apps Script Cache has per-entry size limits.
+     * Don't let a large table break the request just because
+     * it can't be cached.
+     */
+    if (json.length < 90000) {
+
+      CacheService
+        .getScriptCache()
+        .put(
+          key,
+          json,
+          seconds
+        );
+
+    }
+
+  } catch (error) {
+
+    console.warn(
+      'Cache skipped:',
+      key,
+      error
+    );
+
+  }
+}
+
+
+function invalidateAppPage_(
+  pageKey
+) {
+
+  const cache =
+    CacheService.getScriptCache();
+
+
+  cache.remove(
+    'app_page_' + pageKey
+  );
+
+
+  cache.remove(
+    'app_structured_' + pageKey
+  );
+
+
+  cache.remove(
+    'app_dashboard'
+  );
+
+
+  if (pageKey === 'workflow') {
+
+    cache.remove(
+      'app_department_workflow'
+    );
+
+  }
+}
+
+
+function appClearCache() {
+
+  const access =
+    getUserAccess_(
+      getCurrentUserEmail_()
+    );
+
+
+  if (!access.authorized) {
+    throw new Error(
+      'Unauthorized access.'
+    );
+  }
+
+
+  const cache =
+    CacheService.getScriptCache();
+
+
+  cache.remove(
+    'app_dashboard'
+  );
+
+
+  cache.remove(
+    'app_department_workflow'
+  );
+
+
+  Object.keys(APP_PAGE_CONFIG)
+    .forEach(key => {
+
+      cache.remove(
+        'app_page_' + key
+      );
+
+      cache.remove(
+        'app_structured_' + key
+      );
+
+    });
+
+
+  return {
+    status: 'success'
+  };
+}
+
+
+/*******************************************************
+ * USERS
+ *******************************************************/
+
+function getAppUsers_() {
+
+  requireAdmin_();
+
+
+  const sheet =
+    ensureAppUsersSheet_();
+
+
+  if (sheet.getLastRow() < 2) {
+
+    return {
+      users: [],
+      pages:
+        getPermissionPageList_(),
+      breakglass:
+        APP_BREAKGLASS_ADMINS
+    };
+
+  }
+
+
+  const values =
+    sheet
+      .getRange(
+        2,
+        1,
+        sheet.getLastRow() - 1,
+        5
+      )
+      .getDisplayValues();
+
+
+  const users =
+    values
+      .filter(row =>
+        String(row[0] || '').trim()
+      )
+      .map((row, index) => {
+
+        let permissions = {};
+
+
+        try {
+
+          permissions =
+            row[4]
+              ? JSON.parse(row[4])
+              : {};
+
+        } catch (error) {}
+
+
+        return {
+
+          row: index + 2,
+
+          email: row[0],
+
+          name: row[1],
+
+          active:
+            String(row[2])
+              .toLowerCase() === 'true',
+
+          defaultPermission:
+            normalizePermission_(
+              row[3] || 'view'
+            ),
+
+          permissions:
+            permissions
+
+        };
+
+      });
+
+
+  return {
+    users: users,
+    pages:
+      getPermissionPageList_(),
+    breakglass:
+      APP_BREAKGLASS_ADMINS
+  };
+}
+
+
+function getPermissionPageList_() {
+
+  return Object.keys(APP_PAGE_CONFIG)
+    .filter(key =>
+      !APP_PAGE_CONFIG[key].adminOnly
+    )
+    .map(key => ({
+      key: key,
+      label:
+        APP_PAGE_CONFIG[key].label
+    }));
+}
+
+
+function saveAppUser(user) {
+
+  requireAdmin_();
+
+
+  const email =
+    String(user.email || '')
+      .trim()
+      .toLowerCase();
+
+
+  if (!email) {
+    throw new Error(
+      'Email address is required.'
+    );
+  }
+
+
+  if (
+    !email.endsWith(
+      '@sheridanschools.org'
+    )
+  ) {
+    throw new Error(
+      'Only Sheridan School District accounts may be added.'
+    );
+  }
+
+
+  const sheet =
+    ensureAppUsersSheet_();
+
+
+  let targetRow = null;
+
+
+  if (sheet.getLastRow() >= 2) {
+
+    const emails =
+      sheet
+        .getRange(
+          2,
+          1,
+          sheet.getLastRow() - 1,
+          1
+        )
+        .getDisplayValues();
+
+
+    for (
+      let index = 0;
+      index < emails.length;
+      index++
+    ) {
+
+      if (
+        String(emails[index][0] || '')
+          .trim()
+          .toLowerCase() === email
+      ) {
+
+        targetRow =
+          index + 2;
+
+        break;
+
+      }
+
+    }
+
+  }
+
+
+  const values = [[
+
+    email,
+
+    String(
+      user.name || ''
+    ).trim(),
+
+    user.active !== false,
+
+    normalizePermission_(
+      user.defaultPermission || 'view'
+    ),
+
+    JSON.stringify(
+      user.permissions || {}
+    )
+
+  ]];
+
+
+  if (targetRow) {
+
+    sheet
+      .getRange(
+        targetRow,
+        1,
+        1,
+        5
+      )
+      .setValues(values);
+
+  } else {
+
+    sheet
+      .getRange(
+        sheet.getLastRow() + 1,
+        1,
+        1,
+        5
+      )
+      .setValues(values);
+
+  }
+
+  CacheService
+    .getScriptCache()
+    .remove(
+      'app_access_' + email
+  );
+
+  return {
+    status: 'success'
+  };
+}
+
+
+function deleteAppUser(email) {
+
+  requireAdmin_();
+
+
+  email =
+    String(email || '')
+      .trim()
+      .toLowerCase();
+
+
+  if (
+    isBreakglassAdmin_(email)
+  ) {
+    throw new Error(
+      'Break-glass administrators cannot be removed.'
+    );
+  }
+
+
+  const sheet =
+    ensureAppUsersSheet_();
+
+
+  if (sheet.getLastRow() < 2) {
+
+    return {
+      status: 'success'
+    };
+
+  }
+
+
+  const emails =
+    sheet
+      .getRange(
+        2,
+        1,
+        sheet.getLastRow() - 1,
+        1
+      )
+      .getDisplayValues();
+
+
+  for (
+    let index =
+      emails.length - 1;
+
+    index >= 0;
+
+    index--
+  ) {
+
+    if (
+      String(emails[index][0] || '')
+        .trim()
+        .toLowerCase() === email
+    ) {
+
+      sheet.deleteRow(
+        index + 2
+      );
+
+    }
+
+  }
+
+  CacheService
+    .getScriptCache()
+    .remove(
+      'app_access_' + email
+  );
+
+  return {
+    status: 'success'
+  };
+}
+
+function rowHasMeaningfulData_(row, headers) {
+
+  for (let i = 0; i < headers.length; i++) {
+
+    const header = String(headers[i] || '').trim();
+
+    if (!header || isCredentialHeader_(header)) {
+      continue;
+    }
+
+    const value = String(row[i] || '').trim();
+
+    if (!value) {
+      continue;
+    }
+
+    /*
+     * Google Sheets checkboxes / dropdown defaults can create
+     * FALSE values hundreds of rows below the actual dataset.
+     *
+     * Treat FALSE by itself as an unused/default cell.
+     */
+    if (value.toLowerCase() === 'false') {
+      continue;
+    }
+
+    return true;
+  }
+
+  return false;
+}

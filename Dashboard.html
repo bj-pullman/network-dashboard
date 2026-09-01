@@ -1,0 +1,325 @@
+<script>
+
+function renderDashboard(data) {
+
+  setPageHeader(
+    'Dashboard',
+    'District technology infrastructure overview'
+  );
+
+  document.getElementById('pageActions').innerHTML = `
+    <button
+      class="btn btn-sm btn-light border"
+      onclick="refreshCurrentPage()"
+    >
+      <i class="fa-solid fa-rotate me-2"></i>
+      Refresh
+    </button>
+  `;
+
+  const metrics = [
+    {
+      label: 'Switches',
+      value: data.metrics.switches,
+      icon: 'fa-network-wired'
+    },
+    {
+      label: 'Access Points',
+      value: data.metrics.accessPoints,
+      icon: 'fa-wifi'
+    },
+    {
+      label: 'Servers',
+      value: data.metrics.servers,
+      icon: 'fa-server'
+    },
+    {
+      label: 'Offline Servers',
+      value: data.metrics.offlineServers,
+      icon: 'fa-triangle-exclamation'
+    },
+    {
+      label: 'Backup Jobs',
+      value: data.metrics.backups,
+      icon: 'fa-database'
+    }
+  ];
+
+  document.getElementById('pageContent').innerHTML = `
+
+    <div class="row g-3 mb-4">
+
+      ${metrics.map(metric => `
+        <div class="col-xl col-md-4 col-sm-6">
+
+          <div class="metric-card">
+
+            <div class="metric-icon">
+              <i class="fa-solid ${metric.icon}"></i>
+            </div>
+
+            <div>
+              <div class="metric-label">
+                ${escapeHtml(metric.label)}
+              </div>
+
+              <div class="metric-value">
+                ${escapeHtml(metric.value)}
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+      `).join('')}
+
+    </div>
+
+
+    <div class="row g-3 mb-4">
+
+      <div class="col-xl-8">
+
+        <div class="app-card h-100">
+
+          <div class="card-header-clean">
+            <h2 class="card-title-clean">
+              Switch Deployment by Campus
+            </h2>
+          </div>
+
+          <div class="p-3">
+            <canvas
+              id="campusChart"
+              height="105"
+            ></canvas>
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <div class="col-xl-4">
+
+        <div class="app-card h-100">
+
+          <div class="card-header-clean">
+            <h2 class="card-title-clean">
+              Department Workflow
+            </h2>
+
+            <button
+              class="btn btn-sm btn-light border"
+              onclick="navigateTo('workflow')"
+            >
+              Open
+            </button>
+          </div>
+
+          <div class="p-3">
+
+            <div class="row g-2">
+
+              ${dashboardMiniMetric(
+                'Workflow Groups',
+                data.workflow.groups
+              )}
+
+              ${dashboardMiniMetric(
+                'Support Tiers',
+                data.workflow.tiers
+              )}
+
+              ${dashboardMiniMetric(
+                'Ticket Steps',
+                data.workflow.ticketSteps
+              )}
+
+              ${dashboardMiniMetric(
+                'Workflows',
+                data.workflow.workflows
+              )}
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <div class="row g-3">
+
+      <div class="col-lg-6">
+
+        <div class="app-card">
+
+          <div class="card-header-clean">
+            <h2 class="card-title-clean">
+              Switch Health
+            </h2>
+          </div>
+
+          <div class="p-3">
+            ${renderStatusSummary(data.switchStatus)}
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <div class="col-lg-6">
+
+        <div class="app-card">
+
+          <div class="card-header-clean">
+            <h2 class="card-title-clean">
+              Access Point Health
+            </h2>
+          </div>
+
+          <div class="p-3">
+            ${renderStatusSummary(data.apStatus)}
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+  `;
+
+  renderCampusChart(data.campusDistribution);
+}
+
+
+function dashboardMiniMetric(label, value) {
+  return `
+    <div class="col-6">
+
+      <div
+        style="
+          background:#f7f8fa;
+          border:1px solid #e5e8ec;
+          border-radius:9px;
+          padding:13px;
+        "
+      >
+
+        <div class="metric-label">
+          ${escapeHtml(label)}
+        </div>
+
+        <div
+          style="
+            font-size:22px;
+            font-weight:800;
+            color:#0d2342;
+          "
+        >
+          ${escapeHtml(value)}
+        </div>
+
+      </div>
+
+    </div>
+  `;
+}
+
+
+function renderStatusSummary(statuses) {
+
+  const entries =
+    Object.entries(statuses || {});
+
+  if (!entries.length) {
+    return `
+      <div class="text-muted small">
+        No status information available.
+      </div>
+    `;
+  }
+
+  return `
+    <div class="d-flex flex-wrap gap-2">
+
+      ${entries.map(([status, count]) => `
+        <div
+          class="d-flex align-items-center gap-2 border rounded px-3 py-2"
+        >
+          ${statusPill(status)}
+
+          <strong>
+            ${escapeHtml(count)}
+          </strong>
+        </div>
+      `).join('')}
+
+    </div>
+  `;
+}
+
+
+function renderCampusChart(distribution) {
+
+  const canvas =
+    document.getElementById('campusChart');
+
+  if (!canvas) return;
+
+  if (window.dashboardChart) {
+    window.dashboardChart.destroy();
+  }
+
+  window.dashboardChart =
+    new Chart(canvas, {
+
+      type: 'bar',
+
+      data: {
+        labels:
+          Object.keys(distribution || {}),
+
+        datasets: [{
+          label: 'Switches',
+          data:
+            Object.values(distribution || {}),
+          backgroundColor: '#17345f',
+          borderRadius: 5
+        }]
+      },
+
+      options: {
+        responsive: true,
+
+        plugins: {
+          legend: {
+            display: false
+          }
+        },
+
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              precision: 0
+            }
+          },
+
+          x: {
+            grid: {
+              display: false
+            }
+          }
+        }
+      }
+
+    });
+}
+
+</script>

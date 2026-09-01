@@ -1,0 +1,1478 @@
+<script>
+
+/*******************************************************
+ * CONFIGURATION
+ *******************************************************/
+
+
+/*
+ * Browser cache lifetime.
+ *
+ * 5 minutes means clicking back to a page you've already
+ * visited does NOT make another Apps Script request.
+ */
+const CLIENT_CACHE_TTL_MS =
+  5 * 60 * 1000;
+
+
+/*******************************************************
+ * STATE
+ *******************************************************/
+
+let appBootstrap =
+  null;
+
+
+let currentPageKey =
+  'dashboard';
+
+
+let currentPageData =
+  null;
+
+
+let currentTableData =
+  null;
+
+
+let currentStructuredData =
+  null;
+
+
+let currentHeaders =
+  [];
+
+
+let tableInstance =
+  null;
+
+
+let editingRow =
+  null;
+
+
+let recordModal =
+  null;
+
+
+let configModal =
+  null;
+
+
+const clientPageCache =
+  new Map();
+
+
+const structuredTables =
+  {};
+
+
+/*******************************************************
+ * STARTUP
+ *******************************************************/
+
+window.addEventListener(
+  'DOMContentLoaded',
+  function() {
+
+
+    recordModal =
+      new bootstrap.Modal(
+        document.getElementById(
+          'recordModal'
+        )
+      );
+
+
+    configModal =
+      new bootstrap.Modal(
+        document.getElementById(
+          'configModal'
+        )
+      );
+
+
+    google.script.run
+
+      .withSuccessHandler(
+        initializeApplication
+      )
+
+      .withFailureHandler(
+        handleFailure
+      )
+
+      .getAppBootstrap();
+
+  }
+);
+
+
+/*******************************************************
+ * APP INITIALIZATION
+ *******************************************************/
+
+function initializeApplication(
+  data
+) {
+
+  appBootstrap =
+    data;
+
+
+  document.getElementById(
+    'sidebarUserName'
+  ).textContent =
+    data.user.name ||
+    data.user.email;
+
+
+  document.getElementById(
+    'sidebarUserRole'
+  ).textContent =
+    data.user.admin
+      ? 'Super Administrator'
+      : 'Authorized User';
+
+
+  buildNavigation(
+    data.pages
+  );
+
+
+  navigateTo(
+    'dashboard'
+  );
+}
+
+
+/*******************************************************
+ * NAVIGATION
+ *******************************************************/
+
+function buildNavigation(
+  pages
+) {
+
+  const container =
+    document.getElementById(
+      'navigation'
+    );
+
+
+  const groups =
+    {};
+
+
+  pages.forEach(
+    page => {
+
+      if (!groups[page.group]) {
+        groups[page.group] = [];
+      }
+
+
+      groups[
+        page.group
+      ].push(page);
+
+    }
+  );
+
+
+  container.innerHTML =
+    '';
+
+
+  Object.entries(groups)
+    .forEach(
+      ([group, groupPages]) => {
+
+        const section =
+          document.createElement(
+            'div'
+          );
+
+
+        section.className =
+          'nav-group';
+
+
+        const title =
+          document.createElement(
+            'div'
+          );
+
+
+        title.className =
+          'nav-group-title';
+
+
+        title.textContent =
+          group.toUpperCase();
+
+
+        section.appendChild(
+          title
+        );
+
+
+        groupPages.forEach(
+          page => {
+
+            const button =
+              document.createElement(
+                'button'
+              );
+
+
+            button.className =
+              'app-nav-item';
+
+
+            button.dataset.page =
+              page.key;
+
+
+            const icon =
+              document.createElement(
+                'i'
+              );
+
+
+            icon.className =
+              'fa-solid ' +
+              page.icon;
+
+
+            const label =
+              document.createElement(
+                'span'
+              );
+
+
+            label.textContent =
+              page.label;
+
+
+            button.appendChild(
+              icon
+            );
+
+
+            button.appendChild(
+              label
+            );
+
+
+            button.addEventListener(
+              'click',
+              function() {
+
+                navigateTo(
+                  page.key
+                );
+
+              }
+            );
+
+
+            section.appendChild(
+              button
+            );
+
+          }
+        );
+
+
+        container.appendChild(
+          section
+        );
+
+      }
+    );
+}
+
+
+function navigateTo(
+  pageKey
+) {
+
+  if (
+    !appBootstrap ||
+    !appBootstrap.pages.some(
+      page =>
+        page.key === pageKey
+    )
+  ) {
+    return;
+  }
+
+
+  currentPageKey =
+    pageKey;
+
+
+  document
+    .querySelectorAll(
+      '.app-nav-item'
+    )
+    .forEach(
+      button => {
+
+        button.classList.toggle(
+          'active',
+          button.dataset.page === pageKey
+        );
+
+      }
+    );
+
+
+  loadPage(
+    pageKey,
+    false
+  );
+}
+
+
+/*******************************************************
+ * CLIENT CACHE
+ *******************************************************/
+
+function getClientCache(
+  pageKey
+) {
+
+  const entry =
+    clientPageCache.get(
+      pageKey
+    );
+
+
+  if (!entry) {
+    return null;
+  }
+
+
+  if (
+    Date.now() -
+    entry.timestamp >
+    CLIENT_CACHE_TTL_MS
+  ) {
+
+    clientPageCache.delete(
+      pageKey
+    );
+
+    return null;
+
+  }
+
+
+  return entry.data;
+}
+
+
+function setClientCache(
+  pageKey,
+  data
+) {
+
+  clientPageCache.set(
+    pageKey,
+    {
+      timestamp:
+        Date.now(),
+
+      data:
+        data
+    }
+  );
+}
+
+
+function invalidateClientPage(
+  pageKey
+) {
+
+  clientPageCache.delete(
+    pageKey
+  );
+
+
+  if (
+    pageKey !== 'dashboard'
+  ) {
+
+    clientPageCache.delete(
+      'dashboard'
+    );
+
+  }
+}
+
+
+/*******************************************************
+ * PAGE LOADING
+ *******************************************************/
+
+function loadPage(
+  pageKey,
+  forceRefresh
+) {
+
+  closeRowActionMenu();
+
+
+  if (!forceRefresh) {
+
+    const cached =
+      getClientCache(
+        pageKey
+      );
+
+
+    if (cached) {
+
+      currentPageData =
+        cached;
+
+
+      renderPage(
+        pageKey,
+        cached
+      );
+
+
+      return;
+
+    }
+
+  }
+
+
+  showPageLoading();
+
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(data) {
+
+        setClientCache(
+          pageKey,
+          data
+        );
+
+
+        currentPageData =
+          data;
+
+
+        renderPage(
+          pageKey,
+          data
+        );
+
+
+        /*
+         * Once Dashboard is visible, quietly start warming
+         * pages the user is likely to click next.
+         */
+        if (
+          pageKey === 'dashboard'
+        ) {
+
+          schedulePrefetch();
+
+        }
+
+      }
+    )
+
+    .withFailureHandler(
+      handleFailure
+    )
+
+    .appGetPageData(
+      pageKey,
+      !!forceRefresh
+    );
+}
+
+
+function refreshCurrentPage() {
+
+  invalidateClientPage(
+    currentPageKey
+  );
+
+
+  loadPage(
+    currentPageKey,
+    true
+  );
+}
+
+
+/*******************************************************
+ * BACKGROUND PREFETCH
+ *******************************************************/
+
+function schedulePrefetch() {
+
+  const preferred = [
+    'switches',
+    'accessPoints',
+    'servers',
+    'workflow'
+  ];
+
+
+  let delay =
+    350;
+
+
+  preferred.forEach(
+    pageKey => {
+
+      if (
+        !appBootstrap.pages.some(
+          page =>
+            page.key === pageKey
+        )
+      ) {
+        return;
+      }
+
+
+      if (
+        getClientCache(pageKey)
+      ) {
+        return;
+      }
+
+
+      setTimeout(
+        function() {
+
+          prefetchPage(
+            pageKey
+          );
+
+        },
+        delay
+      );
+
+
+      delay +=
+        350;
+
+    }
+  );
+}
+
+
+function prefetchPage(
+  pageKey
+) {
+
+  if (
+    getClientCache(pageKey)
+  ) {
+    return;
+  }
+
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(data) {
+
+        setClientCache(
+          pageKey,
+          data
+        );
+
+      }
+    )
+
+    /*
+     * Prefetch failure should never interrupt the UI.
+     */
+    .withFailureHandler(
+      function(error) {
+
+        console.warn(
+          'Prefetch failed:',
+          pageKey,
+          error
+        );
+
+      }
+    )
+
+    .appGetPageData(
+      pageKey,
+      false
+    );
+}
+
+
+/*******************************************************
+ * LOADING
+ *******************************************************/
+
+function showPageLoading() {
+
+  document.getElementById(
+    'pageContent'
+  ).innerHTML = `
+
+    <div class="app-loading">
+
+      <div
+        class="spinner-border spinner-border-sm"
+      ></div>
+
+      <span>
+        Loading...
+      </span>
+
+    </div>
+
+  `;
+
+
+  document.getElementById(
+    'pageActions'
+  ).innerHTML =
+    '';
+}
+
+
+/*******************************************************
+ * RENDER ROUTER
+ *******************************************************/
+
+function renderPage(
+  pageKey,
+  data
+) {
+
+  destroyActiveTables();
+
+
+  const page =
+    appBootstrap.pages.find(
+      item =>
+        item.key === pageKey
+    );
+
+
+  if (!page) {
+    return;
+  }
+
+
+  if (
+    page.type === 'dashboard'
+  ) {
+
+    renderDashboard(
+      data
+    );
+
+    return;
+
+  }
+
+
+  if (
+    page.type === 'workflow'
+  ) {
+
+    renderWorkflowPage(
+      data
+    );
+
+    return;
+
+  }
+
+
+  if (
+    page.type === 'users'
+  ) {
+
+    renderUsersPage(
+      data
+    );
+
+    return;
+
+  }
+
+
+  if (
+    page.type === 'structured'
+  ) {
+
+    renderStructuredPage(
+      data
+    );
+
+    return;
+
+  }
+
+
+  renderTablePage(
+    data
+  );
+}
+
+
+function destroyActiveTables() {
+
+  if (tableInstance) {
+
+    try {
+      tableInstance.destroy();
+    } catch (error) {}
+
+
+    tableInstance =
+      null;
+
+  }
+
+
+  Object.keys(
+    structuredTables
+  ).forEach(
+    key => {
+
+      try {
+
+        structuredTables[
+          key
+        ].destroy();
+
+      } catch (error) {}
+
+    }
+  );
+
+
+  Object.keys(
+    structuredTables
+  ).forEach(
+    key => {
+
+      delete structuredTables[
+        key
+      ];
+
+    }
+  );
+}
+
+
+/*******************************************************
+ * HEADER
+ *******************************************************/
+
+function setPageHeader(
+  title,
+  subtitle
+) {
+
+  document.getElementById(
+    'pageTitle'
+  ).textContent =
+    title || '';
+
+
+  document.getElementById(
+    'pageSubtitle'
+  ).textContent =
+    subtitle || '';
+}
+
+
+/*******************************************************
+ * STANDARD RECORD EDITOR
+ *******************************************************/
+
+function openAddRecord() {
+
+  editingRow =
+    null;
+
+
+  openRecordModal(
+    'Add Record',
+    {}
+  );
+}
+
+
+function openEditRecord(
+  row
+) {
+
+  editingRow =
+    row;
+
+
+  openRecordModal(
+    'Edit Record',
+    row
+  );
+}
+
+
+function openRecordModal(
+  title,
+  record
+) {
+
+  document.getElementById(
+    'recordModalTitle'
+  ).textContent =
+    title;
+
+
+  const body =
+    document.getElementById(
+      'recordModalBody'
+    );
+
+
+  body.innerHTML =
+    '';
+
+
+  const row =
+    document.createElement(
+      'div'
+    );
+
+
+  row.className =
+    'row g-3';
+
+
+  currentHeaders.forEach(
+    (header, index) => {
+
+      const column =
+        document.createElement(
+          'div'
+        );
+
+
+      column.className =
+        'col-md-6';
+
+
+      const label =
+        document.createElement(
+          'label'
+        );
+
+
+      label.className =
+        'form-label';
+
+
+      label.textContent =
+        header.toUpperCase();
+
+
+      const input =
+        document.createElement(
+          'input'
+        );
+
+
+      input.className =
+        'form-control';
+
+
+      input.dataset.header =
+        header;
+
+
+      input.id =
+        'recordField_' +
+        index;
+
+
+      input.value =
+        record[header] || '';
+
+
+      column.appendChild(
+        label
+      );
+
+
+      column.appendChild(
+        input
+      );
+
+
+      row.appendChild(
+        column
+      );
+
+    }
+  );
+
+
+  body.appendChild(
+    row
+  );
+
+
+  document.getElementById(
+    'saveRecordButton'
+  ).onclick =
+    saveRecordFromModal;
+
+
+  recordModal.show();
+}
+
+
+function saveRecordFromModal() {
+
+  const record =
+    {};
+
+
+  document
+    .querySelectorAll(
+      '#recordModalBody [data-header]'
+    )
+    .forEach(
+      input => {
+
+        record[
+          input.dataset.header
+        ] =
+          input.value;
+
+      }
+    );
+
+
+  const runner =
+    google.script.run
+
+      .withSuccessHandler(
+        function() {
+
+          recordModal.hide();
+
+
+          invalidateClientPage(
+            currentPageKey
+          );
+
+
+          loadPage(
+            currentPageKey,
+            true
+          );
+
+
+          showToast(
+            'Record saved.'
+          );
+
+        }
+      )
+
+      .withFailureHandler(
+        handleFailure
+      );
+
+
+  if (editingRow) {
+
+    runner.appUpdateRecord(
+      currentPageKey,
+      editingRow._row,
+      record,
+      editingRow._sourceSheet || ''
+    );
+
+  } else {
+
+    runner.appAddRecord(
+      currentPageKey,
+      record
+    );
+
+  }
+}
+
+
+function confirmDeleteRecord(
+  row
+) {
+
+  if (
+    !confirm(
+      'Delete this record permanently?'
+    )
+  ) {
+
+    return;
+
+  }
+
+
+  google.script.run
+
+    .withSuccessHandler(
+      function() {
+
+        invalidateClientPage(
+          currentPageKey
+        );
+
+
+        loadPage(
+          currentPageKey,
+          true
+        );
+
+
+        showToast(
+          'Record deleted.'
+        );
+
+      }
+    )
+
+    .withFailureHandler(
+      handleFailure
+    )
+
+    .appDeleteRecord(
+      currentPageKey,
+      row._row,
+      row._sourceSheet || ''
+    );
+}
+
+
+/*******************************************************
+ * ARUBA
+ *******************************************************/
+
+function runCentralSync() {
+
+  showToast(
+    'Synchronizing with Aruba Central...'
+  );
+
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(result) {
+
+        invalidateClientPage(
+          'switches'
+        );
+
+
+        invalidateClientPage(
+          'accessPoints'
+        );
+
+
+        clientPageCache.delete(
+          'dashboard'
+        );
+
+
+        showToast(
+
+          'Central sync complete: ' +
+
+          (
+            result.switchesSynced || 0
+          ) +
+
+          ' switches, ' +
+
+          (
+            result.apsSynced || 0
+          ) +
+
+          ' APs.'
+
+        );
+
+
+        loadPage(
+          currentPageKey,
+          true
+        );
+
+      }
+    )
+
+    .withFailureHandler(
+      handleFailure
+    )
+
+    /*
+     * EXISTING WORKING FUNCTION IN Code.gs.
+     * DO NOT CHANGE THE ARUBA API IMPLEMENTATION.
+     */
+    .syncArubaCentralToSheet();
+}
+
+
+function viewRunningConfig(
+  serial
+) {
+
+  document.getElementById(
+    'configDisplay'
+  ).textContent =
+    'Retrieving configuration from Aruba Central...';
+
+
+  configModal.show();
+
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(result) {
+
+        document.getElementById(
+          'configDisplay'
+        ).textContent =
+          result.status === 'success'
+            ? result.config
+            : result.message;
+
+      }
+    )
+
+    .withFailureHandler(
+      handleFailure
+    )
+
+    .fetchSwitchRunningConfig(
+      serial
+    );
+}
+
+
+/*******************************************************
+ * STATUS
+ *******************************************************/
+
+function isStatusColumn(
+  header
+) {
+
+  const value =
+    String(header || '')
+      .toLowerCase();
+
+
+  return (
+    value === 'status' ||
+    value.includes('installed') ||
+    value.includes('update?') ||
+    value === 'tier'
+  );
+}
+
+
+function statusPill(
+  value
+) {
+
+  const original =
+    String(
+      value ?? ''
+    ).trim();
+
+
+  const normalized =
+    original.toLowerCase();
+
+
+  const success = [
+    'up',
+    'online',
+    'operational',
+    'normal',
+    'healthy',
+    'active',
+    'true',
+    'yes',
+    'installed',
+    'success',
+    'successful',
+    'completed'
+  ];
+
+
+  const danger = [
+    'down',
+    'offline',
+    'failed',
+    'failure',
+    'false',
+    'not installed',
+    'critical',
+    'inactive',
+    'error'
+  ];
+
+
+  const warning = [
+    'warning',
+    'needs attention',
+    'partial',
+    'degraded',
+    'needs update',
+    'pending'
+  ];
+
+
+  let className =
+    'status-neutral';
+
+
+  let icon =
+    'fa-circle';
+
+
+  if (
+    success.includes(
+      normalized
+    )
+  ) {
+
+    className =
+      'status-success';
+
+    icon =
+      'fa-circle-check';
+
+  } else if (
+    danger.includes(
+      normalized
+    )
+  ) {
+
+    className =
+      'status-danger';
+
+    icon =
+      'fa-circle-xmark';
+
+  } else if (
+    warning.includes(
+      normalized
+    )
+  ) {
+
+    className =
+      'status-warning';
+
+    icon =
+      'fa-triangle-exclamation';
+
+  } else if (
+    normalized.startsWith(
+      'tier '
+    )
+  ) {
+
+    className =
+      'status-info';
+
+    icon =
+      'fa-layer-group';
+
+  }
+
+
+  return `
+
+    <span
+      class="status-pill ${className}"
+    >
+
+      <i class="fa-solid ${icon}"></i>
+
+      ${escapeHtml(
+        original || 'Unknown'
+      )}
+
+    </span>
+
+  `;
+}
+
+
+/*******************************************************
+ * ERROR / TOAST
+ *******************************************************/
+
+function handleFailure(
+  error
+) {
+
+  console.error(
+    error
+  );
+
+
+  const message =
+    error &&
+    error.message
+      ? error.message
+      : String(
+          error ||
+          'Unknown error'
+        );
+
+
+  showToast(
+    message,
+    true
+  );
+}
+
+
+function showToast(
+  message,
+  error
+) {
+
+  const container =
+    document.getElementById(
+      'toastContainer'
+    );
+
+
+  const toast =
+    document.createElement(
+      'div'
+    );
+
+
+  toast.className =
+    'app-toast';
+
+
+  if (error) {
+
+    toast.style.background =
+      '#8e2929';
+
+  }
+
+
+  toast.textContent =
+    message;
+
+
+  container.appendChild(
+    toast
+  );
+
+
+  setTimeout(
+    function() {
+
+      toast.remove();
+
+    },
+    4000
+  );
+}
+
+
+/*******************************************************
+ * ESCAPING
+ *******************************************************/
+
+function escapeHtml(
+  value
+) {
+
+  return String(
+    value ?? ''
+  )
+    .replaceAll(
+      '&',
+      '&amp;'
+    )
+    .replaceAll(
+      '<',
+      '&lt;'
+    )
+    .replaceAll(
+      '>',
+      '&gt;'
+    )
+    .replaceAll(
+      '"',
+      '&quot;'
+    )
+    .replaceAll(
+      "'",
+      '&#039;'
+    );
+}
+
+
+function escapeAttribute(
+  value
+) {
+
+  return escapeHtml(
+    value
+  );
+}
+
+
+function safeJson(
+  value
+) {
+
+  return JSON
+    .stringify(value)
+    .replace(
+      /</g,
+      '\\u003c'
+    )
+    .replace(
+      />/g,
+      '\\u003e'
+    )
+    .replace(
+      /&/g,
+      '\\u0026'
+    );
+}
+
+</script>

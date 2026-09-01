@@ -1,0 +1,2209 @@
+<script>
+
+/*******************************************************
+ * STRUCTURED PAGE
+ *******************************************************/
+
+function renderStructuredPage(data) {
+
+  currentStructuredData = data;
+
+  setPageHeader(
+    data.label,
+    'Infrastructure reference and operational information'
+  );
+
+
+  document.getElementById(
+    'pageActions'
+  ).innerHTML = `
+
+    <button
+      class="btn btn-sm btn-light border"
+      onclick="refreshCurrentPage()"
+    >
+      <i class="fa-solid fa-rotate me-2"></i>
+      Refresh
+    </button>
+
+  `;
+
+
+  const content =
+    document.getElementById(
+      'pageContent'
+    );
+
+
+  content.innerHTML = '';
+
+
+  if (
+    !data.sections ||
+    !data.sections.length
+  ) {
+
+    content.innerHTML = `
+
+      <div class="app-card empty-state">
+
+        <i class="fa-solid fa-table-list"></i>
+
+        <h3>No information found</h3>
+
+        <p>
+          This page does not currently contain
+          any configured data sections.
+        </p>
+
+      </div>
+
+    `;
+
+    return;
+
+  }
+
+
+  data.sections.forEach(
+    section => {
+
+      if (section.type === 'metadata') {
+
+        content.appendChild(
+          buildMetadataSection(
+            section,
+            data.permission
+          )
+        );
+
+      }
+
+
+      if (section.type === 'table') {
+
+        content.appendChild(
+          buildStructuredTableSection(
+            section,
+            data.permission
+          )
+        );
+
+      }
+
+    }
+  );
+}
+
+
+/*******************************************************
+ * METADATA
+ *******************************************************/
+
+function buildMetadataSection(
+  section,
+  permission
+) {
+
+  const wrapper =
+    document.createElement(
+      'section'
+    );
+
+
+  wrapper.className =
+    'structured-section';
+
+
+  const card =
+    document.createElement(
+      'div'
+    );
+
+
+  card.className =
+    'app-card';
+
+
+  card.appendChild(
+    buildStructuredHeader(
+      section,
+      permission
+    )
+  );
+
+
+  const body =
+    document.createElement(
+      'div'
+    );
+
+
+  body.className =
+    'metadata-grid';
+
+
+  if (
+    !section.items ||
+    !section.items.length
+  ) {
+
+    body.innerHTML = `
+      <div class="metadata-empty">
+        No reference information found.
+      </div>
+    `;
+
+  } else {
+
+    section.items.forEach(
+      item => {
+
+        const tile =
+          document.createElement(
+            'div'
+          );
+
+
+        tile.className =
+          'metadata-item';
+
+
+        const label =
+          document.createElement(
+            'div'
+          );
+
+
+        label.className =
+          'metadata-label';
+
+
+        label.textContent =
+          item.label;
+
+
+        const value =
+          document.createElement(
+            'div'
+          );
+
+
+        value.className =
+          'metadata-value';
+
+
+        value.textContent =
+          item.value || '—';
+
+
+        tile.appendChild(label);
+        tile.appendChild(value);
+        body.appendChild(tile);
+
+      }
+    );
+
+  }
+
+
+  card.appendChild(body);
+  wrapper.appendChild(card);
+
+  return wrapper;
+}
+
+
+/*******************************************************
+ * STRUCTURED TABLE
+ *******************************************************/
+
+function buildStructuredTableSection(
+  section,
+  permission
+) {
+
+  const wrapper =
+    document.createElement(
+      'section'
+    );
+
+
+  wrapper.className =
+    'structured-section';
+
+
+  const card =
+    document.createElement(
+      'div'
+    );
+
+
+  card.className =
+    'app-card structured-table-card';
+
+
+  card.appendChild(
+    buildStructuredHeader(
+      section,
+      permission
+    )
+  );
+
+
+  const toolbar =
+    document.createElement(
+      'div'
+    );
+
+
+  toolbar.className =
+    'structured-table-toolbar';
+
+
+  const toolbarLeft =
+    document.createElement(
+      'div'
+    );
+
+
+  toolbarLeft.className =
+    'structured-toolbar-left';
+
+
+  const search =
+    document.createElement(
+      'div'
+    );
+
+
+  search.className =
+    'input-group input-group-sm structured-search';
+
+
+  search.innerHTML = `
+
+    <span class="input-group-text bg-white">
+      <i class="fa-solid fa-magnifying-glass"></i>
+    </span>
+
+  `;
+
+
+  const input =
+    document.createElement(
+      'input'
+    );
+
+
+  input.type = 'search';
+
+  input.className =
+    'form-control';
+
+  input.placeholder =
+    'Search ' +
+    section.title +
+    '...';
+
+
+  search.appendChild(
+    input
+  );
+
+
+  const columnDropdown =
+    document.createElement(
+      'div'
+    );
+
+
+  columnDropdown.className =
+    'dropdown';
+
+
+  const columnButton =
+    document.createElement(
+      'button'
+    );
+
+
+  columnButton.type =
+    'button';
+
+
+  columnButton.className =
+    'btn btn-sm btn-light border dropdown-toggle';
+
+
+  columnButton.setAttribute(
+    'data-bs-toggle',
+    'dropdown'
+  );
+
+
+  columnButton.innerHTML = `
+    <i class="fa-solid fa-table-columns me-2"></i>
+    Columns
+  `;
+
+
+  const columnMenu =
+    document.createElement(
+      'div'
+    );
+
+
+  columnMenu.className =
+    'dropdown-menu p-2 shadow table-column-menu';
+
+
+  columnDropdown.appendChild(
+    columnButton
+  );
+
+
+  columnDropdown.appendChild(
+    columnMenu
+  );
+
+
+  const count =
+    document.createElement(
+      'span'
+    );
+
+
+  count.className =
+    'record-count';
+
+
+  count.textContent =
+    `${section.totalCount} records`;
+
+
+  toolbarLeft.appendChild(
+    search
+  );
+
+
+  toolbarLeft.appendChild(
+    columnDropdown
+  );
+
+
+  toolbar.appendChild(
+    toolbarLeft
+  );
+
+
+  toolbar.appendChild(
+    count
+  );
+
+
+  card.appendChild(
+    toolbar
+  );
+
+
+  const tableHost =
+    document.createElement(
+      'div'
+    );
+
+
+  tableHost.className =
+    'structured-tabulator premium-table-host';
+
+
+  tableHost.id =
+    'structuredTable_' +
+    section.key;
+
+
+  card.appendChild(
+    tableHost
+  );
+
+
+  wrapper.appendChild(
+    card
+  );
+
+
+  requestAnimationFrame(
+    function() {
+
+      createStructuredTabulator(
+        tableHost,
+        section,
+        permission,
+        input,
+        count,
+        columnMenu
+      );
+
+    }
+  );
+
+
+  return wrapper;
+}
+
+
+function createStructuredTabulator(
+  host,
+  section,
+  permission
+) {
+
+  const canEdit =
+    permission === 'edit';
+
+
+  /*
+   * Internal fields used by real sheet columns.
+   */
+  const defaults =
+    new Set(
+      section.defaultColumns || []
+    );
+
+
+  /*
+   * Human-readable configured titles.
+   *
+   * Password uses this because it is intentionally
+   * excluded from the normal server payload.
+   */
+  const defaultTitles =
+    new Set(
+      section.defaultColumnTitles || []
+    );
+
+
+  const columns =
+    [];
+
+
+  const sourceColumns =
+    Array.isArray(
+      section.columns
+    )
+      ? section.columns
+      : [];
+
+
+  sourceColumns.forEach(
+    columnInfo => {
+
+      const header =
+        columnInfo.title;
+
+
+      const field =
+        columnInfo.field;
+
+
+      const normalized =
+        String(
+          header || ''
+        )
+          .trim()
+          .toLowerCase();
+
+
+      const column = {
+
+        title:
+          header,
+
+        field:
+          field,
+
+        visible:
+          defaults.size === 0 ||
+          defaults.has(
+            field
+          ),
+
+        headerSort:
+          true,
+
+        tooltip:
+          true,
+
+        minWidth:
+          120,
+
+        widthGrow:
+          1,
+
+        widthShrink:
+          1,
+
+        responsive:
+          2
+
+      };
+
+
+      /*
+       * SITE
+       */
+      if (
+        normalized === 'site'
+      ) {
+
+        column.width =
+          190;
+
+        column.minWidth =
+          190;
+
+        column.maxWidth =
+          190;
+
+        column.widthGrow =
+          0;
+
+        column.widthShrink =
+          0;
+
+        column.resizable =
+          false;
+
+        column.responsive =
+          0;
+
+      }
+
+
+      /*
+       * LOCATION / SERVER LOCATION
+       */
+      if (
+        normalized === 'location' ||
+        normalized === 'server location'
+      ) {
+
+        column.minWidth =
+          170;
+
+        column.widthGrow =
+          1;
+
+        column.widthShrink =
+          1;
+
+        column.responsive =
+          2;
+
+      }
+
+
+      /*
+       * IP ADDRESS
+       */
+      if (
+        normalized === 'ip' ||
+        normalized === 'ip address'
+      ) {
+
+        column.width =
+          200;
+
+        column.minWidth =
+          200;
+
+        column.maxWidth =
+          200;
+
+        column.widthGrow =
+          0;
+
+        column.widthShrink =
+          0;
+
+        column.resizable =
+          false;
+
+        column.responsive =
+          0;
+
+      }
+
+
+      /*
+       * USERNAME
+       */
+      if (
+        isUsernameHeaderClient(
+          header
+        )
+      ) {
+
+        column.width =
+          210;
+
+        column.minWidth =
+          210;
+
+        column.maxWidth =
+          210;
+
+        column.widthGrow =
+          0;
+
+        column.widthShrink =
+          0;
+
+        column.resizable =
+          false;
+
+        column.responsive =
+          1;
+
+      }
+
+
+      /*
+       * NOTES
+       */
+      if (
+        normalized.includes(
+          'note'
+        )
+      ) {
+
+        column.minWidth =
+          170;
+
+        column.widthGrow =
+          1;
+
+        column.widthShrink =
+          1;
+
+        column.responsive =
+          3;
+
+      }
+
+
+      /*
+       * STATUS
+       */
+      if (
+        isStatusColumn(
+          header
+        )
+      ) {
+
+        column.formatter =
+          function(cell) {
+
+            return statusPill(
+              cell.getValue()
+            );
+
+          };
+
+      }
+
+
+      columns.push(
+        column
+      );
+
+
+      /*
+       * PASSWORD
+       *
+       * Password is not contained in the ordinary
+       * row payload.
+       *
+       * Insert the protected virtual Password column
+       * immediately after User.
+       */
+      if (
+        isUsernameHeaderClient(
+          header
+        ) &&
+        section.hasCredentials
+      ) {
+
+        columns.push(
+          createPasswordColumnDefinition(
+            section,
+            canEdit,
+            defaultTitles
+          )
+        );
+
+      }
+
+    }
+  );
+
+
+  /*
+   * Dedicated fixed-width Actions column.
+   *
+   * IMPORTANT:
+   * Do NOT freeze this column. Frozen columns cause
+   * Tabulator to draw the gray separator line.
+   */
+  columns.push(
+    createStructuredActionColumn(
+      section,
+      canEdit
+    )
+  );
+
+
+  const table =
+    new Tabulator(
+      host,
+      {
+
+        data:
+          section.rows || [],
+
+        columns:
+          columns,
+
+        /*
+         * Normal columns share available space.
+         * Explicitly-sized columns retain their
+         * configured widths.
+         */
+        layout:
+          'fitColumns',
+
+        responsiveLayout:
+          false,
+
+        pagination:
+          (section.rows || []).length > 15,
+
+        paginationMode:
+          'local',
+
+        paginationSize:
+          15,
+
+        movableColumns:
+          true,
+
+        placeholder:
+          'No records found',
+
+        columnDefaults: {
+
+          vertAlign:
+            'middle'
+
+        }
+
+      }
+    );
+
+
+  return table;
+
+}
+
+
+/*******************************************************
+ * STRUCTURED COLUMN MENU
+ *******************************************************/
+
+function buildStructuredColumnMenu(
+  table,
+  section,
+  menu
+) {
+
+  if (!menu) {
+    return;
+  }
+
+
+  menu.innerHTML =
+    '';
+
+
+  const availableColumns =
+    Array.isArray(
+      section.columns
+    )
+      ? section.columns.slice()
+      : [];
+
+
+  /*
+   * Add the virtual password column after User.
+   */
+  if (
+    section.hasCredentials
+  ) {
+
+    const usernameIndex =
+      availableColumns.findIndex(
+        column =>
+          isUsernameHeaderClient(
+            column.title
+          )
+      );
+
+
+    const passwordColumn = {
+
+      title:
+        'Password',
+
+      field:
+        '_restrictedPassword'
+
+    };
+
+
+    if (
+      usernameIndex >= 0
+    ) {
+
+      availableColumns.splice(
+        usernameIndex + 1,
+        0,
+        passwordColumn
+      );
+
+    } else {
+
+      availableColumns.push(
+        passwordColumn
+      );
+
+    }
+
+  }
+
+
+  availableColumns.forEach(
+    columnInfo => {
+
+      const column =
+        table.getColumn(
+          columnInfo.field
+        );
+
+
+      if (!column) {
+        return;
+      }
+
+
+      const wrapper =
+        document.createElement(
+          'label'
+        );
+
+
+      wrapper.className =
+        'dropdown-item d-flex align-items-center gap-2';
+
+
+      /*
+       * Prevent clicking the item from closing
+       * Bootstrap's dropdown.
+       */
+      wrapper.addEventListener(
+        'click',
+        function(event) {
+
+          event.stopPropagation();
+
+        }
+      );
+
+
+      const checkbox =
+        document.createElement(
+          'input'
+        );
+
+
+      checkbox.type =
+        'checkbox';
+
+
+      checkbox.className =
+        'form-check-input m-0';
+
+
+      checkbox.checked =
+        column.isVisible();
+
+
+      checkbox.addEventListener(
+        'change',
+        function(event) {
+
+          event.stopPropagation();
+
+
+          if (this.checked) {
+
+            column.show();
+
+          } else {
+
+            column.hide();
+
+          }
+
+
+          /*
+           * Recalculate remaining column widths.
+           */
+          requestAnimationFrame(
+            function() {
+
+              table.redraw(
+                true
+              );
+
+            }
+          );
+
+        }
+      );
+
+
+      const text =
+        document.createElement(
+          'span'
+        );
+
+
+      text.textContent =
+        columnInfo.title;
+
+
+      wrapper.appendChild(
+        checkbox
+      );
+
+
+      wrapper.appendChild(
+        text
+      );
+
+
+      menu.appendChild(
+        wrapper
+      );
+
+    }
+  );
+
+
+  /*
+   * Defensive fallback so an empty menu isn't
+   * silently displayed again.
+   */
+  if (
+    !menu.children.length
+  ) {
+
+    const empty =
+      document.createElement(
+        'div'
+      );
+
+
+    empty.className =
+      'dropdown-item-text text-muted small';
+
+
+    empty.textContent =
+      'No columns available';
+
+
+    menu.appendChild(
+      empty
+    );
+
+  }
+
+}
+
+
+/*******************************************************
+ * PASSWORD
+ *******************************************************/
+
+function normalizeSensitiveHeaderClient(
+  header
+) {
+
+  return String(header || '')
+    .trim()
+    .toLowerCase()
+    .replace(
+      /[\s_\-]+/g,
+      ''
+    );
+}
+
+
+function isUsernameHeaderClient(
+  header
+) {
+
+  const aliases =
+    new Set([
+      'user',
+      'users',
+      'username',
+      'usernames',
+      'login',
+      'logins',
+      'loginname',
+      'loginusername',
+      'account',
+      'accounts',
+      'accountname'
+    ]);
+
+
+  return aliases.has(
+    normalizeSensitiveHeaderClient(
+      header
+    )
+  );
+}
+
+
+function createPasswordColumnDefinition(
+  section,
+  canEdit,
+  defaults
+) {
+
+  return {
+
+    title:
+      'Password',
+
+    field:
+      '_restrictedPassword',
+
+    visible:
+      defaults.size === 0 ||
+      defaults.has('Password'),
+
+    /*
+     * Compact while password is hidden.
+     */
+    width:
+      112,
+
+    minWidth:
+      112,
+
+    widthGrow:
+      0,
+
+    widthShrink:
+      0,
+
+    resizable:
+      true,
+
+    headerSort:
+      false,
+
+    download:
+      false,
+
+    formatter:
+      function(cell) {
+
+        return restrictedPasswordFormatter(
+          cell,
+          section,
+          canEdit
+        );
+
+      }
+
+  };
+}
+
+
+function restrictedPasswordFormatter(
+  cell,
+  section,
+  canEdit
+) {
+
+  const row =
+    cell.getRow();
+
+
+  const rowData =
+    row.getData();
+
+
+  const wrapper =
+    document.createElement(
+      'div'
+    );
+
+
+  wrapper.className =
+    'restricted-password-cell';
+
+
+  /*
+   * View-only users never receive the password.
+   */
+  if (!canEdit) {
+
+    const restricted =
+      document.createElement(
+        'span'
+      );
+
+
+    restricted.className =
+      'restricted-password-unavailable';
+
+
+    restricted.innerHTML =
+      '<i class="fa-solid fa-lock"></i>';
+
+
+    restricted.title =
+      'Edit access required';
+
+
+    wrapper.appendChild(
+      restricted
+    );
+
+
+    return wrapper;
+
+  }
+
+
+  /*
+   * These values live on the row data so they
+   * survive Tabulator formatter redraws.
+   */
+  const loadedPassword =
+    rowData._loadedPassword;
+
+
+  const isLoaded =
+    typeof loadedPassword ===
+    'string';
+
+
+  const isRevealed =
+    rowData._passwordRevealed ===
+    true;
+
+
+  const isLoading =
+    rowData._passwordLoading ===
+    true;
+
+
+  const value =
+    document.createElement(
+      'span'
+    );
+
+
+  value.className =
+    'restricted-password-value';
+
+
+  /*
+   * Password is masked BY DEFAULT.
+   */
+  if (!isLoaded) {
+
+    value.textContent =
+      '••••••••';
+
+  } else {
+
+    value.textContent =
+      isRevealed
+        ? loadedPassword || '—'
+        : '••••••••';
+
+  }
+
+
+  const eye =
+    document.createElement(
+      'button'
+    );
+
+
+  eye.type =
+    'button';
+
+
+  eye.className =
+    'credential-icon-button password-eye-button';
+
+
+  /*
+   * Show the spinner if a request is already
+   * underway.
+   */
+  if (isLoading) {
+
+    eye.disabled =
+      true;
+
+
+    eye.innerHTML =
+      '<span class="password-loading-spinner"></span>';
+
+
+    eye.title =
+      'Loading password';
+
+  } else {
+
+    eye.innerHTML =
+      isLoaded && isRevealed
+        ? '<i class="fa-solid fa-eye-slash"></i>'
+        : '<i class="fa-solid fa-eye"></i>';
+
+
+    eye.title =
+      isLoaded && isRevealed
+        ? 'Hide password'
+        : 'View password';
+
+  }
+
+
+  eye.addEventListener(
+    'click',
+    function(event) {
+
+      event.stopPropagation();
+
+
+      /*
+       * Already loaded:
+       * simply toggle reveal/hide.
+       */
+      if (
+        typeof rowData._loadedPassword ===
+        'string'
+      ) {
+
+        rowData._passwordRevealed =
+          !rowData._passwordRevealed;
+
+
+        cell.getTable().redraw(
+          true
+        );
+
+
+        return;
+
+      }
+
+
+      /*
+       * FIRST CLICK:
+       *
+       * 1. Show spinner
+       * 2. Retrieve password
+       * 3. Store password
+       * 4. Mark revealed
+       * 5. Expand column
+       * 6. Redraw
+       *
+       * Password therefore appears immediately
+       * after this ONE click.
+       */
+
+      rowData._passwordLoading =
+        true;
+
+
+      eye.disabled =
+        true;
+
+
+      eye.innerHTML =
+        '<span class="password-loading-spinner"></span>';
+
+
+      google.script.run
+
+        .withSuccessHandler(
+          function(result) {
+
+            const password =
+              String(
+                result &&
+                result.value != null
+                  ? result.value
+                  : ''
+              );
+
+
+            rowData._passwordLoading =
+              false;
+
+
+            rowData._loadedPassword =
+              password;
+
+
+            rowData._passwordRevealed =
+              true;
+
+
+            /*
+             * Expand BEFORE redraw.
+             */
+            resizePasswordColumn(
+              cell,
+              password
+            );
+
+
+            /*
+             * Formatter redraw now retains
+             * password state because it lives
+             * on rowData.
+             */
+            cell
+              .getTable()
+              .redraw(
+                true
+              );
+
+          }
+        )
+
+        .withFailureHandler(
+          function(error) {
+
+            rowData._passwordLoading =
+              false;
+
+
+            eye.disabled =
+              false;
+
+
+            eye.innerHTML =
+              '<i class="fa-solid fa-eye"></i>';
+
+
+            handleFailure(
+              error
+            );
+
+          }
+        )
+
+        .appGetRowCredential(
+          currentPageKey,
+          section.key,
+          rowData._row,
+          'Password'
+        );
+
+    }
+  );
+
+
+  wrapper.appendChild(
+    value
+  );
+
+
+  wrapper.appendChild(
+    eye
+  );
+
+
+  /*
+   * Copy only exists AFTER:
+   *
+   * - server authorization succeeded
+   * - password was actually returned
+   */
+  if (isLoaded) {
+
+    const copy =
+      document.createElement(
+        'button'
+      );
+
+
+    copy.type =
+      'button';
+
+
+    copy.className =
+      'credential-icon-button';
+
+
+    copy.title =
+      'Copy password';
+
+
+    copy.innerHTML =
+      '<i class="fa-regular fa-copy"></i>';
+
+
+    copy.addEventListener(
+      'click',
+      function(event) {
+
+        event.stopPropagation();
+
+
+        navigator.clipboard
+          .writeText(
+            loadedPassword
+          )
+          .then(
+            function() {
+
+              showToast(
+                'Password copied.'
+              );
+
+            }
+          );
+
+      }
+    );
+
+
+    wrapper.appendChild(
+      copy
+    );
+
+  }
+
+
+  return wrapper;
+}
+
+
+function resizePasswordColumn(
+  cell,
+  password
+) {
+
+  const column =
+    cell.getColumn();
+
+
+  if (!column) {
+    return;
+  }
+
+
+  const value =
+    String(
+      password || ''
+    );
+
+
+  /*
+   * Measure the password instead of guessing
+   * entirely from character count.
+   */
+  const canvas =
+    document.createElement(
+      'canvas'
+    );
+
+
+  const context =
+    canvas.getContext(
+      '2d'
+    );
+
+
+  context.font =
+    '600 13px "Cascadia Code", Consolas, monospace';
+
+
+  const measured =
+    context.measureText(
+      value
+    ).width;
+
+
+  /*
+   * Password text
+   * + eye button
+   * + copy button
+   * + gaps
+   * + cell padding.
+   */
+  const desiredWidth =
+    Math.ceil(
+      measured + 112
+    );
+
+
+  /*
+   * Keep sane boundaries.
+   *
+   * Typical passwords display in full.
+   * Extremely long secrets don't consume the
+   * entire application.
+   */
+  const finalWidth =
+    Math.max(
+      180,
+      Math.min(
+        desiredWidth,
+        520
+      )
+    );
+
+
+  if (
+    finalWidth >
+    column.getWidth()
+  ) {
+
+    column.setWidth(
+      finalWidth
+    );
+
+
+    /*
+     * Tabulator recalculates the remaining data
+     * columns around the expanded password column.
+     */
+    const table =
+      cell.getTable();
+
+
+    requestAnimationFrame(
+      function() {
+
+        table.redraw(
+          true
+        );
+
+      }
+    );
+
+  }
+}
+
+
+function createStructuredActionColumn(
+  section,
+  canEdit
+) {
+
+return {
+
+    title:
+      'Actions',
+
+    field:
+      '_actions',
+
+    width:
+      82,
+
+    minWidth:
+      82,
+
+    maxWidth:
+      82,
+
+    widthGrow:
+      0,
+
+    widthShrink:
+      0,
+
+    resizable:
+      false,
+
+    movable:
+      false,
+
+    hozAlign:
+      'center',
+
+    headerHozAlign:
+      'center',
+
+    headerSort:
+      false,
+
+    download:
+      false,
+
+    formatter:
+      function(cell) {
+
+        if (!canEdit) {
+          return '';
+        }
+
+
+        const rowData =
+          cell.getRow().getData();
+
+
+        const wrapper =
+          document.createElement(
+            'div'
+          );
+
+
+        wrapper.className =
+          'table-row-actions';
+
+
+        const edit =
+          document.createElement(
+            'button'
+          );
+
+
+        edit.type =
+          'button';
+
+
+        edit.className =
+          'table-row-action table-row-action-edit';
+
+
+        edit.title =
+          'Edit record';
+
+
+        edit.setAttribute(
+          'aria-label',
+          'Edit record'
+        );
+
+
+        edit.innerHTML =
+          '<i class="fa-solid fa-pen"></i>';
+
+
+        edit.addEventListener(
+          'click',
+          function(event) {
+
+            event.stopPropagation();
+
+
+            openStructuredEditRecord(
+              rowData,
+              section
+            );
+
+          }
+        );
+
+
+        wrapper.appendChild(
+          edit
+        );
+
+
+        const remove =
+          document.createElement(
+            'button'
+          );
+
+
+        remove.type =
+          'button';
+
+
+        remove.className =
+          'table-row-action table-row-action-delete';
+
+
+        remove.title =
+          'Delete record';
+
+
+        remove.setAttribute(
+          'aria-label',
+          'Delete record'
+        );
+
+
+        remove.innerHTML =
+          '<i class="fa-regular fa-trash-can"></i>';
+
+
+        remove.addEventListener(
+          'click',
+          function(event) {
+
+            event.stopPropagation();
+
+
+            if (
+              !confirm(
+                'Delete this record?'
+              )
+            ) {
+              return;
+            }
+
+
+            google.script.run
+
+              .withSuccessHandler(
+                function() {
+
+                  invalidateClientPage(
+                    currentPageKey
+                  );
+
+
+                  loadPage(
+                    currentPageKey,
+                    true
+                  );
+
+
+                  showToast(
+                    'Record deleted.'
+                  );
+
+                }
+              )
+
+              .withFailureHandler(
+                handleFailure
+              )
+
+              .appDeleteRecord(
+                currentPageKey,
+                rowData._row
+              );
+
+          }
+        );
+
+
+        wrapper.appendChild(
+          remove
+        );
+
+
+        return wrapper;
+
+      }
+
+  };
+
+}
+
+
+/*******************************************************
+ * SECTION HEADER
+ *******************************************************/
+
+function buildStructuredHeader(
+  section,
+  permission
+) {
+
+  const header =
+    document.createElement(
+      'div'
+    );
+
+
+  header.className =
+    'structured-header';
+
+
+  const copy =
+    document.createElement(
+      'div'
+    );
+
+
+  const eyebrow =
+    document.createElement(
+      'div'
+    );
+
+
+  eyebrow.className =
+    'structured-eyebrow';
+
+
+  eyebrow.textContent =
+    section.type === 'metadata'
+      ? 'REFERENCE INFORMATION'
+      : 'DATA';
+
+
+  const title =
+    document.createElement(
+      'h2'
+    );
+
+
+  title.className =
+    'structured-title';
+
+
+  title.textContent =
+    section.title;
+
+
+  copy.appendChild(
+    eyebrow
+  );
+
+
+  copy.appendChild(
+    title
+  );
+
+
+  if (section.subtitle) {
+
+    const subtitle =
+      document.createElement(
+        'div'
+      );
+
+
+    subtitle.className =
+      'structured-subtitle';
+
+
+    subtitle.textContent =
+      section.subtitle;
+
+
+    copy.appendChild(
+      subtitle
+    );
+
+  }
+
+
+  header.appendChild(
+    copy
+  );
+
+
+  return header;
+}
+
+
+/*******************************************************
+ * STRUCTURED ROW MENU
+ *******************************************************/
+
+function openStructuredRowMenu(
+  event,
+  rowData,
+  section
+) {
+
+  closeRowActionMenu();
+
+
+  const menu =
+    document.createElement(
+      'div'
+    );
+
+
+  menu.id =
+    'rowActionMenu';
+
+
+  menu.className =
+    'dropdown-menu show shadow premium-row-menu';
+
+
+  menu.style.position =
+    'fixed';
+
+
+  menu.style.zIndex =
+    '99999';
+
+
+  menu.style.left =
+    Math.min(
+      event.clientX,
+      window.innerWidth - 220
+    ) + 'px';
+
+
+  menu.style.top =
+    Math.min(
+      event.clientY,
+      window.innerHeight - 160
+    ) + 'px';
+
+
+  menu.appendChild(
+    createActionMenuItem(
+      'fa-pen-to-square',
+      'Edit Record',
+      function() {
+
+        openStructuredEditRecord(
+          rowData,
+          section
+        );
+
+      }
+    )
+  );
+
+
+  document.body.appendChild(
+    menu
+  );
+
+
+  setTimeout(
+    function() {
+
+      document.addEventListener(
+        'click',
+        closeRowActionMenu,
+        {
+          once: true
+        }
+      );
+
+    },
+    0
+  );
+}
+
+
+/*******************************************************
+ * STRUCTURED EDIT
+ *******************************************************/
+
+function openStructuredEditRecord(
+  rowData,
+  section
+) {
+
+  editingRow =
+    rowData;
+
+
+  currentHeaders =
+    section.headers.slice();
+
+
+  document.getElementById(
+    'recordModalTitle'
+  ).textContent =
+    'Edit ' +
+    section.title;
+
+
+  const body =
+    document.getElementById(
+      'recordModalBody'
+    );
+
+
+  body.innerHTML =
+    '';
+
+
+  const row =
+    document.createElement(
+      'div'
+    );
+
+
+  row.className =
+    'row g-3';
+
+
+  currentHeaders.forEach(
+    (header, index) => {
+
+      const column =
+        document.createElement(
+          'div'
+        );
+
+
+      column.className =
+        'col-md-6';
+
+
+      const label =
+        document.createElement(
+          'label'
+        );
+
+
+      label.className =
+        'form-label';
+
+
+      label.textContent =
+        header.toUpperCase();
+
+
+      const input =
+        document.createElement(
+          'input'
+        );
+
+
+      input.className =
+        'form-control';
+
+
+      input.dataset.header =
+        header;
+
+
+      input.id =
+        'recordField_' +
+        index;
+
+
+      input.value =
+        rowData[header] || '';
+
+
+      column.appendChild(
+        label
+      );
+
+
+      column.appendChild(
+        input
+      );
+
+
+      row.appendChild(
+        column
+      );
+
+    }
+  );
+
+
+  body.appendChild(
+    row
+  );
+
+
+  document.getElementById(
+    'saveRecordButton'
+  ).onclick =
+    saveStructuredRecord;
+
+
+  recordModal.show();
+}
+
+
+function saveStructuredRecord() {
+
+  const record = {
+
+    _section:
+      editingRow._section
+
+  };
+
+
+  document
+    .querySelectorAll(
+      '#recordModalBody [data-header]'
+    )
+    .forEach(
+      input => {
+
+        record[
+          input.dataset.header
+        ] =
+          input.value;
+
+      }
+    );
+
+
+  google.script.run
+
+    .withSuccessHandler(
+      function() {
+
+        recordModal.hide();
+
+
+        invalidateClientPage(
+          currentPageKey
+        );
+
+
+        loadPage(
+          currentPageKey,
+          true
+        );
+
+
+        showToast(
+          'Record saved.'
+        );
+
+      }
+    )
+
+    .withFailureHandler(
+      handleFailure
+    )
+
+    .appUpdateRecord(
+      currentPageKey,
+      editingRow._row,
+      record
+    );
+}
+
+</script>
