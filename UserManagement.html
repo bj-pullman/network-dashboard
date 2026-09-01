@@ -4,13 +4,13 @@ function renderUsersPage(data) {
 
   setPageHeader(
     'Users & Permissions',
-    'Control access to the Sheridan infrastructure portal'
+    'Control access to Network Dashboard'
   );
 
   document.getElementById('pageActions').innerHTML = `
 
     <button
-      class="btn btn-sm btn-sheridan"
+      class="btn btn-sm btn-brand"
       onclick="openUserEditor()"
     >
       <i class="fa-solid fa-user-plus me-2"></i>
@@ -31,6 +31,10 @@ function renderUsersPage(data) {
     data.breakglass || [];
 
 
+  const domainPolicy =
+    data.domainPolicy || {};
+
+
   document.getElementById('pageContent').innerHTML = `
 
     <div
@@ -48,7 +52,32 @@ function renderUsersPage(data) {
       </div>
 
       <div class="small">
-        ${breakglass.map(escapeHtml).join(' &nbsp;•&nbsp; ')}
+        ${breakglass.length ? breakglass.map(escapeHtml).join(', ') : 'No break-glass administrators are configured.'}
+      </div>
+
+    </div>
+
+
+    <div
+      class="alert mb-4"
+      style="
+        background:#eef4fb;
+        border:1px solid #cbd9ea;
+        color:#284766;
+      "
+    >
+
+      <div class="fw-bold mb-1">
+        <i class="fa-solid fa-envelope-circle-check me-2"></i>
+        User Domain Policy
+      </div>
+
+      <div class="small">
+        ${
+          domainPolicy.restrictionEnabled
+            ? 'New users must belong to @' + escapeHtml(domainPolicy.allowedDomain || 'not configured') + '.'
+            : 'Domain restriction is disabled. Any valid email address may be added.'
+        }
       </div>
 
     </div>
@@ -78,6 +107,7 @@ function renderUsersPage(data) {
               <th>Name</th>
               <th>Email</th>
               <th>Status</th>
+              <th>Role</th>
               <th>Default Access</th>
               <th class="text-end">Actions</th>
             </tr>
@@ -92,7 +122,7 @@ function renderUsersPage(data) {
                   <tr>
 
                     <td class="fw-semibold">
-                      ${escapeHtml(user.name || '—')}
+                      ${escapeHtml(user.name || '-')}
                     </td>
 
                     <td>
@@ -105,6 +135,10 @@ function renderUsersPage(data) {
                           ? statusPill('Active')
                           : statusPill('Inactive')
                       }
+                    </td>
+
+                    <td>
+                      ${rolePill(user.role)}
                     </td>
 
                     <td>
@@ -136,7 +170,7 @@ function renderUsersPage(data) {
                 : `
                   <tr>
                     <td
-                      colspan="5"
+                      colspan="6"
                       class="text-center text-muted py-5"
                     >
                       No additional users configured.
@@ -152,6 +186,24 @@ function renderUsersPage(data) {
       </div>
 
     </div>
+  `;
+}
+
+
+function rolePill(role) {
+
+  if (role === 'admin') {
+    return `
+      <span class="status-pill status-success">
+        Admin
+      </span>
+    `;
+  }
+
+  return `
+    <span class="status-pill status-neutral">
+      User
+    </span>
   `;
 }
 
@@ -188,6 +240,7 @@ function openUserEditor(user) {
     email: '',
     name: '',
     active: true,
+    role: 'user',
     defaultPermission: 'view',
     permissions: {}
   };
@@ -239,6 +292,34 @@ function openUserEditor(user) {
             value="${escapeAttribute(user.email || '')}"
             ${user.email ? 'readonly' : ''}
           >
+
+        </div>
+
+
+        <div class="col-md-6">
+
+          <label class="form-label">
+            ROLE
+          </label>
+
+          <select
+            id="userRole"
+            class="form-select"
+          >
+            <option
+              value="user"
+              ${user.role !== 'admin' ? 'selected' : ''}
+            >
+              User
+            </option>
+
+            <option
+              value="admin"
+              ${user.role === 'admin' ? 'selected' : ''}
+            >
+              Admin
+            </option>
+          </select>
 
         </div>
 
@@ -429,6 +510,11 @@ function saveUserFromModal() {
       document
         .getElementById('userActive')
         .value === 'true',
+
+    role:
+      document
+        .getElementById('userRole')
+        .value,
 
     defaultPermission:
       document

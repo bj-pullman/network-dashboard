@@ -1,12 +1,7 @@
 /*******************************************************
- * SHERIDAN IT INFRASTRUCTURE PORTAL
+ * NETWORK DASHBOARD
  * Application / RBAC / Data Layer
  *******************************************************/
-
-const APP_BREAKGLASS_ADMINS = [
-  'bjpullman@sheridanschools.org',
-  'chancebaughman@sheridanschools.org'
-];
 
 const APP_USERS_SHEET = 'App Users';
 
@@ -51,7 +46,7 @@ const APP_PAGE_CONFIG = {
   dashboard: {
     key: 'dashboard',
     label: 'Dashboard',
-    sheet: 'Server Dashboard',
+    sheet: 'Dashboard',
     type: 'dashboard',
     icon: 'fa-gauge-high',
     group: 'Overview'
@@ -123,7 +118,7 @@ const APP_PAGE_CONFIG = {
       'Type',
       'Status',
       'Location',
-      'Threatdown Installed',
+      'ThreatDown Installed',
       'Wazuh Installed',
       'Notes'
     ]
@@ -157,7 +152,7 @@ const APP_PAGE_CONFIG = {
       'Security Cameras',
 
     sheet:
-      'Security Cameras - District Wide',
+      'Security Cameras',
 
     type:
       'structured',
@@ -172,13 +167,13 @@ const APP_PAGE_CONFIG = {
 
       {
         key:
-          'sheridan',
+          'primary',
 
         title:
-          'Sheridan',
+          'Primary Sites',
 
         subtitle:
-          'District camera infrastructure',
+          'Primary camera infrastructure',
 
         type:
           'table',
@@ -207,13 +202,13 @@ const APP_PAGE_CONFIG = {
 
       {
         key:
-          'eastEnd',
+          'secondary',
 
         title:
-          'East End',
+          'Secondary Sites',
 
         subtitle:
-          'East End camera infrastructure',
+          'Secondary camera infrastructure',
 
         type:
           'table',
@@ -279,7 +274,7 @@ const APP_PAGE_CONFIG = {
   busCameras: {
     key: 'busCameras',
     label: 'Bus Cameras',
-    sheet: 'Bus Camera Information',
+    sheet: 'Bus Cameras',
     type: 'structured',
     icon: 'fa-bus',
     group: 'Physical Systems',
@@ -318,7 +313,7 @@ const APP_PAGE_CONFIG = {
   intercom: {
     key: 'intercom',
     label: 'Intercom & Bell',
-    sheet: 'Intercom/Bell System Info',
+    sheet: 'Intercom Bell System',
     type: 'structured',
     icon: 'fa-bullhorn',
     group: 'Physical Systems',
@@ -363,6 +358,36 @@ const APP_PAGE_CONFIG = {
     ]
   },
 
+  replacementSwitches: {
+    key: 'replacementSwitches',
+    label: 'Replacement Switches',
+    sheet: 'Replacement Switches',
+    type: 'table',
+    icon: 'fa-repeat',
+    group: 'Operations',
+
+    defaultColumns: [
+      'Status',
+      'Device Label',
+      'Model',
+      'IP Address',
+      'Replacement Priority',
+      'Target Replacement',
+      'Campus',
+      'Notes'
+    ]
+  },
+
+  settings: {
+    key: 'settings',
+    label: 'Settings',
+    sheet: 'App Settings',
+    type: 'settings',
+    icon: 'fa-sliders',
+    group: 'Administration',
+    adminOnly: true
+  },
+
   users: {
     key: 'users',
     label: 'Users & Permissions',
@@ -401,11 +426,12 @@ function getCurrentUserEmail_() {
 
 
 function isBreakglassAdmin_(email) {
-  return APP_BREAKGLASS_ADMINS.includes(
-    String(email || '')
-      .trim()
-      .toLowerCase()
-  );
+  return getBreakGlassAdmins_()
+    .includes(
+      String(email || '')
+        .trim()
+        .toLowerCase()
+    );
 }
 
 
@@ -419,34 +445,121 @@ function ensureAppUsersSheet_() {
 
   let sheet = ss.getSheetByName(APP_USERS_SHEET);
 
-  if (sheet) {
-    return sheet;
+  if (!sheet) {
+    sheet = ss.insertSheet(APP_USERS_SHEET);
   }
 
 
-  sheet = ss.insertSheet(APP_USERS_SHEET);
+  const requiredHeaders = getAppUserHeaders_();
 
-  sheet.getRange(1, 1, 1, 5).setValues([[
-    'Email',
-    'Name',
-    'Active',
-    'Default Permission',
-    'Page Permissions'
-  ]]);
+
+  const currentWidth =
+    Math.max(
+      sheet.getLastColumn(),
+      requiredHeaders.length
+    );
+
+
+  const currentHeaders =
+    currentWidth
+      ? sheet
+          .getRange(
+            1,
+            1,
+            1,
+            currentWidth
+          )
+          .getDisplayValues()[0]
+          .map(value =>
+            String(value || '').trim()
+          )
+      : [];
+
+
+  const hasHeaders =
+    currentHeaders.some(Boolean);
+
+
+  if (!hasHeaders) {
+
+    sheet
+      .getRange(
+        1,
+        1,
+        1,
+        requiredHeaders.length
+      )
+      .setValues([
+        requiredHeaders
+      ]);
+
+  } else {
+
+    const headers =
+      currentHeaders.slice();
+
+    while (
+      headers.length &&
+      !headers[headers.length - 1]
+    ) {
+      headers.pop();
+    }
+
+
+    requiredHeaders.forEach(header => {
+
+      if (!headers.includes(header)) {
+
+        sheet
+          .getRange(
+            1,
+            headers.length + 1
+          )
+          .setValue(header);
+
+        headers.push(header);
+
+      }
+
+    });
+
+  }
 
 
   sheet.setFrozenRows(1);
 
 
-  sheet.getRange('A1:E1')
+  sheet
+    .getRange(
+      1,
+      1,
+      1,
+      requiredHeaders.length
+    )
     .setFontWeight('bold')
     .setBackground('#17345f')
     .setFontColor('#ffffff');
 
 
-  sheet.autoResizeColumns(1, 5);
+  sheet.autoResizeColumns(
+    1,
+    requiredHeaders.length
+  );
 
   return sheet;
+}
+
+
+function getAppUserHeaders_() {
+  return [
+    'Email',
+    'Name',
+    'Active',
+    'Role',
+    'Default Permission',
+    'Page Permissions',
+    'Notes'
+  ];
 }
 
 
@@ -478,12 +591,8 @@ function getUserAccess_(email) {
    */
   if (isBreakglassAdmin_(email)) {
 
-    const permissions = {};
-
-    Object.keys(APP_PAGE_CONFIG)
-      .forEach(key => {
-        permissions[key] = 'edit';
-      });
+    const permissions =
+      getFullEditPermissions_();
 
 
     return {
@@ -533,6 +642,20 @@ function getUserAccess_(email) {
     ensureAppUsersSheet_();
 
 
+  const headerMap =
+    getAppUsersHeaderMap_(
+      sheet
+    );
+
+
+  const emailIndex =
+    getHeaderIndex_(
+      headerMap,
+      'Email',
+      0
+    );
+
+
   if (sheet.getLastRow() < 2) {
 
     return {
@@ -551,7 +674,7 @@ function getUserAccess_(email) {
         2,
         1,
         sheet.getLastRow() - 1,
-        5
+        sheet.getLastColumn()
       )
       .getValues();
 
@@ -559,7 +682,7 @@ function getUserAccess_(email) {
   const match =
     values.find(
       row =>
-        String(row[0] || '')
+        String(row[emailIndex] || '')
           .trim()
           .toLowerCase() === email
     );
@@ -578,13 +701,27 @@ function getUserAccess_(email) {
 
 
   const activeText =
-    String(match[2] || '')
+    String(
+      match[
+        getHeaderIndex_(
+          headerMap,
+          'Active',
+          2
+        )
+      ] || ''
+    )
       .trim()
       .toLowerCase();
 
 
   const active =
-    match[2] === true ||
+    match[
+      getHeaderIndex_(
+        headerMap,
+        'Active',
+        2
+      )
+    ] === true ||
     activeText === 'true' ||
     activeText === 'yes' ||
     activeText === 'active';
@@ -604,7 +741,25 @@ function getUserAccess_(email) {
 
   const defaultPermission =
     normalizePermission_(
-      match[3] || 'view'
+      match[
+        getHeaderIndex_(
+          headerMap,
+          'Default Permission',
+          4
+        )
+      ] || 'view'
+    );
+
+
+  const role =
+    normalizeRole_(
+      match[
+        getHeaderIndex_(
+          headerMap,
+          'Role',
+          3
+        )
+      ] || 'user'
     );
 
 
@@ -613,10 +768,22 @@ function getUserAccess_(email) {
 
   try {
 
+    const pagePermissionsIndex =
+      getHeaderIndex_(
+        headerMap,
+        'Page Permissions',
+        5
+      );
+
+
     overrides =
-      match[4]
+      match[pagePermissionsIndex]
         ? JSON.parse(
-            String(match[4])
+            String(
+              match[
+                pagePermissionsIndex
+              ]
+            )
           )
         : {};
 
@@ -628,6 +795,51 @@ function getUserAccess_(email) {
 
 
   const permissions = {};
+
+
+  if (role === 'admin') {
+
+    const adminResult = {
+
+      authorized: true,
+
+      admin: true,
+
+      breakglass: false,
+
+      email: email,
+
+      name:
+        String(
+          match[
+            getHeaderIndex_(
+              headerMap,
+              'Name',
+              1
+            )
+          ] ||
+          email.split('@')[0]
+        ),
+
+      role:
+        role,
+
+      permissions:
+        getFullEditPermissions_()
+
+    };
+
+
+    cacheJson_(
+      cacheKey,
+      adminResult,
+      300
+    );
+
+
+    return adminResult;
+
+  }
 
 
   Object.keys(APP_PAGE_CONFIG)
@@ -670,9 +882,18 @@ function getUserAccess_(email) {
 
     name:
       String(
-        match[1] ||
+        match[
+          getHeaderIndex_(
+            headerMap,
+            'Name',
+            1
+          )
+        ] ||
         email.split('@')[0]
       ),
+
+    role:
+      role,
 
     permissions:
       permissions
@@ -688,6 +909,94 @@ function getUserAccess_(email) {
 
 
   return result;
+}
+
+
+function getFullEditPermissions_() {
+
+  const permissions = {};
+
+  Object.keys(APP_PAGE_CONFIG)
+    .forEach(key => {
+      permissions[key] = 'edit';
+    });
+
+  return permissions;
+}
+
+
+function normalizeRole_(role) {
+
+  const value =
+    String(role || '')
+      .trim()
+      .toLowerCase();
+
+
+  if (
+    value === 'admin' ||
+    value === 'administrator' ||
+    value === 'super administrator'
+  ) {
+    return 'admin';
+  }
+
+
+  return 'user';
+}
+
+
+function getAppUsersHeaderMap_(sheet) {
+
+  const headers =
+    sheet
+      .getRange(
+        1,
+        1,
+        1,
+        sheet.getLastColumn()
+      )
+      .getDisplayValues()[0]
+      .map(value =>
+        String(value || '').trim()
+      );
+
+
+  const map = {};
+
+
+  headers.forEach(
+    (header, index) => {
+      if (header) {
+        map[header] = index;
+      }
+    }
+  );
+
+
+  return map;
+}
+
+
+function getHeaderIndex_(
+  headerMap,
+  header,
+  fallback
+) {
+
+  if (
+    Object.prototype
+      .hasOwnProperty
+      .call(
+        headerMap,
+        header
+      )
+  ) {
+    return headerMap[header];
+  }
+
+
+  return fallback;
 }
 
 
@@ -764,15 +1073,18 @@ function requirePagePermission_(pageKey, level) {
 
 function requireAdmin_() {
 
-  const email = getCurrentUserEmail_();
+  const access =
+    getUserAccess_(
+      getCurrentUserEmail_()
+    );
 
-  if (!isBreakglassAdmin_(email)) {
+  if (!access.admin) {
     throw new Error(
       'Administrator access is required.'
     );
   }
 
-  return true;
+  return access;
 }
 
 
@@ -839,10 +1151,14 @@ function getAppBootstrap() {
       email: access.email,
       name: access.name,
       admin: access.admin,
-      breakglass: access.breakglass
+      breakglass: access.breakglass,
+      role: access.role || 'user'
     },
 
-    pages: pages
+    pages: pages,
+
+    config:
+      AppConfig.getClientConfig_()
 
   };
 }
@@ -887,6 +1203,11 @@ function appGetPageData(pageKey, forceRefresh) {
 
   if (config.type === 'users') {
     return getAppUsers_();
+  }
+
+
+  if (config.type === 'settings') {
+    return getSettingsPageData_();
   }
 
 
@@ -3201,13 +3522,13 @@ function countAppRowsFromSheet_(sheet) {
 
 
   const values =
-    sheet
-      .getRange(
-        2,
-        1,
-        sheet.getLastRow() - 1,
-        1
-      )
+      sheet
+        .getRange(
+          2,
+          emailIndex + 1,
+          sheet.getLastRow() - 1,
+          1
+        )
       .getDisplayValues();
 
 
@@ -4056,7 +4377,9 @@ function getAppUsers_() {
       pages:
         getPermissionPageList_(),
       breakglass:
-        APP_BREAKGLASS_ADMINS
+        getBreakGlassAdmins_(),
+      domainPolicy:
+        getUserDomainPolicy_()
     };
 
   }
@@ -4068,15 +4391,29 @@ function getAppUsers_() {
         2,
         1,
         sheet.getLastRow() - 1,
-        5
+        sheet.getLastColumn()
       )
       .getDisplayValues();
+
+
+  const headerMap =
+    getAppUsersHeaderMap_(
+      sheet
+    );
 
 
   const users =
     values
       .filter(row =>
-        String(row[0] || '').trim()
+        String(
+          row[
+            getHeaderIndex_(
+              headerMap,
+              'Email',
+              0
+            )
+          ] || ''
+        ).trim()
       )
       .map((row, index) => {
 
@@ -4085,9 +4422,19 @@ function getAppUsers_() {
 
         try {
 
+          const pagePermissionsIndex =
+            getHeaderIndex_(
+              headerMap,
+              'Page Permissions',
+              5
+            );
+
+
           permissions =
-            row[4]
-              ? JSON.parse(row[4])
+            row[pagePermissionsIndex]
+              ? JSON.parse(
+                  row[pagePermissionsIndex]
+                )
               : {};
 
         } catch (error) {}
@@ -4097,17 +4444,56 @@ function getAppUsers_() {
 
           row: index + 2,
 
-          email: row[0],
+          email:
+            row[
+              getHeaderIndex_(
+                headerMap,
+                'Email',
+                0
+              )
+            ],
 
-          name: row[1],
+          name:
+            row[
+              getHeaderIndex_(
+                headerMap,
+                'Name',
+                1
+              )
+            ],
 
           active:
-            String(row[2])
+            String(
+              row[
+                getHeaderIndex_(
+                  headerMap,
+                  'Active',
+                  2
+                )
+              ]
+            )
               .toLowerCase() === 'true',
+
+          role:
+            normalizeRole_(
+              row[
+                getHeaderIndex_(
+                  headerMap,
+                  'Role',
+                  3
+                )
+              ] || 'user'
+            ),
 
           defaultPermission:
             normalizePermission_(
-              row[3] || 'view'
+              row[
+                getHeaderIndex_(
+                  headerMap,
+                  'Default Permission',
+                  4
+                )
+              ] || 'view'
             ),
 
           permissions:
@@ -4123,7 +4509,9 @@ function getAppUsers_() {
     pages:
       getPermissionPageList_(),
     breakglass:
-      APP_BREAKGLASS_ADMINS
+      getBreakGlassAdmins_(),
+    domainPolicy:
+      getUserDomainPolicy_()
   };
 }
 
@@ -4160,19 +4548,34 @@ function saveAppUser(user) {
   }
 
 
-  if (
-    !email.endsWith(
-      '@sheridanschools.org'
-    )
-  ) {
+  if (!isValidEmail_(email)) {
     throw new Error(
-      'Only Sheridan School District accounts may be added.'
+      'Enter a valid email address.'
     );
   }
 
 
+  validateUserDomainPolicy_(
+    email
+  );
+
+
   const sheet =
     ensureAppUsersSheet_();
+
+
+  const headerMap =
+    getAppUsersHeaderMap_(
+      sheet
+    );
+
+
+  const emailIndex =
+    getHeaderIndex_(
+      headerMap,
+      'Email',
+      0
+    );
 
 
   let targetRow = null;
@@ -4184,7 +4587,7 @@ function saveAppUser(user) {
       sheet
         .getRange(
           2,
-          1,
+          emailIndex + 1,
           sheet.getLastRow() - 1,
           1
         )
@@ -4215,25 +4618,46 @@ function saveAppUser(user) {
   }
 
 
-  const values = [[
+  const rowObject = {
+    'Email': email,
+    'Name': String(user.name || '').trim(),
+    'Active': user.active !== false,
+    'Role': normalizeRole_(user.role || 'user'),
+    'Default Permission':
+      normalizePermission_(
+        user.defaultPermission || 'view'
+      ),
+    'Page Permissions':
+      JSON.stringify(
+        user.permissions || {}
+      ),
+    'Notes': String(user.notes || '').trim()
+  };
 
-    email,
 
-    String(
-      user.name || ''
-    ).trim(),
+  const sheetHeaders =
+    sheet
+      .getRange(
+        1,
+        1,
+        1,
+        sheet.getLastColumn()
+      )
+      .getDisplayValues()[0]
+      .map(value =>
+        String(value || '').trim()
+      )
+      .filter(Boolean);
 
-    user.active !== false,
 
-    normalizePermission_(
-      user.defaultPermission || 'view'
-    ),
-
-    JSON.stringify(
-      user.permissions || {}
+  const values = [
+    sheetHeaders.map(
+      header =>
+        rowObject[header] !== undefined
+          ? rowObject[header]
+          : ''
     )
-
-  ]];
+  ];
 
 
   if (targetRow) {
@@ -4243,7 +4667,7 @@ function saveAppUser(user) {
         targetRow,
         1,
         1,
-        5
+        sheetHeaders.length
       )
       .setValues(values);
 
@@ -4254,7 +4678,7 @@ function saveAppUser(user) {
         sheet.getLastRow() + 1,
         1,
         1,
-        5
+        sheetHeaders.length
       )
       .setValues(values);
 
@@ -4269,6 +4693,71 @@ function saveAppUser(user) {
   return {
     status: 'success'
   };
+}
+
+
+function isValidEmail_(email) {
+
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+    String(email || '')
+  );
+}
+
+
+function getUserDomainPolicy_() {
+
+  return {
+    restrictionEnabled:
+      AppConfig.getBoolean(
+        'users.domain_restriction_enabled'
+      ),
+    allowedDomain:
+      AppConfig.get(
+        'users.allowed_domain'
+      )
+  };
+}
+
+
+function validateUserDomainPolicy_(email) {
+
+  const policy =
+    getUserDomainPolicy_();
+
+
+  if (!policy.restrictionEnabled) {
+    return true;
+  }
+
+
+  const domain =
+    String(policy.allowedDomain || '')
+      .trim()
+      .toLowerCase()
+      .replace(/^@/, '');
+
+
+  if (!domain) {
+    throw new Error(
+      'Domain restriction is enabled, but no allowed domain is configured.'
+    );
+  }
+
+
+  if (
+    !String(email || '')
+      .toLowerCase()
+      .endsWith('@' + domain)
+  ) {
+    throw new Error(
+      'This installation only allows accounts from @' +
+      domain +
+      '.'
+    );
+  }
+
+
+  return true;
 }
 
 

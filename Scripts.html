@@ -120,6 +120,11 @@ function initializeApplication(
     data;
 
 
+  applyBranding(
+    data.config
+  );
+
+
   document.getElementById(
     'sidebarUserName'
   ).textContent =
@@ -131,7 +136,11 @@ function initializeApplication(
     'sidebarUserRole'
   ).textContent =
     data.user.admin
-      ? 'Super Administrator'
+      ? (
+          data.user.breakglass
+            ? 'Break-glass Administrator'
+            : 'Administrator'
+        )
       : 'Authorized User';
 
 
@@ -143,6 +152,137 @@ function initializeApplication(
   navigateTo(
     'dashboard'
   );
+}
+
+
+function applyBranding(
+  config
+) {
+
+  config =
+    config || {};
+
+  const branding =
+    config.branding || {};
+
+  const organization =
+    config.organization || {};
+
+  const root =
+    document.documentElement;
+
+  const primary =
+    branding.primaryColor || '#17345f';
+
+  const secondary =
+    branding.secondaryColor || '#0d2342';
+
+  const accent =
+    branding.accentColor || '#f4c430';
+
+
+  root.style.setProperty(
+    '--brand-primary',
+    primary
+  );
+
+  root.style.setProperty(
+    '--brand-secondary',
+    secondary
+  );
+
+  root.style.setProperty(
+    '--brand-accent',
+    accent
+  );
+
+  root.style.setProperty(
+    '--navy-800',
+    primary
+  );
+
+  root.style.setProperty(
+    '--navy-900',
+    secondary
+  );
+
+  root.style.setProperty(
+    '--gold',
+    accent
+  );
+
+
+  document.title =
+    config.appName ||
+    'Network Dashboard';
+
+
+  const brandTitle =
+    document.getElementById(
+      'brandTitle'
+    );
+
+  if (brandTitle) {
+    brandTitle.textContent =
+      (
+        organization.shortName ||
+        config.appName ||
+        'Network Dashboard'
+      ).toUpperCase();
+  }
+
+
+  const brandSubtitle =
+    document.getElementById(
+      'brandSubtitle'
+    );
+
+  if (brandSubtitle) {
+    brandSubtitle.textContent =
+      'INFRASTRUCTURE';
+  }
+
+
+  const eyebrow =
+    document.getElementById(
+      'pageEyebrow'
+    );
+
+  if (eyebrow) {
+    eyebrow.textContent =
+      (
+        organization.name ||
+        config.appName ||
+        'Network Dashboard'
+      ).toUpperCase();
+  }
+
+
+  const logo =
+    document.getElementById(
+      'brandLogo'
+    );
+
+  const fallback =
+    document.getElementById(
+      'brandLogoFallback'
+    );
+
+  if (
+    logo &&
+    fallback
+  ) {
+
+    if (branding.logoUrl) {
+      logo.src = branding.logoUrl;
+      logo.hidden = false;
+      fallback.hidden = true;
+    } else {
+      logo.hidden = true;
+      fallback.hidden = false;
+    }
+
+  }
 }
 
 
@@ -716,6 +856,19 @@ function renderPage(
 
 
   if (
+    page.type === 'settings'
+  ) {
+
+    renderSettingsPage(
+      data
+    );
+
+    return;
+
+  }
+
+
+  if (
     page.type === 'structured'
   ) {
 
@@ -1228,7 +1381,9 @@ function statusPill(
     'installed',
     'success',
     'successful',
-    'completed'
+    'completed',
+    'configured',
+    'available'
   ];
 
 
@@ -1241,17 +1396,19 @@ function statusPill(
     'not installed',
     'critical',
     'inactive',
-    'error'
+    'error',
+    'missing',
+    'not configured'
   ];
 
 
   const warning = [
     'warning',
     'needs attention',
-    'partial',
     'degraded',
     'needs update',
-    'pending'
+    'pending',
+    'partial'
   ];
 
 

@@ -11,14 +11,7 @@
     content="width=device-width, initial-scale=1"
   >
 
-  <!-- Sheridan Yellowjacket browser tab icon -->
-  <link
-    rel="icon"
-    type="image/png"
-    href="https://drive.google.com/thumbnail?id=1ndAntT7thieFyWmSlIK0BNS6TqRt08vr&sz=w128"
-  >
-
-  <title>Sheridan IT Infrastructure</title>
+  <title><?= appName ?></title>
 
   <link
     rel="stylesheet"
@@ -53,20 +46,33 @@
       <img
         id="brandLogo"
         class="brand-logo"
-        src="https://drive.google.com/thumbnail?id=1ndAntT7thieFyWmSlIK0BNS6TqRt08vr&sz=w500"
-        alt="Sheridan Yellowjacket"
+        alt="Organization logo"
+        hidden
       >
+
+      <div
+        id="brandLogoFallback"
+        class="brand-logo-fallback"
+      >
+        <i class="fa-solid fa-network-wired"></i>
+      </div>
 
     </div>
 
 
       <div class="brand-copy">
 
-        <div class="brand-title">
-          SHERIDAN IT
+        <div
+          id="brandTitle"
+          class="brand-title"
+        >
+          NETWORK DASHBOARD
         </div>
 
-        <div class="brand-subtitle">
+        <div
+          id="brandSubtitle"
+          class="brand-subtitle"
+        >
           INFRASTRUCTURE
         </div>
 
@@ -98,7 +104,7 @@
           id="sidebarUserRole"
           class="sidebar-user-role"
         >
-          Sheridan Schools
+          Authorized User
         </div>
 
       </div>
@@ -114,8 +120,11 @@
 
       <div class="page-heading">
 
-        <div class="page-eyebrow">
-          SHERIDAN IT INFRASTRUCTURE
+        <div
+          id="pageEyebrow"
+          class="page-eyebrow"
+        >
+          NETWORK DASHBOARD
         </div>
 
 
@@ -140,7 +149,7 @@
           id="pageSubtitle"
           class="page-subtitle"
         >
-          District technology infrastructure overview
+          Network infrastructure overview
         </div>
 
       </div>
@@ -163,7 +172,7 @@
         ></div>
 
         <span>
-          Loading Sheridan infrastructure...
+          Loading Network Dashboard...
         </span>
 
       </div>
@@ -236,7 +245,7 @@
 
         <button
           id="saveRecordButton"
-          class="btn btn-sheridan"
+          class="btn btn-brand"
         >
 
           <i class="fa-solid fa-check me-2"></i>
@@ -273,7 +282,7 @@
         <div>
 
           <div class="modal-eyebrow">
-            ARUBA CENTRAL
+            NETWORK INTEGRATION
           </div>
 
           <h5 class="modal-title">
@@ -329,6 +338,8 @@
 <?!= include('DepartmentWorkflow'); ?>
 
 <?!= include('UserManagement'); ?>
+
+<?!= include('Settings'); ?>
 
 <?!= include('Scripts'); ?>
 

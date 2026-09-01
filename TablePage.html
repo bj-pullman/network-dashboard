@@ -32,7 +32,7 @@ function renderTablePage(
   const subtitle =
     data.pageKey === 'servers' &&
     data.serverViews
-      ? `${data.serverViews.active} active · ${data.serverViews.offline} offline`
+      ? `${data.serverViews.active} active - ${data.serverViews.offline} offline`
       : `${data.totalCount} records`;
 
 
@@ -61,7 +61,7 @@ function renderTablePage(
           <button
             id="serverViewActive"
             type="button"
-            class="btn btn-sheridan"
+            class="btn btn-brand"
             onclick="setServerView('active')"
           >
             <i class="fa-solid fa-circle-check me-1"></i>
@@ -292,8 +292,8 @@ function setServerView(
       }
 
 
-      button.classList.remove(
-        'btn-sheridan'
+    button.classList.remove(
+      'btn-brand'
       );
 
 
@@ -323,7 +323,7 @@ function setServerView(
 
 
     selectedButton.classList.add(
-      'btn-sheridan'
+      'btn-brand'
     );
 
   }
@@ -342,7 +342,11 @@ function renderTablePageActions(
 
 
   const centralButton =
-    data.centralSync
+    data.centralSync &&
+    canEdit &&
+    appBootstrap &&
+    appBootstrap.user &&
+    appBootstrap.user.admin
       ? `
 
         <button
@@ -365,7 +369,7 @@ function renderTablePageActions(
       ? `
 
         <button
-          class="btn btn-sm btn-sheridan"
+          class="btn btn-sm btn-brand"
           onclick="openAddRecord()"
         >
 

@@ -1,6 +1,10 @@
 <style>
 
 :root {
+  --brand-primary: #17345f;
+  --brand-secondary: #0d2342;
+  --brand-accent: #f4c430;
+
   --navy-950: #08182f;
   --navy-900: #0d2342;
   --navy-800: #17345f;
@@ -410,7 +414,7 @@ textarea {
  * BUTTONS
  *******************************************************/
 
-.btn-sheridan {
+.btn-brand {
   border-color: var(--navy-800);
 
   background: var(--navy-800);
@@ -421,7 +425,7 @@ textarea {
 }
 
 
-.btn-sheridan:hover {
+.btn-brand:hover {
   border-color: var(--navy-900);
 
   background: var(--navy-900);
@@ -989,7 +993,7 @@ textarea {
 }
 
 /*******************************************************
- * SHERIDAN LOGO
+ * BRAND LOGO
  *******************************************************/
 
 .brand-logo-shell {
@@ -1018,6 +1022,25 @@ textarea {
   filter: drop-shadow(
     0 2px 3px rgba(0, 0, 0, .18)
   );
+}
+
+
+.brand-logo-fallback {
+  width: 54px;
+  height: 54px;
+
+  display: grid;
+  place-items: center;
+
+  border-radius: 12px;
+
+  background: var(--brand-accent);
+  color: var(--navy-950);
+
+  font-size: 22px;
+
+  box-shadow:
+    0 2px 5px rgba(0, 0, 0, .18);
 }
 
 
@@ -2449,7 +2472,7 @@ textarea {
 
   border-radius: 50%;
 
-  background: var(--sheridan-navy);
+  background: var(--brand-primary);
   color: #ffffff;
 
   font-size: 1rem;
@@ -2531,10 +2554,10 @@ textarea {
 
   border-radius: 50%;
 
-  background: var(--sheridan-navy);
+  background: var(--brand-primary);
   color: #ffffff !important;
 
-  border: 3px solid var(--sheridan-gold);
+  border: 3px solid var(--brand-accent);
 
   font-size: 1.05rem;
   font-weight: 900;
@@ -2561,7 +2584,7 @@ textarea {
 .workflow-owner {
   margin-bottom: 8px;
 
-  color: var(--sheridan-navy);
+  color: var(--brand-primary);
 
   font-size: 0.94rem;
   font-weight: 700;
@@ -2596,7 +2619,7 @@ textarea {
   border-radius: 50%;
 
   background: var(--surface);
-  color: var(--sheridan-gold);
+  color: var(--brand-accent);
 
   font-size: 0.7rem;
 }
@@ -2844,8 +2867,8 @@ textarea {
 
   border-radius: 10px;
 
-  background: var(--sheridan-navy);
-  color: var(--sheridan-gold);
+  background: var(--brand-primary);
+  color: var(--brand-accent);
 
   font-size: 1.25rem;
 }
@@ -2883,7 +2906,7 @@ textarea {
   align-items: center;
   justify-content: center;
 
-  color: var(--sheridan-gold);
+  color: var(--brand-accent);
 
   font-size: 1.2rem;
 }
@@ -2915,8 +2938,8 @@ textarea {
 
   border-radius: 8px;
 
-  background: var(--sheridan-navy);
-  color: var(--sheridan-gold);
+  background: var(--brand-primary);
+  color: var(--brand-accent);
 }
 
 .workflow-classify-grid {
@@ -2942,7 +2965,7 @@ textarea {
 .workflow-classify-item > i {
   margin-top: 3px;
 
-  color: var(--sheridan-navy);
+  color: var(--brand-primary);
 
   font-size: 0.9rem;
 }
@@ -2988,7 +3011,7 @@ textarea {
 }
 
 .workflow-route-heading-label {
-  color: var(--sheridan-navy);
+  color: var(--brand-primary);
 
   font-size: 0.72rem;
   font-weight: 850;
@@ -3102,7 +3125,7 @@ textarea {
 }
 
 .workflow-escalation-label > i {
-  color: var(--sheridan-navy);
+  color: var(--brand-primary);
 
   font-size: 1.1rem;
 }
@@ -3166,7 +3189,7 @@ textarea {
   margin: 0 18px 18px;
   padding: 14px 16px;
 
-  border-left: 4px solid var(--sheridan-gold);
+  border-left: 4px solid var(--brand-accent);
   border-radius: 6px;
 
   background: #fff9e8;
@@ -3578,8 +3601,8 @@ textarea {
 
   border-radius: 7px;
 
-  background: var(--sheridan-navy);
-  color: var(--sheridan-gold);
+  background: var(--brand-primary);
+  color: var(--brand-accent);
 
   font-size: 0.78rem;
 }
@@ -3618,7 +3641,7 @@ textarea {
 }
 
 .workflow-sla-explanation i {
-  color: var(--sheridan-navy);
+  color: var(--brand-primary);
 }
 
 
@@ -3699,5 +3722,241 @@ textarea {
 
 
 
+
+/*******************************************************
+ * SETTINGS
+ *******************************************************/
+
+.settings-layout {
+  display: grid;
+  gap: 18px;
+}
+
+.settings-panel {
+  overflow: hidden;
+}
+
+.settings-card-subtitle {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+  padding: 18px;
+}
+
+.settings-field {
+  display: grid;
+  gap: 7px;
+}
+
+.settings-field > span {
+  color: #485565;
+  font-size: 10px;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.settings-color-row {
+  display: grid;
+  grid-template-columns: 58px 1fr;
+  gap: 9px;
+}
+
+.settings-switch-field {
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fafbfc;
+}
+
+.settings-switch-field input {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+
+.settings-switch-field strong {
+  display: block;
+  color: var(--text);
+  font-size: 0.86rem;
+}
+
+.settings-switch-field small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.settings-brand-preview {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  margin: 0 18px 18px;
+  padding: 15px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: linear-gradient(135deg, var(--brand-secondary), var(--brand-primary));
+  color: white;
+}
+
+.settings-preview-mark {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 42px;
+  border-radius: 9px;
+  background: var(--brand-accent);
+  color: var(--navy-950);
+}
+
+.settings-preview-title {
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.settings-preview-subtitle {
+  margin-top: 2px;
+  color: rgba(255,255,255,.68);
+  font-size: 0.78rem;
+}
+
+.integration-help {
+  padding: 13px 18px;
+  border-bottom: 1px solid var(--border);
+  background: #fff9df;
+  color: #6a5509;
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
+.integration-list {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+}
+
+.integration-card {
+  display: grid;
+  gap: 13px;
+  padding: 15px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: #ffffff;
+}
+
+.integration-card-main {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.integration-card-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.integration-card h3 {
+  margin: 0;
+  color: var(--navy-900);
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.integration-card p {
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.integration-note {
+  margin-top: 9px;
+  color: #725a08;
+  font-size: 0.78rem;
+}
+
+.integration-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.integration-property-table {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid #e3e8ef;
+  border-radius: 8px;
+}
+
+.integration-property-table > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #e9edf3;
+  background: #fafbfc;
+}
+
+.integration-property-table > div:last-child {
+  border-bottom: 0;
+}
+
+.integration-property-table code {
+  color: #17283e;
+  font-size: 0.79rem;
+  font-weight: 700;
+}
+
+.integration-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.integration-last-status {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.settings-validation-output {
+  min-height: 180px;
+  margin: 0;
+  padding: 16px 18px;
+  border: 0;
+  background: #07111f;
+  color: #dce6f3;
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 0.78rem;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 720px) {
+  .integration-card-main {
+    flex-direction: column;
+  }
+
+  .settings-color-row {
+    grid-template-columns: 1fr;
+  }
+}
 
 </style>

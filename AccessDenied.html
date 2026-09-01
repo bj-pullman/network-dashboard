@@ -19,9 +19,9 @@
   <style>
 
     :root {
-      --navy:#0d2342;
-      --navy-dark:#08182f;
-      --gold:#f4c430;
+      --navy:<?= branding.primaryColor ?>;
+      --navy-dark:<?= branding.secondaryColor ?>;
+      --gold:<?= branding.accentColor ?>;
       --surface:#f5f4f0;
       --muted:#6b7582;
     }
@@ -43,11 +43,6 @@
       padding:25px;
 
       background:
-        radial-gradient(
-          circle at 70% 20%,
-          rgba(244,196,48,.10),
-          transparent 28%
-        ),
         linear-gradient(
           145deg,
           var(--navy-dark),
@@ -242,11 +237,11 @@
 
         <div>
           <div class="brand-title">
-            SHERIDAN IT
+            <?= appName ?>
           </div>
 
           <div class="brand-subtitle">
-            INFRASTRUCTURE
+            ACCESS CONTROL
           </div>
         </div>
 
@@ -257,7 +252,7 @@
 
       <p>
         This application is restricted to authorized
-        Sheridan School District technology personnel.
+        <?= organizationName ?> personnel.
       </p>
 
 
@@ -285,7 +280,7 @@
 
 
       <div class="footer">
-        Sheridan School District • Technology Department
+        Network Dashboard
       </div>
 
     </div>

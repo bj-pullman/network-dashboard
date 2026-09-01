@@ -1,5 +1,5 @@
 {
-  "timeZone": "America/Chicago",
+  "timeZone": "Etc/UTC",
   "dependencies": {
   },
   "webapp": {

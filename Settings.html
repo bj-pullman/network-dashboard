@@ -1,0 +1,587 @@
+<script>
+
+function renderSettingsPage(data) {
+
+  currentPageData =
+    data;
+
+  setPageHeader(
+    'Settings',
+    'Instance configuration, branding, user policy and integrations'
+  );
+
+  document.getElementById('pageActions').innerHTML = `
+
+    <button
+      class="btn btn-sm btn-brand"
+      onclick="saveSettingsForm()"
+    >
+      <i class="fa-solid fa-floppy-disk me-2"></i>
+      Save Settings
+    </button>
+
+    <button
+      class="btn btn-sm btn-light border"
+      onclick="runSettingsValidation()"
+    >
+      <i class="fa-solid fa-shield-halved me-2"></i>
+      Validate
+    </button>
+
+    <button
+      class="btn btn-sm btn-light border"
+      onclick="refreshCurrentPage()"
+    >
+      <i class="fa-solid fa-rotate me-2"></i>
+      Refresh
+    </button>
+  `;
+
+  const values =
+    (data.settings && data.settings.values) || {};
+
+  const integrations =
+    data.integrations || [];
+
+  document.getElementById('pageContent').innerHTML = `
+
+    <div class="settings-layout">
+
+      <section class="app-card settings-panel">
+
+        <div class="card-header-clean">
+          <div>
+            <h2 class="card-title-clean">General</h2>
+            <div class="settings-card-subtitle">
+              Application and organization identity.
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-grid">
+          ${settingsTextField('app.name', 'Application Name', values)}
+          ${settingsTextField('organization.name', 'Organization Name', values)}
+          ${settingsTextField('organization.short_name', 'Organization Short Name', values)}
+          ${settingsTextField('app.web_app_url', 'Web App URL', values)}
+        </div>
+
+      </section>
+
+
+      <section class="app-card settings-panel">
+
+        <div class="card-header-clean">
+          <div>
+            <h2 class="card-title-clean">Branding</h2>
+            <div class="settings-card-subtitle">
+              Logo and colors used by the web application.
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-grid">
+          ${settingsTextField('branding.logo_url', 'Logo URL', values)}
+          ${settingsColorField('branding.primary_color', 'Primary Color', values)}
+          ${settingsColorField('branding.secondary_color', 'Secondary Color', values)}
+          ${settingsColorField('branding.accent_color', 'Accent Color', values)}
+        </div>
+
+        <div class="settings-brand-preview">
+          <div class="settings-preview-mark">
+            <i class="fa-solid fa-network-wired"></i>
+          </div>
+          <div>
+            <div class="settings-preview-title">
+              ${escapeHtml(values['organization.short_name'] || values['app.name'] || 'Network Dashboard')}
+            </div>
+            <div class="settings-preview-subtitle">
+              Network infrastructure overview
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+
+      <section class="app-card settings-panel">
+
+        <div class="card-header-clean">
+          <div>
+            <h2 class="card-title-clean">Regional</h2>
+            <div class="settings-card-subtitle">
+              Timezone and display preferences.
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-grid">
+          ${settingsTextField('regional.timezone', 'Timezone', values)}
+          ${settingsSelectField('regional.date_format', 'Date Format', values, ['yyyy-MM-dd', 'MM/dd/yyyy', 'dd/MM/yyyy'])}
+          ${settingsSelectField('regional.time_format', 'Time Format', values, ['HH:mm', 'h:mm a'])}
+        </div>
+
+      </section>
+
+
+      <section class="app-card settings-panel">
+
+        <div class="card-header-clean">
+          <div>
+            <h2 class="card-title-clean">User Policy</h2>
+            <div class="settings-card-subtitle">
+              Optional domain restriction for newly added users.
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-grid">
+          ${settingsBooleanField('users.domain_restriction_enabled', 'Restrict users to one domain', values)}
+          ${settingsTextField('users.allowed_domain', 'Allowed Email Domain', values)}
+        </div>
+
+      </section>
+
+
+      <section class="app-card settings-panel">
+
+        <div class="card-header-clean">
+          <div>
+            <h2 class="card-title-clean">Integrations</h2>
+            <div class="settings-card-subtitle">
+              Integration status and non-secret configuration.
+            </div>
+          </div>
+        </div>
+
+        <div class="integration-help">
+          Add credentials in Apps Script -> Project Settings -> Script Properties.
+          Property names are case-sensitive. Secret values are never shown here.
+        </div>
+
+        <div class="integration-list">
+          ${integrations.map(renderIntegrationCard).join('')}
+        </div>
+
+      </section>
+
+
+      <section class="app-card settings-panel">
+
+        <div class="card-header-clean">
+          <div>
+            <h2 class="card-title-clean">Validation</h2>
+            <div class="settings-card-subtitle">
+              Run an installation health check without changing data.
+            </div>
+          </div>
+        </div>
+
+        <pre id="settingsValidationOutput" class="settings-validation-output">Validation has not been run in this session.</pre>
+
+      </section>
+
+    </div>
+  `;
+}
+
+
+function settingsTextField(key, label, values) {
+
+  return `
+    <label class="settings-field">
+      <span>${escapeHtml(label)}</span>
+      <input
+        class="form-control"
+        data-setting-key="${escapeAttribute(key)}"
+        value="${escapeAttribute(values[key] || '')}"
+      >
+    </label>
+  `;
+}
+
+
+function settingsColorField(key, label, values) {
+
+  const value =
+    values[key] || '#17345f';
+
+  return `
+    <label class="settings-field">
+      <span>${escapeHtml(label)}</span>
+      <div class="settings-color-row">
+        <input
+          class="form-control form-control-color"
+          type="color"
+          data-setting-key="${escapeAttribute(key)}"
+          value="${escapeAttribute(value)}"
+          oninput="syncSettingsColorInputs(this)"
+        >
+        <input
+          class="form-control"
+          data-setting-key="${escapeAttribute(key)}"
+          value="${escapeAttribute(value)}"
+          oninput="syncSettingsColorInputs(this)"
+        >
+      </div>
+    </label>
+  `;
+}
+
+
+function syncSettingsColorInputs(input) {
+
+  const wrapper =
+    input.closest(
+      '.settings-color-row'
+    );
+
+  if (!wrapper) {
+    return;
+  }
+
+  const inputs =
+    wrapper.querySelectorAll(
+      'input[data-setting-key]'
+    );
+
+  inputs.forEach(item => {
+
+    if (
+      item !== input &&
+      /^#[0-9a-fA-F]{6}$/.test(input.value)
+    ) {
+      item.value = input.value;
+    }
+
+  });
+}
+
+
+function settingsSelectField(key, label, values, options) {
+
+  return `
+    <label class="settings-field">
+      <span>${escapeHtml(label)}</span>
+      <select
+        class="form-select"
+        data-setting-key="${escapeAttribute(key)}"
+      >
+        ${options.map(option => `
+          <option
+            value="${escapeAttribute(option)}"
+            ${values[key] === option ? 'selected' : ''}
+          >
+            ${escapeHtml(option)}
+          </option>
+        `).join('')}
+      </select>
+    </label>
+  `;
+}
+
+
+function settingsBooleanField(key, label, values) {
+
+  const checked =
+    String(values[key] || '')
+      .toLowerCase() === 'true';
+
+  return `
+    <label class="settings-switch-field">
+      <input
+        type="checkbox"
+        data-setting-key="${escapeAttribute(key)}"
+        ${checked ? 'checked' : ''}
+      >
+      <span>
+        <strong>${escapeHtml(label)}</strong>
+        <small>When enabled, User Management accepts only the configured domain.</small>
+      </span>
+    </label>
+  `;
+}
+
+
+function renderIntegrationCard(integration) {
+
+  const implementationLabel =
+    integration.implementationStatus === 'available'
+      ? 'Available'
+      : integration.implementationStatus === 'partial'
+        ? 'Partial'
+        : integration.implementationStatus || 'Planned';
+
+  const canRun =
+    integration.configurationComplete;
+
+  return `
+    <article class="integration-card">
+
+      <div class="integration-card-main">
+        <div>
+          <div class="integration-card-title-row">
+            <h3>${escapeHtml(integration.name)}</h3>
+            ${statusPill(implementationLabel)}
+            ${
+              integration.configurationComplete
+                ? statusPill('Configured')
+                : statusPill('Missing')
+            }
+          </div>
+
+          <p>${escapeHtml(integration.description || '')}</p>
+
+          ${
+            integration.notes
+              ? `<div class="integration-note">${escapeHtml(integration.notes)}</div>`
+              : ''
+          }
+        </div>
+
+        <label class="integration-toggle">
+          <input
+            type="checkbox"
+            ${integration.enabled ? 'checked' : ''}
+            onchange="saveIntegrationEnabled('${escapeAttribute(integration.id)}', this.checked)"
+          >
+          <span>Enabled</span>
+        </label>
+      </div>
+
+      <div class="integration-property-table">
+        ${integration.requiredProperties.map(property => `
+          <div>
+            <code>${escapeHtml(property.key)}</code>
+            ${
+              property.configured
+                ? statusPill('Configured')
+                : statusPill('Missing')
+            }
+          </div>
+        `).join('')}
+      </div>
+
+      <div class="integration-actions">
+        ${
+          integration.supportsConnectionTest
+            ? `
+              <button
+                class="btn btn-sm btn-light border"
+                onclick="testSettingsIntegration('${escapeAttribute(integration.id)}')"
+                ${canRun ? '' : 'disabled'}
+              >
+                <i class="fa-solid fa-plug-circle-check me-2"></i>
+                Test
+              </button>
+            `
+            : ''
+        }
+
+        ${
+          integration.supportsSync
+            ? `
+              <button
+                class="btn btn-sm btn-brand"
+                onclick="syncSettingsIntegration('${escapeAttribute(integration.id)}')"
+                ${canRun ? '' : 'disabled'}
+              >
+                <i class="fa-solid fa-cloud-arrow-down me-2"></i>
+                Sync Now
+              </button>
+            `
+            : ''
+        }
+
+        <span class="integration-last-status">
+          ${escapeHtml(integration.lastStatus || 'Not configured')}
+          ${
+            integration.lastSync
+              ? ' - ' + escapeHtml(integration.lastSync)
+              : ''
+          }
+        </span>
+      </div>
+
+    </article>
+  `;
+}
+
+
+function saveSettingsForm() {
+
+  const settings = {};
+
+  document
+    .querySelectorAll('[data-setting-key]')
+    .forEach(input => {
+
+      const key =
+        input.dataset.settingKey;
+
+      if (!key) {
+        return;
+      }
+
+      if (input.type === 'checkbox') {
+        settings[key] =
+          input.checked
+            ? 'true'
+            : 'false';
+      } else {
+        settings[key] =
+          input.value;
+      }
+
+    });
+
+
+  google.script.run
+    .withSuccessHandler(function(data) {
+
+      currentPageData =
+        data;
+
+      appBootstrap.config =
+        data.config;
+
+      applyBranding(
+        data.config
+      );
+
+      renderSettingsPage(
+        data
+      );
+
+      showToast(
+        'Settings saved.'
+      );
+
+    })
+    .withFailureHandler(handleFailure)
+    .saveAppSettings(settings);
+}
+
+
+function saveIntegrationEnabled(id, enabled) {
+
+  google.script.run
+    .withSuccessHandler(function(data) {
+
+      currentPageData =
+        data;
+
+      renderSettingsPage(
+        data
+      );
+
+      showToast(
+        'Integration setting saved.'
+      );
+
+    })
+    .withFailureHandler(handleFailure)
+    .saveIntegrationConfig(
+      id,
+      {
+        enabled: enabled,
+        settings: {}
+      }
+    );
+}
+
+
+function testSettingsIntegration(id) {
+
+  showToast(
+    'Testing integration connection...'
+  );
+
+  google.script.run
+    .withSuccessHandler(function(result) {
+      showToast(
+        result.message ||
+        result.status ||
+        'Connection test complete.'
+      );
+      refreshCurrentPage();
+    })
+    .withFailureHandler(handleFailure)
+    .testIntegrationConnection(id);
+}
+
+
+function syncSettingsIntegration(id) {
+
+  showToast(
+    'Running integration sync...'
+  );
+
+  google.script.run
+    .withSuccessHandler(function(result) {
+      showToast(
+        result.status === 'success'
+          ? 'Integration sync complete.'
+          : 'Integration sync finished: ' + result.status
+      );
+      refreshCurrentPage();
+    })
+    .withFailureHandler(handleFailure)
+    .runIntegrationSync(id);
+}
+
+
+function runSettingsValidation() {
+
+  const output =
+    document.getElementById(
+      'settingsValidationOutput'
+    );
+
+  if (output) {
+    output.textContent =
+      'Running validation...';
+  }
+
+  google.script.run
+    .withSuccessHandler(function(result) {
+
+      if (output) {
+        output.textContent =
+          formatClientValidationResult(result);
+      }
+
+      showToast(
+        result.healthy
+          ? 'Installation is healthy.'
+          : 'Validation found issues.'
+      );
+
+    })
+    .withFailureHandler(handleFailure)
+    .appValidateNetworkDashboard();
+}
+
+
+function formatClientValidationResult(result) {
+
+  return [
+    'Application: ' + result.applicationVersion,
+    'Schema: ' + result.schemaVersion,
+    'Status: ' + (result.healthy ? 'Healthy' : 'Needs attention'),
+    '',
+    'Sheets checked: ' + (result.sheets || []).length,
+    'Protections checked: ' + (result.protections || []).length,
+    '',
+    'Errors:',
+    result.errors && result.errors.length
+      ? result.errors.join('\n')
+      : 'None',
+    '',
+    'Warnings:',
+    result.warnings && result.warnings.length
+      ? result.warnings.join('\n')
+      : 'None'
+  ].join('\n');
+}
+
+</script>

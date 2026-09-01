@@ -2,9 +2,19 @@
 
 function renderDashboard(data) {
 
+  const organizationName =
+    appBootstrap &&
+    appBootstrap.config &&
+    appBootstrap.config.organization &&
+    appBootstrap.config.organization.name
+      ? appBootstrap.config.organization.name
+      : '';
+
   setPageHeader(
     'Dashboard',
-    'District technology infrastructure overview'
+    organizationName
+      ? organizationName + ' infrastructure overview'
+      : 'Network infrastructure overview'
   );
 
   document.getElementById('pageActions').innerHTML = `
@@ -289,7 +299,14 @@ function renderCampusChart(distribution) {
           label: 'Switches',
           data:
             Object.values(distribution || {}),
-          backgroundColor: '#17345f',
+          backgroundColor:
+            (
+              appBootstrap &&
+              appBootstrap.config &&
+              appBootstrap.config.branding &&
+              appBootstrap.config.branding.primaryColor
+            ) ||
+            '#17345f',
           borderRadius: 5
         }]
       },
