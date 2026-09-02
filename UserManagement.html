@@ -2,6 +2,9 @@
 
 function renderUsersPage(data) {
 
+  currentPageData =
+    data;
+
   setPageHeader(
     'Users & Permissions',
     'Control access to Network Dashboard'
@@ -37,14 +40,7 @@ function renderUsersPage(data) {
 
   document.getElementById('pageContent').innerHTML = `
 
-    <div
-      class="alert mb-4"
-      style="
-        background:#fff8dd;
-        border:1px solid #f0d875;
-        color:#705b00;
-      "
-    >
+    <div class="app-card user-access-note mb-4">
 
       <div class="fw-bold mb-1">
         <i class="fa-solid fa-shield-halved me-2"></i>
@@ -52,7 +48,16 @@ function renderUsersPage(data) {
       </div>
 
       <div class="small">
-        ${breakglass.length ? breakglass.map(escapeHtml).join(', ') : 'No break-glass administrators are configured.'}
+        ${
+          breakglass.length
+            ? breakglass.map(escapeHtml).join(', ')
+            : 'No break-glass administrators are currently configured.'
+        }
+      </div>
+
+      <div class="small text-muted mt-2">
+        Break-glass access provides emergency administrative access independent
+        of normal page permissions. This is not an error.
       </div>
 
     </div>
@@ -251,6 +256,18 @@ function openUserEditor(user) {
   const pages =
     data.pages || [];
 
+  const roleOptions =
+    getUserControlledOptions_(
+      'Role',
+      ['user', 'admin']
+    );
+
+  const permissionOptions =
+    getUserControlledOptions_(
+      'Default Permission',
+      ['view', 'edit', 'none']
+    );
+
 
   document.getElementById('recordModalTitle')
     .textContent =
@@ -306,19 +323,10 @@ function openUserEditor(user) {
             id="userRole"
             class="form-select"
           >
-            <option
-              value="user"
-              ${user.role !== 'admin' ? 'selected' : ''}
-            >
-              User
-            </option>
-
-            <option
-              value="admin"
-              ${user.role === 'admin' ? 'selected' : ''}
-            >
-              Admin
-            </option>
+            ${userOptionList_(
+              roleOptions,
+              user.role || 'user'
+            )}
           </select>
 
         </div>
@@ -334,26 +342,10 @@ function openUserEditor(user) {
             id="userDefaultPermission"
             class="form-select"
           >
-            <option
-              value="view"
-              ${user.defaultPermission === 'view' ? 'selected' : ''}
-            >
-              View
-            </option>
-
-            <option
-              value="edit"
-              ${user.defaultPermission === 'edit' ? 'selected' : ''}
-            >
-              Edit
-            </option>
-
-            <option
-              value="none"
-              ${user.defaultPermission === 'none' ? 'selected' : ''}
-            >
-              None
-            </option>
+            ${userOptionList_(
+              permissionOptions,
+              user.defaultPermission || 'view'
+            )}
           </select>
 
         </div>
@@ -435,26 +427,10 @@ function openUserEditor(user) {
                     Default
                   </option>
 
-                  <option
-                    value="view"
-                    ${selected === 'view' ? 'selected' : ''}
-                  >
-                    View
-                  </option>
-
-                  <option
-                    value="edit"
-                    ${selected === 'edit' ? 'selected' : ''}
-                  >
-                    Edit
-                  </option>
-
-                  <option
-                    value="none"
-                    ${selected === 'none' ? 'selected' : ''}
-                  >
-                    None
-                  </option>
+                  ${userOptionList_(
+                    permissionOptions,
+                    selected
+                  )}
                 </select>
 
               </div>
@@ -474,6 +450,56 @@ function openUserEditor(user) {
 
 
   recordModal.show();
+}
+
+
+function getUserControlledOptions_(
+  field,
+  fallback
+) {
+
+  const data =
+    currentPageData || {};
+
+  const options =
+    data.controlledOptions &&
+    data.controlledOptions[field];
+
+  return Array.isArray(options) &&
+    options.length
+    ? options
+    : fallback;
+}
+
+
+function userOptionList_(
+  options,
+  selected
+) {
+
+  const value =
+    String(selected || '');
+
+  return (
+    options || []
+  ).map(option => {
+
+    const text =
+      String(option);
+
+    return `
+      <option
+        value="${escapeAttribute(text)}"
+        ${text === value ? 'selected' : ''}
+      >
+        ${escapeHtml(
+          text.charAt(0).toUpperCase() +
+          text.slice(1)
+        )}
+      </option>
+    `;
+
+  }).join('');
 }
 
 

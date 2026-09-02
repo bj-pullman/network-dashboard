@@ -466,6 +466,89 @@ textarea {
 }
 
 
+.app-working-modal-open {
+  overflow: hidden;
+}
+
+
+.app-working-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2050;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(13, 35, 66, .46);
+  backdrop-filter: blur(3px);
+}
+
+
+.app-working-modal {
+  width: min(360px, 100%);
+  padding: 34px 28px 28px;
+  border: 1px solid rgba(255,255,255,.36);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 24px 70px rgba(13, 35, 66, .28);
+  text-align: center;
+}
+
+
+.app-working-modal-icon {
+  width: 58px;
+  height: 58px;
+  margin: 0 auto 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--brand-primary);
+  color: white;
+  font-size: 1.45rem;
+}
+
+
+.app-working-modal-icon.is-success {
+  background: #15803d;
+}
+
+
+.app-working-modal-icon.is-error {
+  background: #b42318;
+}
+
+
+.app-working-modal-title {
+  color: var(--navy-950);
+  font-size: 1.08rem;
+  font-weight: 800;
+}
+
+
+.app-working-modal-message {
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: .9rem;
+  font-weight: 650;
+}
+
+
+.app-working-modal-error {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid #f1b8b4;
+  border-radius: 8px;
+  background: #fff4f2;
+  color: #8a1f17;
+  font-size: .82rem;
+  text-align: left;
+}
+
+
+.app-working-modal-actions {
+  margin-top: 16px;
+}
+
+
 /*******************************************************
  * CARDS
  *******************************************************/
@@ -2025,6 +2108,20 @@ textarea {
   max-height: 360px;
 
   overflow-y: auto;
+}
+
+
+.column-menu-controls {
+  display: flex;
+
+  gap: 6px;
+
+  padding: 4px 4px 8px;
+
+  border-bottom:
+    1px solid var(--border);
+
+  margin-bottom: 6px;
 }
 
 
@@ -3984,10 +4081,45 @@ textarea {
   font-size: 0.84rem;
 }
 
+.integration-capability-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.integration-capability-list span {
+  padding: 4px 7px;
+  border: 1px solid #dce3ec;
+  border-radius: 999px;
+  background: #f7f9fc;
+  color: #4a596b;
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
 .integration-note {
   margin-top: 9px;
   color: #725a08;
   font-size: 0.78rem;
+}
+
+.user-access-note {
+  padding: 16px 18px;
+  color: var(--text);
+}
+
+.user-access-note h3 {
+  margin: 0 0 5px;
+  color: var(--navy-900);
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+
+.user-access-note p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.84rem;
 }
 
 .integration-toggle {
@@ -4114,6 +4246,35 @@ textarea {
   width: 150px;
 }
 
+.internet-wan-monitoring-banner {
+  padding: 10px 12px;
+  border: 1px solid #cfd9e5;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #4b5d72;
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
+.internet-wan-monitoring-banner.is-warning {
+  border-color: #ead47c;
+  background: #fff9df;
+  color: #665300;
+}
+
+.internet-wan-monitoring-banner.is-error {
+  border-color: #f1b8b4;
+  background: #fff4f2;
+  color: #8a1f17;
+}
+
+.internet-wan-health-stamp {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
 .internet-wan-circuit-cell {
   display: grid;
   gap: 2px;
@@ -4132,6 +4293,21 @@ textarea {
   color: var(--muted);
   font-size: 0.74rem;
   font-weight: 700;
+}
+
+.internet-wan-health-cell {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.internet-wan-health-cell small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .internet-wan-actions {

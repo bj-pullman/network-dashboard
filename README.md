@@ -10,10 +10,10 @@ Network Dashboard is separated into four layers:
 
 - Core application: authentication, RBAC, navigation, dashboard, tables, structured pages, Department Workflow, Settings, setup and validation.
 - Instance configuration: organization identity, branding, regional settings, user-domain policy, users, permissions and non-secret integration configuration.
-- Integrations: Aruba Central, ThreatDown and future provider modules.
+- Integrations: Aruba Central, ThreatDown, UptimeRobot and future provider modules.
 - Secrets: Apps Script Script Properties only.
 
-The web app uses one lightweight shell. Dashboard rendering is included for first paint; heavier page renderers are lazy-loaded by page type the first time a user opens those pages.
+The web app uses one lightweight shell. Page data is fetched on demand and cached in the browser so navigation can render cached pages immediately while fresh data refreshes in the background.
 
 Dashboard metrics and summary tables are formula-driven in the `Dashboard` sheet. The Dashboard web page reads only that sheet, while setup owns the formulas that reference operational sheets.
 
@@ -44,7 +44,7 @@ Do not run `clasp push` to a production script until you have reviewed the chang
 
 `setupNetworkDashboard()` is the official installer. It is idempotent and safe to run again.
 
-Setup creates missing sheets for enabled modules, creates canonical headers, configures the Dashboard formula layer, freezes header rows, applies standard header formatting, protects managed header ranges, seeds `App Settings`, seeds `App Integrations`, seeds the first admin user when possible, records application/schema version metadata and reports integration Script Property status.
+Setup creates missing sheets for enabled modules, creates canonical headers, applies controlled dropdown validations, configures the Dashboard formula layer, freezes header rows, applies standard header formatting, protects managed header ranges, seeds `App Settings`, seeds `App Integrations`, seeds the first admin user when possible, records application/schema version metadata and reports integration Script Property status.
 
 Setup does not store secrets in Sheets, erase operational data, duplicate settings, duplicate integration definitions or duplicate managed header protections.
 
@@ -159,12 +159,14 @@ Operational data rows remain editable. Google Sheets owners can intentionally re
 - `Role`
 - `Provider`
 - `Service Type`
+- `APSCN Device Name`
 - `Download Bandwidth`
 - `Upload Bandwidth`
 - `Public Network / CIDR`
 - `Gateway`
 - `Public IPs`
 - `Circuit / Account ID`
+- `UptimeRobot Monitor ID`
 - `Status`
 - `Notes`
 
@@ -286,6 +288,10 @@ Internet / WAN is a core module for documenting site circuits and public Interne
 
 The page supports viewing, filtering, adding, editing and deleting circuits subject to RBAC. Server-side save validation requires circuit name, site, role, provider, service type, status, positive bandwidth values, valid CIDR notation for public networks, valid gateway IPs and valid individual public IP entries.
 
+WAN `Status` is administrative/configured state and must be one of `Active`, `Standby`, `Maintenance` or `Disabled`. Runtime health is separate and, when UptimeRobot is enabled, appears as `Online`, `Down`, `Paused`, `Unknown` or `Not Monitored`. Health refreshes do not write to the `Status` column.
+
+`APSCN Device Name` is an optional local device/reference name. `UptimeRobot Monitor ID` is optional and should contain the numeric monitor ID from UptimeRobot when a circuit is monitored externally.
+
 Do not store circuit portal passwords, ISP credentials or shared secrets in Internet/WAN rows. Public IP ranges, public gateways, provider names, non-secret circuit/account references and operational notes are acceptable.
 
 ## User Management and RBAC
@@ -375,6 +381,22 @@ Required ThreatDown Script Properties:
 
 ThreatDown must be configured in Script Properties and enabled in Settings -> Integrations before sync runs.
 
+## UptimeRobot
+
+UptimeRobot is an optional read-only integration for Internet/WAN health display. It uses the current v3 API documented by UptimeRobot at <https://uptimerobot.com/api/v3/> and the official OpenAPI specification published in <https://github.com/uptimerobot/uptimerobot-cli>.
+
+UptimeRobot requirements:
+
+- Create monitors in UptimeRobot first.
+- For WAN circuits, a Ping monitor should target the circuit IP address or hostname that represents the observable WAN endpoint.
+- Store a read-only UptimeRobot API key in Apps Script Script Properties as `UPTIMEROBOT_API_KEY`.
+- Enable UptimeRobot in Settings -> Integrations.
+- Use Test in Settings to verify the key.
+- Map monitor IDs on `Internet WAN` rows in the `UptimeRobot Monitor ID` column.
+- Use Refresh Health on the Internet / WAN page to fetch and cache current monitor health.
+
+The dashboard does not create, edit or delete UptimeRobot monitors. UptimeRobot's v3 documentation lists Free-plan rate limiting at 10 requests per minute, so health refreshes fetch the monitor collection in paginated requests, respect rate-limit responses and cache normalized monitor state briefly.
+
 ## Department Workflow
 
 Department Workflow is a generic product feature for documenting support groups, tiers, ticket stages, priority/SLA definitions and workflow ownership. Setup seeds generic starter rows that each organization should edit in the sheet or a future workflow editor.
@@ -411,7 +433,7 @@ Do not commit secrets. Do not push to production from this template-development 
 
 `DevSeed.js` is a local-only development helper for filling a test spreadsheet with fictional rows. It is intentionally listed in `.gitignore`, but it remains a normal Apps Script source file locally so it can be included in local `clasp` QA when that is intentional.
 
-Use `seedNetworkDashboardTestData()` to seed fictional data, `clearNetworkDashboardTestData()` to remove seed-owned rows, and `resetNetworkDashboardDevEnvironment("RESET")` to reset a local development spreadsheet. DevSeed includes fictional Internet/WAN circuits using documentation-safe public IP ranges and never seeds real credentials.
+Use `seedNetworkDashboardTestData()` to seed fictional data, `clearNetworkDashboardTestData()` to remove seed-owned rows, and `resetNetworkDashboardDevEnvironment("RESET")` to reset a local development spreadsheet. DevSeed includes fictional Internet/WAN circuits using documentation-safe public IP ranges, placeholder APSCN device names, blank UptimeRobot monitor IDs and never seeds real credentials.
 
 ## Troubleshooting
 
@@ -421,6 +443,7 @@ Use `seedNetworkDashboardTestData()` to seed fictional data, `clearNetworkDashbo
 - Integration cannot be enabled: add the required Script Properties first.
 - Aruba sync fails: verify `ARUBA_CLIENT_ID`, `ARUBA_CLIENT_SECRET` and `ARUBA_REFRESH_TOKEN`.
 - ThreatDown sync returns disabled or not configured: enable it in Settings and verify all ThreatDown Script Properties.
+- UptimeRobot health does not refresh: verify `UPTIMEROBOT_API_KEY`, enable the integration, test the connection and confirm mapped monitor IDs exist in UptimeRobot.
 - Header edits fail: this is expected for managed header ranges. Edit data rows, not protected headers.
 - Validation reports missing protections: run `setupNetworkDashboard()` to repair safe managed protections.
 

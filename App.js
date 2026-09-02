@@ -157,10 +157,11 @@ const APP_PAGE_CONFIG = {
       'Role',
       'Provider',
       'Service Type',
-      'Download Bandwidth',
-      'Upload Bandwidth',
-      'Public IPs',
+      'APSCN Device Name',
+      '_bandwidth',
+      '_publicIpSummary',
       'Gateway',
+      '_monitorHealth',
       'Status'
     ]
   },
@@ -690,6 +691,45 @@ function invalidateModuleCache_() {
         APP_MODULE_CACHE_KEY
       );
   } catch (error) {}
+}
+
+
+function haveModuleStatesChanged_(
+  before,
+  after
+) {
+
+  before =
+    before || {};
+
+  after =
+    after || {};
+
+  const ids = {};
+
+  Object.keys(before)
+    .forEach(id => {
+      ids[id] =
+        true;
+    });
+
+  Object.keys(after)
+    .forEach(id => {
+      ids[id] =
+        true;
+    });
+
+  return Object.keys(ids)
+    .some(id =>
+      !!(
+        before[id] &&
+        before[id].enabled
+      ) !==
+      !!(
+        after[id] &&
+        after[id].enabled
+      )
+    );
 }
 
 
@@ -2492,6 +2532,11 @@ function getAppTableData_(
     defaultColumns:
       defaultColumns,
 
+    controlledOptions:
+      getControlledOptionsForSheet_(
+        config.sheet
+      ),
+
     centralSync:
       !!config.centralSync,
 
@@ -3003,6 +3048,10 @@ function emptyTableResult_(
     rows: [],
     totalCount: 0,
     defaultColumns: [],
+    controlledOptions:
+      getControlledOptionsForSheet_(
+        config.sheet
+      ),
     centralSync:
       !!config.centralSync,
     permission:
@@ -3117,6 +3166,11 @@ function getStructuredPageData_(
 
     permission:
       getPagePermission_(pageKey),
+
+    controlledOptions:
+      getControlledOptionsForSheet_(
+        config.sheet
+      ),
 
     sections: sections
 
@@ -4788,6 +4842,14 @@ function getInternetWanPageData_(
   const result =
     buildEmptyInternetWanPageData_();
 
+  const monitoring =
+    getInternetWanMonitoringSnapshot_(
+      false
+    );
+
+  result.monitoring =
+    monitoring;
+
 
   if (!sheet) {
     return result;
@@ -4846,7 +4908,8 @@ function getInternetWanPageData_(
     });
 
     applyInternetWanDisplayFields_(
-      row
+      row,
+      monitoring
     );
 
     rows.push(
@@ -4895,6 +4958,16 @@ function buildEmptyInternetWanPageData_() {
       config.sheet
     ];
 
+  const controlledOptions =
+    getControlledOptionsForSheet_(
+      config.sheet
+    );
+
+  controlledOptions.Health =
+    getControlledOptions_(
+      'wanHealth'
+    );
+
   return {
     pageKey: 'internetWan',
     type: 'internetWan',
@@ -4908,18 +4981,25 @@ function buildEmptyInternetWanPageData_() {
     totalCount: 0,
     defaultColumns:
       config.defaultColumns || [],
+    controlledOptions:
+      controlledOptions,
     permission:
       getPagePermission_(
         'internetWan'
       ),
     summary:
-      buildInternetWanSummary_([])
+      buildInternetWanSummary_([]),
+    monitoring:
+      getInternetWanMonitoringSnapshot_(
+        false
+      )
   };
 }
 
 
 function applyInternetWanDisplayFields_(
-  row
+  row,
+  monitoring
 ) {
 
   const ips =
@@ -4940,6 +5020,156 @@ function applyInternetWanDisplayFields_(
       row['Download Bandwidth'],
       row['Upload Bandwidth']
     );
+
+  applyInternetWanMonitoringFields_(
+    row,
+    monitoring
+  );
+}
+
+
+function getInternetWanMonitoringSnapshot_(
+  forceRefresh
+) {
+
+  if (
+    typeof getUptimeRobotMonitorSnapshot_ !==
+    'function'
+  ) {
+    return {
+      integrationId: 'uptimerobot',
+      enabled: false,
+      configurationComplete: false,
+      canRefresh: false,
+      status: 'unavailable',
+      message:
+        'UptimeRobot integration is not installed.'
+    };
+  }
+
+  return getUptimeRobotMonitorSnapshot_({
+    forceRefresh:
+      !!forceRefresh,
+    allowFetch:
+      !!forceRefresh
+  });
+}
+
+
+function applyInternetWanMonitoringFields_(
+  row,
+  monitoring
+) {
+
+  const monitorId =
+    String(
+      row['UptimeRobot Monitor ID'] || ''
+    ).trim();
+
+  row._monitorHealth =
+    monitorId
+      ? 'Unknown'
+      : 'Not Monitored';
+
+  row._monitorName =
+    '';
+
+  row._monitorStatus =
+    '';
+
+  row._monitorLastChecked =
+    '';
+
+  if (!monitorId) {
+    return row;
+  }
+
+  const monitorMap =
+    buildInternetWanMonitorMap_(
+      monitoring
+    );
+
+  const monitor =
+    monitorMap[monitorId];
+
+  if (!monitor) {
+    return row;
+  }
+
+  row._monitorHealth =
+    monitor.health ||
+    monitor.observedHealth ||
+    'Unknown';
+
+  row._monitorName =
+    monitor.name || '';
+
+  row._monitorStatus =
+    monitor.status || '';
+
+  row._monitorLastChecked =
+    monitor.lastChecked || '';
+
+  return row;
+}
+
+
+function buildInternetWanMonitorMap_(
+  monitoring
+) {
+
+  const map = {};
+
+  (
+    monitoring &&
+    monitoring.monitors
+      ? monitoring.monitors
+      : []
+  ).forEach(monitor => {
+
+    const id =
+      String(
+        monitor.id || ''
+      ).trim();
+
+    if (id) {
+      map[id] =
+        monitor;
+    }
+
+  });
+
+  return map;
+}
+
+
+function appRefreshInternetWanHealth() {
+
+  requirePagePermission_(
+    'internetWan',
+    'view'
+  );
+
+  const monitoring =
+    getInternetWanMonitoringSnapshot_(
+      true
+    );
+
+  if (monitoring.status === 'fresh') {
+    updateIntegrationRuntimeStatus_(
+      'uptimerobot',
+      monitoring.fetchedAt || '',
+      'Monitor health refresh succeeded'
+    );
+  } else if (monitoring.status === 'error') {
+    updateIntegrationRuntimeStatus_(
+      'uptimerobot',
+      '',
+      'Monitor health refresh failed'
+    );
+  }
+
+  return monitoring;
 }
 
 
@@ -4957,8 +5187,10 @@ function buildInternetWanSummary_(
     backup: 0,
     active: 0,
     standby: 0,
-    down: 0,
+    maintenance: 0,
     disabled: 0,
+    healthDown: 0,
+    notMonitored: 0,
     sites: 0
   };
 
@@ -4991,6 +5223,19 @@ function buildInternetWanSummary_(
 
     if (summary[status] !== undefined) {
       summary[status]++;
+    }
+
+    const health =
+      normalizeSimpleKey_(
+        row._monitorHealth
+      );
+
+    if (health === 'down') {
+      summary.healthDown++;
+    }
+
+    if (health === 'not_monitored') {
+      summary.notMonitored++;
     }
 
   });
@@ -5320,9 +5565,11 @@ function normalizeInternetWanRecord_(
         'Site / Location'
       ),
     'Role':
-      normalizeInternetWanChoice_(
+      normalizeControlledOption_(
+        'wanRole',
         record['Role'],
-        'Role'
+        'Role',
+        true
       ),
     'Provider':
       requiredInternetWanText_(
@@ -5330,10 +5577,16 @@ function normalizeInternetWanRecord_(
         'Provider'
       ),
     'Service Type':
-      normalizeInternetWanChoice_(
+      normalizeControlledOption_(
+        'wanServiceType',
         record['Service Type'],
-        'Service Type'
+        'Service Type',
+        true
       ),
+    'APSCN Device Name':
+      String(
+        record['APSCN Device Name'] || ''
+      ).trim(),
     'Download Bandwidth':
       normalizeInternetWanBandwidth_(
         record['Download Bandwidth'],
@@ -5362,10 +5615,16 @@ function normalizeInternetWanRecord_(
       String(
         record['Circuit / Account ID'] || ''
       ).trim(),
+    'UptimeRobot Monitor ID':
+      normalizeInternetWanMonitorId_(
+        record['UptimeRobot Monitor ID']
+      ),
     'Status':
-      normalizeInternetWanChoice_(
+      normalizeControlledOption_(
+        'wanStatus',
         record['Status'],
-        'Status'
+        'Status',
+        true
       ),
     'Notes':
       String(
@@ -5374,6 +5633,27 @@ function normalizeInternetWanRecord_(
   };
 
   return normalized;
+}
+
+
+function normalizeInternetWanMonitorId_(
+  value
+) {
+
+  const text =
+    String(value || '').trim();
+
+  if (!text) {
+    return '';
+  }
+
+  if (!/^[0-9]+$/.test(text)) {
+    throw new Error(
+      'UptimeRobot Monitor ID must be numeric.'
+    );
+  }
+
+  return text;
 }
 
 
@@ -6321,7 +6601,12 @@ function appUpdateRecord(
       ) {
 
         output[index] =
-          record[name];
+          normalizeControlledSheetField_(
+            targetSheetName,
+            name,
+            record[name],
+            false
+          );
 
       }
 
@@ -6426,7 +6711,12 @@ function appAddRecord(
       return Object.prototype
         .hasOwnProperty
         .call(record, name)
-          ? record[name]
+          ? normalizeControlledSheetField_(
+              config.sheet,
+              name,
+              record[name],
+              false
+            )
           : '';
 
     });
@@ -6731,6 +7021,10 @@ function getAppUsers_() {
       users: [],
       pages:
         getPermissionPageList_(),
+      controlledOptions:
+        getControlledOptionsForSheet_(
+          APP_USERS_SHEET
+        ),
       breakglass:
         getBreakGlassAdmins_(),
       domainPolicy:
@@ -6819,6 +7113,10 @@ function getAppUsers_() {
     users: users,
     pages:
       getPermissionPageList_(),
+    controlledOptions:
+      getControlledOptionsForSheet_(
+        APP_USERS_SHEET
+      ),
     breakglass:
       getBreakGlassAdmins_(),
     domainPolicy:
@@ -6829,17 +7127,38 @@ function getAppUsers_() {
 
 function getPermissionPageList_() {
 
-  return Object.keys(APP_PAGE_CONFIG)
-    .filter(key =>
-      !APP_PAGE_CONFIG[key].adminOnly &&
-      isPageEnabled_(
-        key
-      )
-    )
-    .map(key => ({
-      key: key,
+  return getModuleDefinitions_()
+    .filter(module => {
+
+      if (
+        !module.pageKey ||
+        !isModuleEnabled_(
+          module.id
+        )
+      ) {
+        return false;
+      }
+
+      const page =
+        APP_PAGE_CONFIG[
+          module.pageKey
+        ];
+
+      return !!page &&
+        !page.adminOnly;
+
+    })
+    .map(module => ({
+      key:
+        module.pageKey,
       label:
-        APP_PAGE_CONFIG[key].label
+        APP_PAGE_CONFIG[module.pageKey].label,
+      moduleId:
+        module.id,
+      classification:
+        module.classification,
+      optional:
+        module.classification === 'optional'
     }));
 }
 

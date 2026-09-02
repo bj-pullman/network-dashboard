@@ -1016,6 +1016,9 @@ function saveAppSettings(settings) {
   const access =
     requireAdmin_();
 
+  const beforeModules =
+    getModuleStateMap_();
+
   AppConfig.setMany(
     settings || {},
     access.email
@@ -1023,7 +1026,17 @@ function saveAppSettings(settings) {
 
   invalidateModuleCache_();
 
+  const afterModules =
+    getModuleStateMap_();
+
+  const moduleStateChanged =
+    haveModuleStatesChanged_(
+      beforeModules,
+      afterModules
+    );
+
   if (
+    moduleStateChanged &&
     typeof ensureEnabledOptionalModuleSheets_ === 'function'
   ) {
     ensureEnabledOptionalModuleSheets_();
@@ -1031,7 +1044,13 @@ function saveAppSettings(settings) {
 
   clearAppDataCaches_();
 
-  return getSettingsPageData_();
+  const data =
+    getSettingsPageData_();
+
+  data.moduleStateChanged =
+    moduleStateChanged;
+
+  return data;
 }
 
 

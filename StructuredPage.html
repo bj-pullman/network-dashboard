@@ -2105,14 +2105,26 @@ function openStructuredEditRecord(
         header.toUpperCase();
 
 
+      const options =
+        currentStructuredData &&
+        currentStructuredData.controlledOptions
+          ? currentStructuredData.controlledOptions[header] || []
+          : [];
+
       const input =
-        document.createElement(
-          'input'
-        );
+        options.length
+          ? document.createElement(
+              'select'
+            )
+          : document.createElement(
+              'input'
+            );
 
 
       input.className =
-        'form-control';
+        options.length
+          ? 'form-select'
+          : 'form-control';
 
 
       input.dataset.header =
@@ -2124,8 +2136,51 @@ function openStructuredEditRecord(
         index;
 
 
-      input.value =
-        rowData[header] || '';
+      if (options.length) {
+
+        const currentValue =
+          String(
+            rowData[header] || ''
+          ).trim();
+
+        const optionList =
+          currentValue &&
+          !options.some(option =>
+            String(option).toLowerCase() ===
+            currentValue.toLowerCase()
+          )
+            ? [currentValue].concat(options)
+            : options;
+
+        optionList.forEach(option => {
+
+          const item =
+            document.createElement(
+              'option'
+            );
+
+          item.value =
+            option;
+
+          item.textContent =
+            option;
+
+          input.appendChild(
+            item
+          );
+
+        });
+
+        input.value =
+          currentValue ||
+          options[0];
+
+      } else {
+
+        input.value =
+          rowData[header] || '';
+
+      }
 
 
       column.appendChild(

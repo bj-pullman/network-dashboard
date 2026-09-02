@@ -1,5 +1,9 @@
 <script>
 
+let settingsSaveInProgress =
+  false;
+
+
 function renderSettingsPage(data) {
 
   currentPageData =
@@ -438,6 +442,19 @@ function renderIntegrationCard(integration) {
           <p>${escapeHtml(integration.description || '')}</p>
 
           ${
+            integration.capabilities &&
+            integration.capabilities.length
+              ? `
+                <div class="integration-capability-list">
+                  ${integration.capabilities.map(capability => `
+                    <span>${escapeHtml(capability)}</span>
+                  `).join('')}
+                </div>
+              `
+              : ''
+          }
+
+          ${
             integration.notes
               ? `<div class="integration-note">${escapeHtml(integration.notes)}</div>`
               : ''
@@ -719,6 +736,13 @@ function saveSettingsForm(
   button
 ) {
 
+  if (settingsSaveInProgress) {
+    return;
+  }
+
+  settingsSaveInProgress =
+    true;
+
   const settings =
     collectSettingsFormValues_();
 
@@ -727,6 +751,11 @@ function saveSettingsForm(
       button,
       'Saving...'
     );
+
+  showAppWorkingModal({
+    title: 'Saving Settings...',
+    message: 'Applying your configuration'
+  });
 
   scriptRunPromise_(
     'saveAppSettings',
@@ -741,6 +770,14 @@ function saveSettingsForm(
         data;
 
       clearClientPageCache_();
+
+      updateAppWorkingModal({
+        state: 'success',
+        title: 'Settings Saved',
+        message: data.moduleStateChanged
+          ? 'Reloading Dashboard...'
+          : 'Applying saved configuration'
+      });
 
       if (
         data.bootstrap
@@ -770,6 +807,21 @@ function saveSettingsForm(
         'Settings saved.'
       );
 
+      if (data.moduleStateChanged) {
+        requestNextInitialRoute_(
+          'settings'
+        );
+
+        setTimeout(
+          function() {
+            window.location.reload();
+          },
+          900
+        );
+
+        return;
+      }
+
       setTimeout(
         function() {
           renderSettingsPage(
@@ -783,12 +835,31 @@ function saveSettingsForm(
             }
           );
           scheduleOperationalPrefetch_();
+          settingsSaveInProgress =
+            false;
+          hideAppWorkingModal();
         },
         450
       );
 
     })
     .catch(function(error) {
+      settingsSaveInProgress =
+        false;
+
+      updateAppWorkingModal({
+        state: 'error',
+        title: 'Settings Save Failed',
+        message: 'Review the issue and try again.',
+        error: error,
+        retry: function() {
+          hideAppWorkingModal();
+          saveSettingsForm(
+            button
+          );
+        }
+      });
+
       setActionError(
         actionButton,
         'Save Failed'

@@ -172,12 +172,14 @@ function getNetworkDashboardSchema_() {
         'Role',
         'Provider',
         'Service Type',
+        'APSCN Device Name',
         'Download Bandwidth',
         'Upload Bandwidth',
         'Public Network / CIDR',
         'Gateway',
         'Public IPs',
         'Circuit / Account ID',
+        'UptimeRobot Monitor ID',
         'Status',
         'Notes'
       ],
@@ -188,12 +190,14 @@ function getNetworkDashboardSchema_() {
         'Role',
         'Provider',
         'Service Type',
+        'APSCN Device Name',
         'Download Bandwidth',
         'Upload Bandwidth',
         'Public Network / CIDR',
         'Gateway',
         'Public IPs',
         'Circuit / Account ID',
+        'UptimeRobot Monitor ID',
         'Status',
         'Notes'
       ],
@@ -822,16 +826,16 @@ function getDashboardMetricDefinitions_() {
       notes: 'WAN circuits with Role = Backup.'
     },
     {
-      key: 'internet_wan.down',
-      label: 'Down Circuits',
+      key: 'internet_wan.disabled',
+      label: 'Disabled Circuits',
       sort: 53,
       formula:
         dashboardCountIfFormula_(
           'Internet WAN',
           'Status',
-          'Down'
+          'Disabled'
         ),
-      notes: 'WAN circuits with Status = Down.'
+      notes: 'WAN circuits with Status = Disabled.'
     },
     {
       key: 'internet_wan.active',
@@ -858,9 +862,21 @@ function getDashboardMetricDefinitions_() {
       notes: 'WAN circuits with Status = Standby.'
     },
     {
+      key: 'internet_wan.maintenance',
+      label: 'Maintenance Circuits',
+      sort: 56,
+      formula:
+        dashboardCountIfFormula_(
+          'Internet WAN',
+          'Status',
+          'Maintenance'
+        ),
+      notes: 'WAN circuits with Status = Maintenance.'
+    },
+    {
       key: 'internet_wan.sites',
       label: 'WAN Sites',
-      sort: 56,
+      sort: 57,
       formula:
         dashboardUniqueCountFormula_(
           'Internet WAN',
@@ -1494,6 +1510,12 @@ function setupSchemaSheet_(
     );
   }
 
+  applySheetControlledValidations_(
+    sheet,
+    sheetName,
+    definition
+  );
+
 
   if (definition.frozenRows) {
     sheet.setFrozenRows(
@@ -1521,6 +1543,162 @@ function setupSchemaSheet_(
     definition,
     result
   );
+}
+
+
+function applySheetControlledValidations_(
+  sheet,
+  sheetName,
+  definition
+) {
+
+  if (!definition) {
+    return;
+  }
+
+  const controlledOptions =
+    getControlledOptionsForSheet_(
+      sheetName
+    );
+
+  const fields =
+    Object.keys(
+      controlledOptions
+    );
+
+  if (!fields.length) {
+    return;
+  }
+
+  if (definition.headers) {
+    applyControlledValidationsForHeaderRow_(
+      sheet,
+      1,
+      1,
+      Math.max(
+        sheet.getLastColumn(),
+        definition.headers.length
+      ),
+      Math.max(
+        sheet.getMaxRows() - 1,
+        1
+      ),
+      controlledOptions,
+      fields
+    );
+  }
+
+  const headerRanges =
+    definition.headerRanges || [];
+
+  headerRanges.forEach(rangeDefinition => {
+
+    const nextRange =
+      headerRanges
+        .filter(item =>
+          Number(item.row) >
+          Number(rangeDefinition.row)
+        )
+        .sort((left, right) =>
+          Number(left.row) -
+          Number(right.row)
+        )[0];
+
+    const validationRows =
+      nextRange
+        ? Math.max(
+            Number(nextRange.row) -
+            Number(rangeDefinition.row) -
+            1,
+            0
+          )
+        : Math.max(
+            sheet.getMaxRows() -
+            Number(rangeDefinition.row),
+            0
+          );
+
+    if (!validationRows) {
+      return;
+    }
+
+    applyControlledValidationsForHeaderRow_(
+      sheet,
+      rangeDefinition.row,
+      rangeDefinition.column || 1,
+      Math.max(
+        sheet.getLastColumn(),
+        rangeDefinition.headers.length
+      ),
+      validationRows,
+      controlledOptions,
+      fields
+    );
+
+  });
+}
+
+
+function applyControlledValidationsForHeaderRow_(
+  sheet,
+  headerRow,
+  startColumn,
+  width,
+  validationRows,
+  controlledOptions,
+  fields
+) {
+
+  const headers =
+    sheet
+      .getRange(
+        headerRow,
+        startColumn,
+        1,
+        width
+      )
+      .getDisplayValues()[0]
+      .map(value =>
+        String(value || '').trim()
+      );
+
+  fields.forEach(field => {
+
+    const localIndex =
+      headers.indexOf(field);
+
+    const options =
+      controlledOptions[field] || [];
+
+    if (
+      localIndex < 0 ||
+      !options.length
+    ) {
+      return;
+    }
+
+    const rule =
+      SpreadsheetApp
+        .newDataValidation()
+        .requireValueInList(
+          options,
+          true
+        )
+        .setAllowInvalid(false)
+        .build();
+
+    sheet
+      .getRange(
+        headerRow + 1,
+        startColumn + localIndex,
+        validationRows,
+        1
+      )
+      .setDataValidation(
+        rule
+      );
+
+  });
 }
 
 
@@ -3373,14 +3551,6 @@ function validateBreakGlass_(result) {
     configured:
       admins.length > 0
   });
-
-  if (!admins.length) {
-    result.warnings.push(
-      'Break-glass administrators are not configured. Set Script Property ' +
-      NETWORK_DASHBOARD_BREAK_GLASS_ADMINS_PROPERTY +
-      ' with a comma-separated admin email list.'
-    );
-  }
 }
 
 
@@ -3567,7 +3737,7 @@ function getSetupNextSteps_() {
   return [
     'Open Network Dashboard Settings.',
     'Configure organization, branding, regional and user-domain policy.',
-    'Configure break-glass administrators in Script Properties.',
+    'Optionally configure break-glass administrators in Script Properties.',
     'Add Script Properties for desired integrations.',
     'Add users and permissions.',
     'Deploy or open the Apps Script web application.'

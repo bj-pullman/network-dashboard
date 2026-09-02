@@ -5,8 +5,28 @@ function renderInternetWanPage(data) {
   currentPageData =
     data;
 
+  applyInternetWanHealthToData_(
+    data,
+    data.monitoring
+  );
+
   const canEdit =
     data.permission === 'edit';
+
+  const monitoring =
+    data.monitoring || {};
+
+  const showHealthButton =
+    !!monitoring.enabled ||
+    !!monitoring.configurationComplete ||
+    (data.rows || []).some(row =>
+      String(
+        row['UptimeRobot Monitor ID'] || ''
+      ).trim()
+    );
+
+  const canRefreshHealth =
+    !!monitoring.canRefresh;
 
   setPageHeader(
     'Internet / WAN',
@@ -30,6 +50,21 @@ function renderInternetWanPage(data) {
         : ''
     }
 
+    ${
+      showHealthButton
+        ? `
+          <button
+            class="btn btn-sm btn-light border"
+            onclick="refreshInternetWanHealth(this)"
+            ${canRefreshHealth ? '' : 'disabled'}
+          >
+            <i class="fa-solid fa-heart-pulse me-2"></i>
+            Refresh Health
+          </button>
+        `
+        : ''
+    }
+
     <button
       class="btn btn-sm btn-light border"
       onclick="refreshCurrentPage(this)"
@@ -46,11 +81,14 @@ function renderInternetWanPage(data) {
     <div class="internet-wan-layout">
       <div class="internet-wan-summary">
         ${internetWanSummaryCard('WAN Circuits', data.summary.total, 'fa-globe')}
-        ${internetWanSummaryCard('Primary', data.summary.primary, 'fa-arrow-up-wide-short')}
-        ${internetWanSummaryCard('Backup', data.summary.backup, 'fa-shuffle')}
-        ${internetWanSummaryCard('Sites', data.summary.sites, 'fa-location-dot')}
-        ${internetWanSummaryCard('Down', data.summary.down, 'fa-triangle-exclamation')}
+        ${internetWanSummaryCard('Active', data.summary.active, 'fa-circle-check')}
+        ${internetWanSummaryCard('Standby', data.summary.standby, 'fa-circle-pause')}
+        ${internetWanSummaryCard('Maintenance', data.summary.maintenance, 'fa-screwdriver-wrench')}
+        ${internetWanSummaryCard('Disabled', data.summary.disabled, 'fa-circle-minus')}
+        ${internetWanSummaryCard('Health Down', data.summary.healthDown, 'fa-triangle-exclamation')}
       </div>
+
+      ${internetWanMonitoringBanner_(data.monitoring)}
 
       <div class="table-toolbar">
         <div class="table-toolbar-left">
@@ -73,9 +111,12 @@ function renderInternetWanPage(data) {
             onchange="applyInternetWanFilters()"
           >
             <option value="">All roles</option>
-            <option value="Primary">Primary</option>
-            <option value="Secondary">Secondary</option>
-            <option value="Backup">Backup</option>
+            ${internetWanFilterOptions_(
+              getInternetWanControlledOptions_(
+                'Role',
+                ['Primary', 'Secondary', 'Backup']
+              )
+            )}
           </select>
 
           <select
@@ -84,11 +125,41 @@ function renderInternetWanPage(data) {
             onchange="applyInternetWanFilters()"
           >
             <option value="">All statuses</option>
-            <option value="Active">Active</option>
-            <option value="Standby">Standby</option>
-            <option value="Down">Down</option>
-            <option value="Disabled">Disabled</option>
+            ${internetWanFilterOptions_(
+              getInternetWanControlledOptions_(
+                'Status',
+                ['Active', 'Standby', 'Maintenance', 'Disabled']
+              )
+            )}
           </select>
+
+          <select
+            id="internetWanHealthFilter"
+            class="form-select form-select-sm internet-wan-filter"
+            onchange="applyInternetWanFilters()"
+          >
+            <option value="">All health</option>
+            ${internetWanFilterOptions_(
+              getInternetWanControlledOptions_(
+                'Health',
+                ['Online', 'Down', 'Paused', 'Unknown', 'Not Monitored']
+              )
+            )}
+          </select>
+
+          <div class="dropdown">
+            <button
+              class="btn btn-sm btn-light border dropdown-toggle"
+              data-bs-toggle="dropdown"
+            >
+              <i class="fa-solid fa-table-columns me-2"></i>
+              Columns
+            </button>
+            <div
+              id="internetWanColumnMenu"
+              class="dropdown-menu table-column-menu p-2 shadow"
+            ></div>
+          </div>
 
           <button
             class="btn btn-sm btn-light border"
@@ -100,6 +171,9 @@ function renderInternetWanPage(data) {
         </div>
 
         <div class="table-toolbar-right">
+          <span class="internet-wan-health-stamp">
+            ${internetWanHealthStamp_(data.monitoring)}
+          </span>
           <span
             id="internetWanRecordCount"
             class="record-count"
@@ -141,6 +215,101 @@ function internetWanSummaryCard(
 }
 
 
+function getInternetWanControlledOptions_(
+  field,
+  fallback
+) {
+
+  const options =
+    currentPageData &&
+    currentPageData.controlledOptions &&
+    currentPageData.controlledOptions[field];
+
+  return Array.isArray(options) &&
+    options.length
+    ? options
+    : fallback;
+}
+
+
+function internetWanFilterOptions_(
+  options
+) {
+
+  return (
+    options || []
+  ).map(option => `
+    <option value="${escapeAttribute(option)}">
+      ${escapeHtml(option)}
+    </option>
+  `).join('');
+}
+
+
+function internetWanMonitoringBanner_(
+  monitoring
+) {
+
+  monitoring =
+    monitoring || {};
+
+  if (!monitoring.enabled) {
+    return '';
+  }
+
+  if (!monitoring.configurationComplete) {
+    return `
+      <div class="internet-wan-monitoring-banner is-warning">
+        UptimeRobot is enabled but missing required Script Properties.
+      </div>
+    `;
+  }
+
+  if (monitoring.status === 'error') {
+    return `
+      <div class="internet-wan-monitoring-banner is-error">
+        ${escapeHtml(monitoring.message || 'UptimeRobot health refresh failed.')}
+      </div>
+    `;
+  }
+
+  if (monitoring.status === 'not_fetched') {
+    return `
+      <div class="internet-wan-monitoring-banner">
+        UptimeRobot health has not been refreshed yet.
+      </div>
+    `;
+  }
+
+  return '';
+}
+
+
+function internetWanHealthStamp_(
+  monitoring
+) {
+
+  monitoring =
+    monitoring || {};
+
+  if (
+    !monitoring.enabled ||
+    !monitoring.fetchedAt
+  ) {
+    return '';
+  }
+
+  try {
+    return 'Health ' +
+      new Date(
+        monitoring.fetchedAt
+      ).toLocaleString();
+  } catch (error) {
+    return 'Health refreshed';
+  }
+}
+
+
 function buildInternetWanTable(data) {
 
   if (tableInstance) {
@@ -150,6 +319,17 @@ function buildInternetWanTable(data) {
 
   const canEdit =
     data.permission === 'edit';
+
+  applyInternetWanHealthToData_(
+    data,
+    data.monitoring
+  );
+
+  const columns =
+    getInternetWanColumns_(
+      data,
+      canEdit
+    );
 
   tableInstance =
     new Tabulator(
@@ -167,142 +347,8 @@ function buildInternetWanTable(data) {
           15,
         placeholder:
           'No WAN circuits found.',
-        columns: [
-          {
-            title: 'Circuit',
-            field: 'Circuit Name',
-            minWidth: 180,
-            widthGrow: 1.5,
-            formatter: function(cell) {
-              const row =
-                cell.getRow().getData();
-              return `
-                <div class="internet-wan-circuit-cell">
-                  <strong>${escapeHtml(row['Circuit Name'])}</strong>
-                  <small>${escapeHtml(row['Circuit ID'])}</small>
-                </div>
-              `;
-            }
-          },
-          {
-            title: 'Site',
-            field: 'Site / Location',
-            minWidth: 140
-          },
-          {
-            title: 'Role',
-            field: 'Role',
-            minWidth: 105
-          },
-          {
-            title: 'Provider',
-            field: 'Provider',
-            minWidth: 130
-          },
-          {
-            title: 'Service',
-            field: 'Service Type',
-            minWidth: 110
-          },
-          {
-            title: 'Bandwidth',
-            field: '_bandwidth',
-            minWidth: 130
-          },
-          {
-            title: 'Public IPs',
-            field: '_publicIpSummary',
-            minWidth: 150,
-            tooltip: function(event, cell) {
-              return (
-                cell
-                  .getRow()
-                  .getData()
-                  ['Public IPs'] || ''
-              );
-            }
-          },
-          {
-            title: 'Gateway',
-            field: 'Gateway',
-            minWidth: 130
-          },
-          {
-            title: 'Status',
-            field: 'Status',
-            minWidth: 115,
-            formatter: function(cell) {
-              return statusPill(
-                cell.getValue()
-              );
-            }
-          },
-          {
-            title: 'Actions',
-            field: '_actions',
-            width: 132,
-            minWidth: 132,
-            hozAlign: 'right',
-            headerSort: false,
-            formatter: function() {
-              return `
-                <div class="internet-wan-actions">
-                  <button
-                    class="btn btn-sm btn-light border"
-                    data-wan-action="view"
-                    title="View circuit"
-                  >
-                    <i class="fa-solid fa-eye"></i>
-                  </button>
-                  ${
-                    canEdit
-                      ? `
-                        <button
-                          class="btn btn-sm btn-light border"
-                          data-wan-action="edit"
-                          title="Edit circuit"
-                        >
-                          <i class="fa-solid fa-pen"></i>
-                        </button>
-                        <button
-                          class="btn btn-sm btn-light border text-danger"
-                          data-wan-action="delete"
-                          title="Delete circuit"
-                        >
-                          <i class="fa-solid fa-trash"></i>
-                        </button>
-                      `
-                      : ''
-                  }
-                </div>
-              `;
-            },
-            cellClick: function(event, cell) {
-              const action =
-                event.target.closest(
-                  '[data-wan-action]'
-                );
-
-              if (!action) {
-                return;
-              }
-
-              const row =
-                cell.getRow().getData();
-
-              if (action.dataset.wanAction === 'view') {
-                openInternetWanViewCircuit(row);
-              } else if (action.dataset.wanAction === 'edit') {
-                openInternetWanEditCircuit(row);
-              } else if (action.dataset.wanAction === 'delete') {
-                confirmDeleteInternetWanCircuit(
-                  row,
-                  action
-                );
-              }
-            }
-          }
-        ]
+        columns:
+          columns
       }
     );
 
@@ -318,6 +364,520 @@ function buildInternetWanTable(data) {
           `${rows.length} records`;
       }
     }
+  );
+
+  buildInternetWanColumnMenu_(
+    data,
+    columns
+  );
+}
+
+
+function getInternetWanColumns_(
+  data,
+  canEdit
+) {
+
+  const defaults =
+    new Set(
+      data.defaultColumns || []
+    );
+
+  const preferences =
+    getColumnVisibilityPreferences_(
+      'internetWan'
+    );
+
+  const requiredColumns =
+    getInternetWanRequiredColumns_();
+
+  const applyVisible =
+    column => {
+      if (column.field !== '_actions') {
+        column.visible =
+          isTableColumnVisibleByPreference_(
+            column.field,
+            defaults,
+            preferences,
+            requiredColumns
+          );
+      }
+      return column;
+    };
+
+  return [
+    applyVisible({
+      title: 'Circuit',
+      field: 'Circuit Name',
+      minWidth: 180,
+      widthGrow: 1.5,
+      formatter: function(cell) {
+        const row =
+          cell.getRow().getData();
+        return `
+          <div class="internet-wan-circuit-cell">
+            <strong>${escapeHtml(row['Circuit Name'])}</strong>
+            <small>${escapeHtml(row['Circuit ID'])}</small>
+          </div>
+        `;
+      }
+    }),
+    applyVisible({
+      title: 'Site',
+      field: 'Site / Location',
+      minWidth: 140
+    }),
+    applyVisible({
+      title: 'Role',
+      field: 'Role',
+      minWidth: 105
+    }),
+    applyVisible({
+      title: 'Provider',
+      field: 'Provider',
+      minWidth: 130
+    }),
+    applyVisible({
+      title: 'Service',
+      field: 'Service Type',
+      minWidth: 110
+    }),
+    applyVisible({
+      title: 'APSCN Device',
+      field: 'APSCN Device Name',
+      minWidth: 145
+    }),
+    applyVisible({
+      title: 'Bandwidth',
+      field: '_bandwidth',
+      minWidth: 130
+    }),
+    applyVisible({
+      title: 'Download Mbps',
+      field: 'Download Bandwidth',
+      minWidth: 125
+    }),
+    applyVisible({
+      title: 'Upload Mbps',
+      field: 'Upload Bandwidth',
+      minWidth: 115
+    }),
+    applyVisible({
+      title: 'Public IPs',
+      field: '_publicIpSummary',
+      minWidth: 150,
+      tooltip: function(event, cell) {
+        return (
+          cell
+            .getRow()
+            .getData()
+            ['Public IPs'] || ''
+        );
+      }
+    }),
+    applyVisible({
+      title: 'Gateway',
+      field: 'Gateway',
+      minWidth: 130
+    }),
+    applyVisible({
+      title: 'CIDR',
+      field: 'Public Network / CIDR',
+      minWidth: 145
+    }),
+    applyVisible({
+      title: 'Monitor ID',
+      field: 'UptimeRobot Monitor ID',
+      minWidth: 115
+    }),
+    applyVisible({
+      title: 'Health',
+      field: '_monitorHealth',
+      minWidth: 145,
+      formatter: function(cell) {
+        const row =
+          cell.getRow().getData();
+
+        const detail =
+          row._monitorName ||
+          (
+            row['UptimeRobot Monitor ID']
+              ? 'Monitor ' + row['UptimeRobot Monitor ID']
+              : ''
+          );
+
+        return `
+          <div class="internet-wan-health-cell">
+            ${statusPill(cell.getValue() || 'Not Monitored')}
+            ${detail ? `<small>${escapeHtml(detail)}</small>` : ''}
+          </div>
+        `;
+      }
+    }),
+    applyVisible({
+      title: 'Status',
+      field: 'Status',
+      minWidth: 115,
+      formatter: function(cell) {
+        return statusPill(
+          cell.getValue()
+        );
+      }
+    }),
+    applyVisible({
+      title: 'Account ID',
+      field: 'Circuit / Account ID',
+      minWidth: 130
+    }),
+    applyVisible({
+      title: 'Notes',
+      field: 'Notes',
+      minWidth: 180
+    }),
+    {
+      title: 'Actions',
+      field: '_actions',
+      width: 132,
+      minWidth: 132,
+      hozAlign: 'right',
+      headerSort: false,
+      formatter: function() {
+        return `
+          <div class="internet-wan-actions">
+            <button
+              class="btn btn-sm btn-light border"
+              data-wan-action="view"
+              title="View circuit"
+            >
+              <i class="fa-solid fa-eye"></i>
+            </button>
+            ${
+              canEdit
+                ? `
+                  <button
+                    class="btn btn-sm btn-light border"
+                    data-wan-action="edit"
+                    title="Edit circuit"
+                  >
+                    <i class="fa-solid fa-pen"></i>
+                  </button>
+                  <button
+                    class="btn btn-sm btn-light border text-danger"
+                    data-wan-action="delete"
+                    title="Delete circuit"
+                  >
+                    <i class="fa-solid fa-trash"></i>
+                  </button>
+                `
+                : ''
+            }
+          </div>
+        `;
+      },
+      cellClick: function(event, cell) {
+        const action =
+          event.target.closest(
+            '[data-wan-action]'
+          );
+
+        if (!action) {
+          return;
+        }
+
+        const row =
+          cell.getRow().getData();
+
+        if (action.dataset.wanAction === 'view') {
+          openInternetWanViewCircuit(row);
+        } else if (action.dataset.wanAction === 'edit') {
+          openInternetWanEditCircuit(row);
+        } else if (action.dataset.wanAction === 'delete') {
+          confirmDeleteInternetWanCircuit(
+            row,
+            action
+          );
+        }
+      }
+    }
+  ];
+}
+
+
+function getInternetWanRequiredColumns_() {
+
+  return {
+    'Circuit Name': true
+  };
+}
+
+
+function buildInternetWanColumnMenu_(
+  data,
+  columns
+) {
+
+  const menu =
+    document.getElementById(
+      'internetWanColumnMenu'
+    );
+
+  if (
+    !menu ||
+    !tableInstance
+  ) {
+    return;
+  }
+
+  menu.innerHTML =
+    '';
+
+  const controls =
+    document.createElement(
+      'div'
+    );
+
+  controls.className =
+    'column-menu-controls';
+
+  const selectAll =
+    document.createElement(
+      'button'
+    );
+
+  selectAll.type =
+    'button';
+  selectAll.className =
+    'btn btn-sm btn-light border';
+  selectAll.textContent =
+    'Select All';
+
+  const clearAll =
+    document.createElement(
+      'button'
+    );
+
+  clearAll.type =
+    'button';
+  clearAll.className =
+    'btn btn-sm btn-light border';
+  clearAll.textContent =
+    'Clear All';
+
+  controls.appendChild(
+    selectAll
+  );
+
+  controls.appendChild(
+    clearAll
+  );
+
+  menu.appendChild(
+    controls
+  );
+
+  const defaults =
+    new Set(
+      data.defaultColumns || []
+    );
+
+  const requiredColumns =
+    getInternetWanRequiredColumns_();
+
+  const selectableColumns =
+    columns.filter(column =>
+      column.field &&
+      column.field !== '_actions'
+    );
+
+  selectAll.addEventListener(
+    'click',
+    function(event) {
+      event.stopPropagation();
+      setAllInternetWanColumnsVisible_(
+        selectableColumns,
+        true,
+        defaults,
+        requiredColumns
+      );
+      buildInternetWanColumnMenu_(
+        data,
+        columns
+      );
+    }
+  );
+
+  clearAll.addEventListener(
+    'click',
+    function(event) {
+      event.stopPropagation();
+      setAllInternetWanColumnsVisible_(
+        selectableColumns,
+        false,
+        defaults,
+        requiredColumns
+      );
+      buildInternetWanColumnMenu_(
+        data,
+        columns
+      );
+    }
+  );
+
+  selectableColumns.forEach(columnDefinition => {
+
+    const field =
+      columnDefinition.field;
+
+    const column =
+      tableInstance.getColumn(
+        field
+      );
+
+    const wrapper =
+      document.createElement(
+        'label'
+      );
+
+    wrapper.className =
+      'dropdown-item d-flex align-items-center gap-2';
+
+    wrapper.addEventListener(
+      'click',
+      function(event) {
+        event.stopPropagation();
+      }
+    );
+
+    const checkbox =
+      document.createElement(
+        'input'
+      );
+
+    checkbox.type =
+      'checkbox';
+    checkbox.className =
+      'form-check-input m-0';
+    checkbox.checked =
+      !!(
+        column &&
+        column.isVisible()
+      );
+    checkbox.disabled =
+      !!requiredColumns[field];
+
+    checkbox.addEventListener(
+      'change',
+      function(event) {
+        event.stopPropagation();
+
+        if (this.checked) {
+          tableInstance.showColumn(
+            field
+          );
+        } else {
+          tableInstance.hideColumn(
+            field
+          );
+        }
+
+        persistColumnVisibilityPreference_(
+          'internetWan',
+          field,
+          this.checked,
+          defaults
+        );
+      }
+    );
+
+    const label =
+      document.createElement(
+        'span'
+      );
+
+    label.textContent =
+      requiredColumns[field]
+        ? columnDefinition.title + ' (required)'
+        : columnDefinition.title;
+
+    wrapper.appendChild(
+      checkbox
+    );
+
+    wrapper.appendChild(
+      label
+    );
+
+    menu.appendChild(
+      wrapper
+    );
+
+  });
+}
+
+
+function setAllInternetWanColumnsVisible_(
+  columns,
+  visible,
+  defaults,
+  requiredColumns
+) {
+
+  const preferences = {
+    hidden: [],
+    visible: []
+  };
+
+  columns.forEach(columnDefinition => {
+
+    const field =
+      columnDefinition.field;
+
+    const column =
+      tableInstance.getColumn(
+        field
+      );
+
+    const shouldShow =
+      visible ||
+      requiredColumns[field];
+
+    if (column) {
+      if (shouldShow) {
+        tableInstance.showColumn(
+          field
+        );
+      } else {
+        tableInstance.hideColumn(
+          field
+        );
+      }
+    }
+
+    if (requiredColumns[field]) {
+      return;
+    }
+
+    const defaultVisible =
+      defaults.size === 0 ||
+      defaults.has(field);
+
+    if (shouldShow) {
+      if (!defaultVisible) {
+        preferences.visible.push(
+          field
+        );
+      }
+    } else {
+      preferences.hidden.push(
+        field
+      );
+    }
+
+  });
+
+  setColumnVisibilityPreferences_(
+    'internetWan',
+    preferences
   );
 }
 
@@ -345,6 +905,11 @@ function applyInternetWanFilters() {
       'internetWanStatusFilter'
     ).value;
 
+  const health =
+    document.getElementById(
+      'internetWanHealthFilter'
+    ).value;
+
   tableInstance.setFilter(function(row) {
 
     if (
@@ -361,6 +926,13 @@ function applyInternetWanFilters() {
       return false;
     }
 
+    if (
+      health &&
+      row._monitorHealth !== health
+    ) {
+      return false;
+    }
+
     if (!search) {
       return true;
     }
@@ -371,8 +943,11 @@ function applyInternetWanFilters() {
       row['Site / Location'],
       row['Provider'],
       row['Service Type'],
+      row['APSCN Device Name'],
       row['Gateway'],
       row['Public IPs'],
+      row['UptimeRobot Monitor ID'],
+      row._monitorHealth,
       row['Notes']
     ]
       .join(' ')
@@ -385,7 +960,12 @@ function applyInternetWanFilters() {
 
 function clearInternetWanFilters() {
 
-  ['internetWanSearch', 'internetWanRoleFilter', 'internetWanStatusFilter']
+  [
+    'internetWanSearch',
+    'internetWanRoleFilter',
+    'internetWanStatusFilter',
+    'internetWanHealthFilter'
+  ]
     .forEach(id => {
       const element =
         document.getElementById(id);
@@ -397,6 +977,275 @@ function clearInternetWanFilters() {
   if (tableInstance) {
     tableInstance.clearFilter();
   }
+}
+
+
+function refreshInternetWanHealth(
+  button
+) {
+
+  const actionButton =
+    setActionWorking(
+      button,
+      'Refreshing...'
+    );
+
+  scriptRunPromise_(
+    'appRefreshInternetWanHealth',
+    runner =>
+      runner.appRefreshInternetWanHealth()
+  )
+    .then(monitoring => {
+
+      if (
+        monitoring &&
+        monitoring.status === 'error'
+      ) {
+
+        setActionError(
+          actionButton,
+          'Refresh Failed'
+        );
+
+        applyInternetWanHealthToData_(
+          currentPageData,
+          monitoring
+        );
+
+        markClientPageWritten(
+          'internetWan',
+          currentPageData
+        );
+
+        renderInternetWanPage(
+          currentPageData
+        );
+
+        handleFailure(
+          {
+            message:
+              monitoring.message ||
+              'WAN health refresh failed.'
+          },
+          'refresh WAN health'
+        );
+
+        return;
+      }
+
+      setActionSuccess(
+        actionButton,
+        'Refreshed'
+      );
+
+      applyInternetWanHealthToData_(
+        currentPageData,
+        monitoring
+      );
+
+      markClientPageWritten(
+        'internetWan',
+        currentPageData
+      );
+
+      renderInternetWanPage(
+        currentPageData
+      );
+
+      showToast(
+        monitoring && monitoring.message
+          ? monitoring.message
+          : 'WAN health refreshed.'
+      );
+
+    })
+    .catch(error => {
+
+      setActionError(
+        actionButton,
+        'Refresh Failed'
+      );
+
+      handleFailure(
+        error,
+        'refresh WAN health'
+      );
+
+    });
+}
+
+
+function applyInternetWanHealthToData_(
+  data,
+  monitoring
+) {
+
+  if (!data) {
+    return data;
+  }
+
+  data.monitoring =
+    monitoring ||
+    data.monitoring ||
+    {};
+
+  const monitorMap = {};
+
+  (
+    data.monitoring.monitors || []
+  ).forEach(monitor => {
+
+    const id =
+      String(
+        monitor.id || ''
+      ).trim();
+
+    if (id) {
+      monitorMap[id] =
+        monitor;
+    }
+
+  });
+
+  (
+    data.rows || []
+  ).forEach(row => {
+
+    const monitorId =
+      String(
+        row['UptimeRobot Monitor ID'] || ''
+      ).trim();
+
+    row._monitorHealth =
+      monitorId
+        ? 'Unknown'
+        : 'Not Monitored';
+
+    row._monitorName =
+      '';
+
+    row._monitorStatus =
+      '';
+
+    row._monitorLastChecked =
+      '';
+
+    if (
+      monitorId &&
+      monitorMap[monitorId]
+    ) {
+
+      row._monitorHealth =
+        monitorMap[monitorId].health ||
+        'Unknown';
+
+      row._monitorName =
+        monitorMap[monitorId].name || '';
+
+      row._monitorStatus =
+        monitorMap[monitorId].status || '';
+
+      row._monitorLastChecked =
+        monitorMap[monitorId].lastChecked || '';
+
+    }
+
+  });
+
+  data.summary =
+    buildInternetWanClientSummary_(
+      data.rows || []
+    );
+
+  return data;
+}
+
+
+function buildInternetWanClientSummary_(
+  rows
+) {
+
+  const sites = {};
+
+  const summary = {
+    total:
+      rows.length,
+    primary: 0,
+    secondary: 0,
+    backup: 0,
+    active: 0,
+    standby: 0,
+    maintenance: 0,
+    disabled: 0,
+    healthDown: 0,
+    notMonitored: 0,
+    sites: 0
+  };
+
+  rows.forEach(row => {
+
+    const site =
+      String(
+        row['Site / Location'] || ''
+      ).trim();
+
+    if (site) {
+      sites[site] =
+        true;
+    }
+
+    const role =
+      internetWanSummaryKey_(
+        row.Role
+      );
+
+    const status =
+      internetWanSummaryKey_(
+        row.Status
+      );
+
+    if (summary[role] !== undefined) {
+      summary[role]++;
+    }
+
+    if (summary[status] !== undefined) {
+      summary[status]++;
+    }
+
+    if (
+      internetWanSummaryKey_(
+        row._monitorHealth
+      ) === 'down'
+    ) {
+      summary.healthDown++;
+    }
+
+    if (
+      internetWanSummaryKey_(
+        row._monitorHealth
+      ) === 'not_monitored'
+    ) {
+      summary.notMonitored++;
+    }
+
+  });
+
+  summary.sites =
+    Object.keys(sites).length;
+
+  return summary;
+}
+
+
+function internetWanSummaryKey_(
+  value
+) {
+
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
 }
 
 
@@ -454,7 +1303,8 @@ function openInternetWanForm_(
           ${internetWanSelectField_('Role', row && row['Role'], ['Primary', 'Secondary', 'Backup'])}
           ${internetWanTextField_('Provider', row && row['Provider'])}
           ${internetWanSelectField_('Service Type', row && row['Service Type'], ['Fiber', 'DIA', 'Cable', 'Fixed Wireless', 'DSL', 'Cellular', 'Other'])}
-          ${internetWanSelectField_('Status', row && row['Status'], ['Active', 'Standby', 'Down', 'Disabled'])}
+          ${internetWanTextField_('APSCN Device Name', row && row['APSCN Device Name'])}
+          ${internetWanSelectField_('Status', row && row['Status'], ['Active', 'Standby', 'Maintenance', 'Disabled'])}
         </div>
       </div>
 
@@ -489,7 +1339,10 @@ function openInternetWanForm_(
 
       <div class="internet-wan-form-section">
         <h3>Provider Reference</h3>
-        ${internetWanTextField_('Circuit / Account ID', row && row['Circuit / Account ID'])}
+        <div class="internet-wan-form-grid two-column">
+          ${internetWanTextField_('Circuit / Account ID', row && row['Circuit / Account ID'])}
+          ${internetWanMonitorField_('UptimeRobot Monitor ID', row && row['UptimeRobot Monitor ID'])}
+        </div>
       </div>
 
       <div class="internet-wan-form-section">
@@ -559,30 +1412,108 @@ function internetWanSelectField_(
   options
 ) {
 
-  const selected =
-    value || options[0];
+  options =
+    getInternetWanControlledOptions_(
+      label,
+      options || []
+    );
 
-  const listId =
-    'internetWan' +
-    label.replace(/[^a-z0-9]/gi, '') +
-    'Options';
+  const selected =
+    String(
+      value || options[0] || ''
+    ).trim();
+
+  const optionList =
+    selected &&
+    !options.some(option =>
+      String(option).toLowerCase() ===
+      selected.toLowerCase()
+    )
+      ? [selected].concat(options)
+      : options;
 
   return `
     <label class="internet-wan-field">
       <span>${escapeHtml(label)}</span>
-      <input
-        class="form-control"
-        list="${escapeAttribute(listId)}"
+      <select
+        class="form-select"
         data-wan-field="${escapeAttribute(label)}"
-        value="${escapeAttribute(selected)}"
       >
-      <datalist id="${escapeAttribute(listId)}">
-        ${options.map(option => `
+        ${optionList.map(option => `
           <option
             value="${escapeAttribute(option)}"
-          ></option>
+            ${String(option) === selected ? 'selected' : ''}
+          >
+            ${escapeHtml(option)}
+          </option>
         `).join('')}
-      </datalist>
+      </select>
+    </label>
+  `;
+}
+
+
+function internetWanMonitorField_(
+  label,
+  value
+) {
+
+  const monitors =
+    currentPageData &&
+    currentPageData.monitoring &&
+    Array.isArray(currentPageData.monitoring.monitors)
+      ? currentPageData.monitoring.monitors
+      : [];
+
+  const selected =
+    String(value || '').trim();
+
+  if (!monitors.length) {
+    return internetWanTextField_(
+      label,
+      selected
+    );
+  }
+
+  const hasSelected =
+    !selected ||
+    monitors.some(monitor =>
+      String(monitor.id) === selected
+    );
+
+  return `
+    <label class="internet-wan-field">
+      <span>${escapeHtml(label)}</span>
+      <select
+        class="form-select"
+        data-wan-field="${escapeAttribute(label)}"
+      >
+        <option value="">Not Monitored</option>
+        ${
+          hasSelected
+            ? ''
+            : `
+              <option
+                value="${escapeAttribute(selected)}"
+                selected
+              >
+                ${escapeHtml(selected)}
+              </option>
+            `
+        }
+        ${monitors.map(monitor => `
+          <option
+            value="${escapeAttribute(monitor.id)}"
+            ${String(monitor.id) === selected ? 'selected' : ''}
+          >
+            ${escapeHtml(
+              monitor.id +
+              ' - ' +
+              (monitor.name || monitor.target || monitor.type || 'Monitor')
+            )}
+          </option>
+        `).join('')}
+      </select>
     </label>
   `;
 }
@@ -824,17 +1755,44 @@ function openInternetWanViewCircuit(row) {
       ${internetWanDetailItem_('Role', row['Role'])}
       ${internetWanDetailItem_('Provider', row['Provider'])}
       ${internetWanDetailItem_('Service Type', row['Service Type'])}
+      ${internetWanDetailItem_('APSCN Device Name', row['APSCN Device Name'])}
       ${internetWanDetailItem_('Bandwidth', row._bandwidth)}
       ${internetWanDetailItem_('Public Network / CIDR', row['Public Network / CIDR'])}
       ${internetWanDetailItem_('Gateway', row['Gateway'])}
       ${internetWanDetailItem_('Public IP Addresses', internetWanPublicIpLines_(row))}
       ${internetWanDetailItem_('Circuit / Account ID', row['Circuit / Account ID'])}
+      ${internetWanDetailItem_('UptimeRobot Monitor ID', row['UptimeRobot Monitor ID'])}
       ${internetWanDetailItem_('Status', row['Status'])}
+      ${internetWanDetailItem_('Health', internetWanHealthDetail_(row))}
       ${internetWanDetailItem_('Notes', row['Notes'])}
     </div>
   `;
 
   recordModal.show();
+}
+
+
+function internetWanHealthDetail_(
+  row
+) {
+
+  const parts = [
+    row._monitorHealth || 'Not Monitored'
+  ];
+
+  if (row._monitorName) {
+    parts.push(
+      row._monitorName
+    );
+  }
+
+  if (row._monitorStatus) {
+    parts.push(
+      row._monitorStatus
+    );
+  }
+
+  return parts.join('\n');
 }
 
 

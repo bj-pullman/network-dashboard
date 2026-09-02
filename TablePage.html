@@ -436,12 +436,14 @@ function buildTabulator(data) {
       data.defaultColumns || []
     );
 
+  const columnPreferences =
+    getColumnVisibilityPreferences_(
+      data.pageKey
+    );
 
-  const visibleHeaders =
-    data.headers.filter(
-      header =>
-        defaults.size === 0 ||
-        defaults.has(header)
+  const requiredColumns =
+    getRequiredVisibleColumns_(
+      data
     );
 
 
@@ -468,8 +470,12 @@ function buildTabulator(data) {
           field: header,
 
           visible:
-            defaults.size === 0 ||
-            defaults.has(header),
+            isTableColumnVisibleByPreference_(
+              header,
+              defaults,
+              columnPreferences,
+              requiredColumns
+            ),
 
           headerSort: true,
 
@@ -840,6 +846,91 @@ function buildColumnMenu(
   menu.innerHTML =
     '';
 
+  const controls =
+    document.createElement(
+      'div'
+    );
+
+  controls.className =
+    'column-menu-controls';
+
+  const selectAll =
+    document.createElement(
+      'button'
+    );
+
+  selectAll.type =
+    'button';
+  selectAll.className =
+    'btn btn-sm btn-light border';
+  selectAll.textContent =
+    'Select All';
+
+  const clearAll =
+    document.createElement(
+      'button'
+    );
+
+  clearAll.type =
+    'button';
+  clearAll.className =
+    'btn btn-sm btn-light border';
+  clearAll.textContent =
+    'Clear All';
+
+  controls.appendChild(
+    selectAll
+  );
+
+  controls.appendChild(
+    clearAll
+  );
+
+  menu.appendChild(
+    controls
+  );
+
+  const defaults =
+    new Set(
+      data.defaultColumns || []
+    );
+
+  const requiredColumns =
+    getRequiredVisibleColumns_(
+      data
+    );
+
+  selectAll.addEventListener(
+    'click',
+    function(event) {
+      event.stopPropagation();
+      setAllTableColumnsVisible_(
+        data,
+        true,
+        defaults,
+        requiredColumns
+      );
+      buildColumnMenu(
+        data
+      );
+    }
+  );
+
+  clearAll.addEventListener(
+    'click',
+    function(event) {
+      event.stopPropagation();
+      setAllTableColumnsVisible_(
+        data,
+        false,
+        defaults,
+        requiredColumns
+      );
+      buildColumnMenu(
+        data
+      );
+    }
+  );
 
   data.headers.forEach(
     header => {
@@ -858,6 +949,14 @@ function buildColumnMenu(
 
       wrapper.className =
         'dropdown-item d-flex align-items-center gap-2';
+
+
+      wrapper.addEventListener(
+        'click',
+        function(event) {
+          event.stopPropagation();
+        }
+      );
 
 
       const checkbox =
@@ -880,6 +979,9 @@ function buildColumnMenu(
           column.isVisible()
         );
 
+      checkbox.disabled =
+        !!requiredColumns[header];
+
 
       checkbox.addEventListener(
         'change',
@@ -899,6 +1001,13 @@ function buildColumnMenu(
 
           }
 
+          persistColumnVisibilityPreference_(
+            data.pageKey,
+            header,
+            this.checked,
+            defaults
+          );
+
         }
       );
 
@@ -910,7 +1019,9 @@ function buildColumnMenu(
 
 
       text.textContent =
-        header;
+        requiredColumns[header]
+          ? header + ' (required)'
+          : header;
 
 
       wrapper.appendChild(
@@ -929,6 +1040,270 @@ function buildColumnMenu(
 
     }
   );
+}
+
+
+function setAllTableColumnsVisible_(
+  data,
+  visible,
+  defaults,
+  requiredColumns
+) {
+
+  const preferences = {
+    hidden: [],
+    visible: []
+  };
+
+  data.headers.forEach(header => {
+
+    const column =
+      tableInstance.getColumn(
+        header
+      );
+
+    const shouldShow =
+      visible ||
+      requiredColumns[header];
+
+    if (column) {
+      if (shouldShow) {
+        tableInstance.showColumn(
+          header
+        );
+      } else {
+        tableInstance.hideColumn(
+          header
+        );
+      }
+    }
+
+    if (requiredColumns[header]) {
+      return;
+    }
+
+    const defaultVisible =
+      defaults.size === 0 ||
+      defaults.has(header);
+
+    if (shouldShow) {
+      if (!defaultVisible) {
+        preferences.visible.push(
+          header
+        );
+      }
+    } else {
+      preferences.hidden.push(
+        header
+      );
+    }
+
+  });
+
+  setColumnVisibilityPreferences_(
+    data.pageKey,
+    preferences
+  );
+}
+
+
+function getColumnStorageKey_(
+  pageKey
+) {
+
+  return 'networkDashboard.columns.' +
+    pageKey;
+}
+
+
+function getColumnVisibilityPreferences_(
+  pageKey
+) {
+
+  try {
+    const raw =
+      localStorage.getItem(
+        getColumnStorageKey_(
+          pageKey
+        )
+      );
+
+    const parsed =
+      raw
+        ? JSON.parse(raw)
+        : {};
+
+    return {
+      hidden:
+        Array.isArray(parsed.hidden)
+          ? parsed.hidden
+          : [],
+      visible:
+        Array.isArray(parsed.visible)
+          ? parsed.visible
+          : []
+    };
+  } catch (error) {
+    return {
+      hidden: [],
+      visible: []
+    };
+  }
+}
+
+
+function setColumnVisibilityPreferences_(
+  pageKey,
+  preferences
+) {
+
+  try {
+    localStorage.setItem(
+      getColumnStorageKey_(
+        pageKey
+      ),
+      JSON.stringify({
+        hidden:
+          preferences.hidden || [],
+        visible:
+          preferences.visible || []
+      })
+    );
+  } catch (error) {}
+}
+
+
+function isTableColumnVisibleByPreference_(
+  header,
+  defaults,
+  preferences,
+  requiredColumns
+) {
+
+  if (requiredColumns[header]) {
+    return true;
+  }
+
+  const hidden =
+    new Set(
+      preferences.hidden || []
+    );
+
+  const visible =
+    new Set(
+      preferences.visible || []
+    );
+
+  if (visible.has(header)) {
+    return true;
+  }
+
+  if (hidden.has(header)) {
+    return false;
+  }
+
+  return defaults.size === 0 ||
+    defaults.has(header);
+}
+
+
+function persistColumnVisibilityPreference_(
+  pageKey,
+  header,
+  visible,
+  defaults
+) {
+
+  const preferences =
+    getColumnVisibilityPreferences_(
+      pageKey
+    );
+
+  const hidden =
+    new Set(
+      preferences.hidden || []
+    );
+
+  const shown =
+    new Set(
+      preferences.visible || []
+    );
+
+  const defaultVisible =
+    defaults.size === 0 ||
+    defaults.has(header);
+
+  if (visible) {
+    hidden.delete(header);
+    if (defaultVisible) {
+      shown.delete(header);
+    } else {
+      shown.add(header);
+    }
+  } else {
+    shown.delete(header);
+    hidden.add(header);
+  }
+
+  setColumnVisibilityPreferences_(
+    pageKey,
+    {
+      hidden:
+        Array.from(hidden),
+      visible:
+        Array.from(shown)
+    }
+  );
+}
+
+
+function getRequiredVisibleColumns_(
+  data
+) {
+
+  const requiredByPage = {
+    switches: [
+      'Device Label'
+    ],
+    accessPoints: [
+      'Device Label'
+    ],
+    servers: [
+      'Server Name'
+    ],
+    routes: [
+      'Destination'
+    ],
+    securityCameras: [
+      'Location'
+    ],
+    backups: [
+      'Server Name'
+    ]
+  };
+
+  const required = {};
+
+  (
+    requiredByPage[data.pageKey] ||
+    [
+      data.headers &&
+      data.headers[0]
+    ]
+  )
+    .filter(Boolean)
+    .forEach(header => {
+      if (
+        data.headers.includes(
+          header
+        )
+      ) {
+        required[header] =
+          true;
+      }
+    });
+
+  return required;
 }
 
 

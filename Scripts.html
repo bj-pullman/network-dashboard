@@ -32,12 +32,18 @@ const PREFETCH_PAGE_PRIORITY = [
   'securityCameras',
   'busCameras',
   'intercom',
-  'backups'
+  'backups',
+  'workflow',
+  'users'
 ];
 
 
 const ACTION_SUCCESS_RESET_MS =
   1200;
+
+
+const NEXT_ROUTE_STORAGE_KEY =
+  'networkDashboard.nextRoute';
 
 
 /*******************************************************
@@ -89,6 +95,14 @@ let recordModal =
 
 
 let configModal =
+  null;
+
+
+let appWorkingModal =
+  null;
+
+
+let appWorkingModalRetry =
   null;
 
 
@@ -221,8 +235,77 @@ function initializeApplication(
 
 
   navigateTo(
-    'dashboard'
+    getInitialRoute_()
   );
+}
+
+
+function getInitialRoute_() {
+
+  const pages =
+    appBootstrap &&
+    appBootstrap.pages
+      ? appBootstrap.pages
+      : [];
+
+  const allowed = {};
+
+  pages.forEach(page => {
+    allowed[page.key] = true;
+  });
+
+  let storedRoute =
+    '';
+
+  try {
+    storedRoute =
+      sessionStorage.getItem(
+        NEXT_ROUTE_STORAGE_KEY
+      ) || '';
+
+    if (storedRoute) {
+      sessionStorage.removeItem(
+        NEXT_ROUTE_STORAGE_KEY
+      );
+    }
+  } catch (error) {
+    storedRoute =
+      '';
+  }
+
+  if (
+    storedRoute &&
+    allowed[storedRoute]
+  ) {
+    return storedRoute;
+  }
+
+  if (
+    allowed[currentPageKey]
+  ) {
+    return currentPageKey;
+  }
+
+  return allowed.dashboard
+    ? 'dashboard'
+    : (
+        pages[0] &&
+        pages[0].key
+      ) ||
+      'dashboard';
+}
+
+
+function requestNextInitialRoute_(
+  pageKey
+) {
+
+  try {
+    sessionStorage.setItem(
+      NEXT_ROUTE_STORAGE_KEY,
+      pageKey
+    );
+  } catch (error) {}
 }
 
 
@@ -1223,6 +1306,257 @@ function scheduleActionRestore_(
 
 
 /*******************************************************
+ * APPLICATION WORKING MODAL
+ *******************************************************/
+
+function showAppWorkingModal(
+  options
+) {
+
+  options =
+    options || {};
+
+  hideAppWorkingModal();
+
+  const overlay =
+    document.createElement(
+      'div'
+    );
+
+  overlay.id =
+    'appWorkingModal';
+
+  overlay.className =
+    'app-working-modal-backdrop';
+
+  overlay.innerHTML = `
+    <div
+      class="app-working-modal"
+      role="status"
+      aria-live="polite"
+      aria-modal="true"
+    >
+      <div class="app-working-modal-icon">
+        <i class="fa-solid fa-circle-notch fa-spin"></i>
+      </div>
+      <div class="app-working-modal-title">
+        ${escapeHtml(options.title || 'Working...')}
+      </div>
+      <div class="app-working-modal-message">
+        ${escapeHtml(options.message || '')}
+      </div>
+      <div
+        class="app-working-modal-error"
+        hidden
+      ></div>
+      <div
+        class="app-working-modal-actions"
+        hidden
+      >
+        <button
+          type="button"
+          class="btn btn-sm btn-light border"
+          data-working-modal-close
+        >
+          Close
+        </button>
+        <button
+          type="button"
+          class="btn btn-sm btn-brand"
+          data-working-modal-retry
+          hidden
+        >
+          Try Again
+        </button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(
+    overlay
+  );
+
+  const close =
+    overlay.querySelector(
+      '[data-working-modal-close]'
+    );
+
+  if (close) {
+    close.addEventListener(
+      'click',
+      hideAppWorkingModal
+    );
+  }
+
+  const retry =
+    overlay.querySelector(
+      '[data-working-modal-retry]'
+    );
+
+  if (retry) {
+    retry.addEventListener(
+      'click',
+      function() {
+        if (typeof appWorkingModalRetry === 'function') {
+          appWorkingModalRetry();
+        }
+      }
+    );
+  }
+
+  appWorkingModal =
+    overlay;
+
+  document.body.classList.add(
+    'app-working-modal-open'
+  );
+
+  return overlay;
+}
+
+
+function updateAppWorkingModal(
+  options
+) {
+
+  options =
+    options || {};
+
+  const overlay =
+    appWorkingModal ||
+    document.getElementById(
+      'appWorkingModal'
+    );
+
+  if (!overlay) {
+    return null;
+  }
+
+  const icon =
+    overlay.querySelector(
+      '.app-working-modal-icon'
+    );
+
+  const title =
+    overlay.querySelector(
+      '.app-working-modal-title'
+    );
+
+  const message =
+    overlay.querySelector(
+      '.app-working-modal-message'
+    );
+
+  const error =
+    overlay.querySelector(
+      '.app-working-modal-error'
+    );
+
+  const actions =
+    overlay.querySelector(
+      '.app-working-modal-actions'
+    );
+
+  const retry =
+    overlay.querySelector(
+      '[data-working-modal-retry]'
+    );
+
+  if (icon) {
+    icon.innerHTML =
+      options.state === 'success'
+        ? '<i class="fa-solid fa-check"></i>'
+        : options.state === 'error'
+          ? '<i class="fa-solid fa-triangle-exclamation"></i>'
+          : '<i class="fa-solid fa-circle-notch fa-spin"></i>';
+
+    icon.classList.toggle(
+      'is-success',
+      options.state === 'success'
+    );
+
+    icon.classList.toggle(
+      'is-error',
+      options.state === 'error'
+    );
+  }
+
+  if (
+    title &&
+    options.title !== undefined
+  ) {
+    title.textContent =
+      options.title;
+  }
+
+  if (
+    message &&
+    options.message !== undefined
+  ) {
+    message.textContent =
+      options.message;
+  }
+
+  if (error) {
+    const errorMessage =
+      options.error
+        ? getSafeErrorMessage_(
+            options.error
+          )
+        : '';
+
+    error.textContent =
+      errorMessage;
+
+    error.hidden =
+      !errorMessage;
+  }
+
+  if (actions) {
+    actions.hidden =
+      options.state !== 'error';
+  }
+
+  appWorkingModalRetry =
+    typeof options.retry === 'function'
+      ? options.retry
+      : null;
+
+  if (retry) {
+    retry.hidden =
+      options.state !== 'error' ||
+      !appWorkingModalRetry;
+  }
+
+  return overlay;
+}
+
+
+function hideAppWorkingModal() {
+
+  const overlay =
+    appWorkingModal ||
+    document.getElementById(
+      'appWorkingModal'
+    );
+
+  if (overlay) {
+    overlay.remove();
+  }
+
+  appWorkingModal =
+    null;
+
+  appWorkingModalRetry =
+    null;
+
+  document.body.classList.remove(
+    'app-working-modal-open'
+  );
+}
+
+
+/*******************************************************
  * PAGE LOADING
  *******************************************************/
 
@@ -1728,16 +2062,16 @@ function shouldPrefetchPage_(
   if (
     !page ||
     page.key === 'dashboard' ||
-    page.key === 'settings' ||
-    page.key === 'users' ||
-    page.key === 'workflow'
+    page.key === 'settings'
   ) {
     return false;
   }
 
   return page.type === 'table' ||
     page.type === 'internetWan' ||
-    page.type === 'structured';
+    page.type === 'structured' ||
+    page.type === 'workflow' ||
+    page.type === 'users';
 }
 
 
@@ -2720,14 +3054,26 @@ function openRecordModal(
         header.toUpperCase();
 
 
+      const options =
+        currentPageData &&
+        currentPageData.controlledOptions
+          ? currentPageData.controlledOptions[header] || []
+          : [];
+
       const input =
-        document.createElement(
-          'input'
-        );
+        options.length
+          ? document.createElement(
+              'select'
+            )
+          : document.createElement(
+              'input'
+            );
 
 
       input.className =
-        'form-control';
+        options.length
+          ? 'form-select'
+          : 'form-control';
 
 
       input.dataset.header =
@@ -2739,8 +3085,51 @@ function openRecordModal(
         index;
 
 
-      input.value =
-        record[header] || '';
+      if (options.length) {
+
+        const currentValue =
+          String(
+            record[header] || ''
+          ).trim();
+
+        const optionList =
+          currentValue &&
+          !options.some(option =>
+            String(option).toLowerCase() ===
+            currentValue.toLowerCase()
+          )
+            ? [currentValue].concat(options)
+            : options;
+
+        optionList.forEach(option => {
+
+          const item =
+            document.createElement(
+              'option'
+            );
+
+          item.value =
+            option;
+
+          item.textContent =
+            option;
+
+          input.appendChild(
+            item
+          );
+
+        });
+
+        input.value =
+          currentValue ||
+          options[0];
+
+      } else {
+
+        input.value =
+          record[header] || '';
+
+      }
 
 
       column.appendChild(
@@ -3172,6 +3561,8 @@ function statusPill(
     'warning',
     'needs attention',
     'degraded',
+    'maintenance',
+    'paused',
     'needs update',
     'pending',
     'partial'

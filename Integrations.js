@@ -77,6 +77,31 @@ function getIntegrationRegistry_() {
       supportsConnectionTest: true,
       notes:
         'Partial implementation: endpoint inventory matching exists; broader ThreatDown management, alerting and reporting are not implemented yet.'
+    },
+
+    uptimerobot: {
+      id: 'uptimerobot',
+      name: 'UptimeRobot',
+      description:
+        'Reads UptimeRobot monitor state for Internet/WAN health display.',
+      implementationStatus: 'available',
+      capabilities: [
+        'Read monitor collection',
+        'Map monitor health to Internet/WAN circuits',
+        'Manual health refresh'
+      ],
+      requiredProperties: [
+        {
+          key: 'UPTIMEROBOT_API_KEY',
+          label: 'Read-only API key'
+        }
+      ],
+      optionalProperties: [],
+      settings: [],
+      supportsSync: false,
+      supportsConnectionTest: true,
+      notes:
+        'Read-only integration. Create monitors in UptimeRobot first, then map monitor IDs on Internet/WAN rows.'
     }
   };
 }
@@ -586,6 +611,21 @@ function testIntegrationConnection(
         message:
           'ThreatDown token exchange succeeded.'
       };
+
+    }
+
+    if (integrationId === 'uptimerobot') {
+
+      const result =
+        testUptimeRobotConnection_();
+
+      updateIntegrationRuntimeStatus_(
+        integrationId,
+        '',
+        'Connection test succeeded'
+      );
+
+      return result;
 
     }
 
