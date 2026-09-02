@@ -20,7 +20,7 @@ function renderStructuredPage(data) {
 
     <button
       class="btn btn-sm btn-light border"
-      onclick="refreshCurrentPage()"
+      onclick="refreshCurrentPage(this)"
     >
       <i class="fa-solid fa-rotate me-2"></i>
       Refresh
@@ -1355,10 +1355,17 @@ function restrictedPasswordFormatter(
         '<span class="password-loading-spinner"></span>';
 
 
-      google.script.run
-
-        .withSuccessHandler(
-          function(result) {
+      scriptRunPromise_(
+        'appGetRowCredential:' + currentPageKey,
+        runner =>
+          runner.appGetRowCredential(
+            currentPageKey,
+            section.key,
+            rowData._row,
+            'Password'
+          )
+      )
+        .then(function(result) {
 
             const password =
               String(
@@ -1401,11 +1408,8 @@ function restrictedPasswordFormatter(
                 true
               );
 
-          }
-        )
-
-        .withFailureHandler(
-          function(error) {
+        })
+        .catch(function(error) {
 
             rowData._passwordLoading =
               false;
@@ -1420,18 +1424,11 @@ function restrictedPasswordFormatter(
 
 
             handleFailure(
-              error
+              error,
+              'load row credential'
             );
 
-          }
-        )
-
-        .appGetRowCredential(
-          currentPageKey,
-          section.key,
-          rowData._row,
-          'Password'
-        );
+        });
 
     }
   );
@@ -1782,37 +1779,58 @@ return {
             }
 
 
-            google.script.run
+            const pageKey =
+              currentPageKey;
 
-              .withSuccessHandler(
-                function() {
-
-                  invalidateClientPage(
-                    currentPageKey
-                  );
-
-
-                  loadPage(
-                    currentPageKey,
-                    true
-                  );
-
-
-                  showToast(
-                    'Record deleted.'
-                  );
-
-                }
-              )
-
-              .withFailureHandler(
-                handleFailure
-              )
-
-              .appDeleteRecord(
-                currentPageKey,
-                rowData._row
+            const actionButton =
+              setActionWorking(
+                remove,
+                'Deleting...'
               );
+
+            scriptRunPromise_(
+              'appDeleteRecord:' + pageKey,
+              runner =>
+                runner.appDeleteRecord(
+                  pageKey,
+                  rowData._row,
+                  rowData._sourceSheet || ''
+                )
+            )
+              .then(function() {
+
+                setActionSuccess(
+                  actionButton,
+                  'Deleted'
+                );
+
+                invalidateClientPage(
+                  pageKey
+                );
+
+                loadPage(
+                  pageKey,
+                  true
+                );
+
+                showToast(
+                  'Record deleted.'
+                );
+
+              })
+              .catch(function(error) {
+
+                setActionError(
+                  actionButton,
+                  'Delete Failed'
+                );
+
+                handleFailure(
+                  error,
+                  'delete structured record: ' + pageKey
+                );
+
+              });
 
           }
         );
@@ -2169,41 +2187,60 @@ function saveStructuredRecord() {
     );
 
 
-  google.script.run
+  const pageKey =
+    currentPageKey;
 
-    .withSuccessHandler(
-      function() {
-
-        recordModal.hide();
-
-
-        invalidateClientPage(
-          currentPageKey
-        );
-
-
-        loadPage(
-          currentPageKey,
-          true
-        );
-
-
-        showToast(
-          'Record saved.'
-        );
-
-      }
-    )
-
-    .withFailureHandler(
-      handleFailure
-    )
-
-    .appUpdateRecord(
-      currentPageKey,
-      editingRow._row,
-      record
+  const saveButton =
+    setActionWorking(
+      document.getElementById(
+        'saveRecordButton'
+      ),
+      'Saving...'
     );
+
+  scriptRunPromise_(
+    'appUpdateRecord:' + pageKey,
+    runner =>
+      runner.appUpdateRecord(
+        pageKey,
+        editingRow._row,
+        record,
+        editingRow._sourceSheet || ''
+      )
+  )
+    .then(function() {
+
+      setActionSuccess(
+        saveButton,
+        'Saved'
+      );
+
+      recordModal.hide();
+
+      invalidateClientPage(
+        pageKey
+      );
+
+      loadPage(
+        pageKey,
+        true
+      );
+
+      showToast(
+        'Record saved.'
+      );
+
+    })
+    .catch(function(error) {
+      setActionError(
+        saveButton,
+        'Save Failed'
+      );
+      handleFailure(
+        error,
+        'save structured record: ' + pageKey
+      );
+    });
 }
 
 </script>

@@ -700,8 +700,36 @@ var AppConfig = (function() {
     const definitions =
       definitionsByKey_();
 
-    Object.keys(values || {})
-      .forEach(key => {
+    const keys =
+      Object.keys(values || {});
+
+    if (!keys.length) {
+      return getAll();
+    }
+
+
+    const sheet =
+      ensureSheet_();
+
+    const rows =
+      rowMap_(sheet);
+
+    const width =
+      getAppSettingsSheetHeaders_().length;
+
+    const now =
+      new Date();
+
+    const lastRow =
+      sheet.getLastRow();
+
+    const updates =
+      [];
+
+    const appends =
+      [];
+
+    keys.forEach(key => {
 
         const definition =
           definitions[key];
@@ -715,13 +743,102 @@ var AppConfig = (function() {
           );
         }
 
-        upsert_(
+        const normalizedValue =
+          normalizeValue_(
+            definition,
+            values[key]
+          );
+
+        const output = [
           key,
-          values[key],
-          updatedBy
-        );
+          normalizedValue,
+          definition.type,
+          definition.category,
+          definition.label,
+          definition.description || '',
+          now,
+          updatedBy || ''
+        ];
+
+        if (rows[key]) {
+          updates.push({
+            row: rows[key],
+            values: output
+          });
+        } else {
+          appends.push(
+            output
+          );
+
+          rows[key] =
+            lastRow +
+            appends.length;
+        }
 
       });
+
+    updates.sort((a, b) =>
+      a.row - b.row
+    );
+
+    let group =
+      [];
+
+    function flushGroup_() {
+
+      if (!group.length) {
+        return;
+      }
+
+      sheet
+        .getRange(
+          group[0].row,
+          1,
+          group.length,
+          width
+        )
+        .setValues(
+          group.map(item =>
+            item.values
+          )
+        );
+
+      group =
+        [];
+    }
+
+    updates.forEach(item => {
+
+      if (
+        group.length &&
+        item.row !==
+          group[group.length - 1].row + 1
+      ) {
+        flushGroup_();
+      }
+
+      group.push(
+        item
+      );
+
+    });
+
+    flushGroup_();
+
+    if (appends.length) {
+      sheet
+        .getRange(
+          lastRow + 1,
+          1,
+          appends.length,
+          width
+        )
+        .setValues(
+          appends
+        );
+    }
+
+    invalidate_();
 
     return getAll();
   }

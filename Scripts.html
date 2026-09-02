@@ -6,13 +6,38 @@
 
 
 /*
- * Browser cache lifetime.
+ * Browser session cache policy.
  *
- * 5 minutes means clicking back to a page you've already
- * visited does NOT make another Apps Script request.
+ * Fresh entries render without a server trip. Older entries
+ * can still render immediately, then refresh quietly in the
+ * background.
  */
+const CLIENT_CACHE_FRESH_MS =
+  60 * 1000;
+
 const CLIENT_CACHE_TTL_MS =
   5 * 60 * 1000;
+
+
+const PREFETCH_CONCURRENCY =
+  2;
+
+
+const PREFETCH_PAGE_PRIORITY = [
+  'switches',
+  'accessPoints',
+  'servers',
+  'internetWan',
+  'routes',
+  'securityCameras',
+  'busCameras',
+  'intercom',
+  'backups'
+];
+
+
+const ACTION_SUCCESS_RESET_MS =
+  1200;
 
 
 /*******************************************************
@@ -25,6 +50,14 @@ let appBootstrap =
 
 let currentPageKey =
   'dashboard';
+
+
+let navigationGeneration =
+  0;
+
+
+let clientCacheGeneration =
+  0;
 
 
 let currentPageData =
@@ -61,6 +94,22 @@ let configModal =
 
 const clientPageCache =
   new Map();
+
+
+const pageRendererPromises =
+  new Map();
+
+
+let prefetchStarted =
+  false;
+
+
+let prefetchQueue =
+  [];
+
+
+let prefetchActiveCount =
+  0;
 
 
 const structuredTables =
@@ -538,6 +587,14 @@ function navigateTo(
   currentPageKey =
     pageKey;
 
+  const generation =
+    nextNavigationGeneration_();
+
+
+  prioritizePrefetchForNavigation_(
+    pageKey
+  );
+
 
   document
     .querySelectorAll(
@@ -557,7 +614,11 @@ function navigateTo(
 
   loadPage(
     pageKey,
-    false
+    false,
+    {
+      generation: generation,
+      reason: 'navigation'
+    }
   );
 }
 
@@ -571,19 +632,36 @@ function getClientCache(
 ) {
 
   const entry =
-    clientPageCache.get(
+    getClientCacheEntry_(
       pageKey
     );
 
 
-  if (!entry) {
+  return entry && entry.data
+    ? entry.data
+    : null;
+}
+
+
+function getClientCacheEntry_(
+  pageKey
+) {
+
+  const entry =
+    clientPageCache.get(
+      pageKey
+    );
+
+  if (
+    !entry
+  ) {
     return null;
   }
 
-
   if (
+    entry.loadedAt &&
     Date.now() -
-    entry.timestamp >
+    entry.loadedAt >
     CLIENT_CACHE_TTL_MS
   ) {
 
@@ -596,25 +674,211 @@ function getClientCache(
   }
 
 
-  return entry.data;
+  return entry;
+}
+
+
+function getOrCreateClientCacheEntry_(
+  pageKey
+) {
+
+  let entry =
+    clientPageCache.get(
+      pageKey
+    );
+
+  if (!entry) {
+
+    entry = {
+      pageKey: pageKey,
+      status: 'idle',
+      data: null,
+      loadedAt: 0,
+      timestamp: 0,
+      inFlight: null,
+      error: null,
+      metadata: {}
+    };
+
+    clientPageCache.set(
+      pageKey,
+      entry
+    );
+
+  }
+
+  return entry;
+}
+
+
+function isClientCacheFresh_(
+  entry
+) {
+
+  return !!(
+    entry &&
+    entry.data &&
+    entry.loadedAt &&
+    Date.now() -
+      entry.loadedAt <=
+      CLIENT_CACHE_FRESH_MS
+  );
+}
+
+
+function isClientCacheStale_(
+  entry
+) {
+
+  return !!(
+    entry &&
+    entry.data &&
+    !isClientCacheFresh_(
+      entry
+    )
+  );
 }
 
 
 function setClientCache(
   pageKey,
-  data
+  data,
+  metadata
 ) {
+
+  const now =
+    Date.now();
+
+  const entry =
+    getOrCreateClientCacheEntry_(
+      pageKey
+    );
+
+  entry.status =
+    'loaded';
+
+  entry.timestamp =
+    now;
+
+  entry.loadedAt =
+    now;
+
+  entry.data =
+    data;
+
+  entry.error =
+    null;
+
+  entry.inFlight =
+    null;
+
+  entry.metadata =
+    Object.assign(
+      {},
+      entry.metadata || {},
+      metadata || {}
+    );
 
   clientPageCache.set(
     pageKey,
-    {
-      timestamp:
-        Date.now(),
-
-      data:
-        data
-    }
+    entry
   );
+}
+
+
+function setClientPageInFlight_(
+  pageKey,
+  promise,
+  metadata
+) {
+
+  const entry =
+    getOrCreateClientCacheEntry_(
+      pageKey
+    );
+
+  entry.status =
+    'loading';
+
+  entry.inFlight =
+    promise;
+
+  entry.error =
+    null;
+
+  entry.metadata =
+    Object.assign(
+      {},
+      entry.metadata || {},
+      metadata || {}
+    );
+
+  clientPageCache.set(
+    pageKey,
+    entry
+  );
+}
+
+
+function clearClientPageInFlight_(
+  pageKey,
+  promise
+) {
+
+  const entry =
+    clientPageCache.get(
+      pageKey
+    );
+
+  if (
+    entry &&
+    entry.inFlight === promise
+  ) {
+
+    entry.inFlight =
+      null;
+
+    if (
+      entry.status === 'loading'
+    ) {
+      entry.status =
+        entry.data
+          ? 'loaded'
+          : 'idle';
+    }
+
+  }
+}
+
+
+function setClientPageError_(
+  pageKey,
+  error,
+  metadata
+) {
+
+  const entry =
+    getOrCreateClientCacheEntry_(
+      pageKey
+    );
+
+  entry.status =
+    entry.data
+      ? 'loaded'
+      : 'error';
+
+  entry.error =
+    error;
+
+  entry.inFlight =
+    null;
+
+  entry.metadata =
+    Object.assign(
+      {},
+      entry.metadata || {},
+      metadata || {}
+    );
 }
 
 
@@ -639,6 +903,70 @@ function invalidateClientPage(
 }
 
 
+function clearClientPageCache_() {
+
+  clientCacheGeneration +=
+    1;
+
+  clientPageCache.clear();
+
+  prefetchStarted =
+    false;
+
+  prefetchQueue =
+    [];
+
+  prefetchActiveCount =
+    0;
+}
+
+
+function markClientPageWritten(
+  pageKey,
+  data
+) {
+
+  setClientCache(
+    pageKey,
+    data,
+    {
+      source: 'write'
+    }
+  );
+
+  if (
+    pageKey !== 'dashboard'
+  ) {
+    invalidateClientPage(
+      'dashboard'
+    );
+  }
+}
+
+
+function logCacheEvent_(
+  pageKey,
+  message
+) {
+
+  const page =
+    getBootstrapPage_(
+      pageKey
+    );
+
+  console.log(
+    '[Cache] ' +
+    (
+      page && page.label
+        ? page.label
+        : pageKey
+    ) +
+    ': ' +
+    message
+  );
+}
+
+
 function closeRowActionMenu() {
 
   const menu =
@@ -654,21 +982,297 @@ function closeRowActionMenu() {
 
 
 /*******************************************************
+ * ACTION STATE
+ *******************************************************/
+
+function setActionWorking(
+  button,
+  label
+) {
+
+  button =
+    resolveActionButton_(
+      button
+    );
+
+  if (!button) {
+    return null;
+  }
+
+  captureActionState_(
+    button
+  );
+
+  button.disabled =
+    true;
+
+  button.setAttribute(
+    'aria-busy',
+    'true'
+  );
+
+  button.innerHTML =
+    '<i class="fa-solid fa-circle-notch fa-spin me-2 action-state-icon"></i>' +
+    escapeHtml(
+      label || 'Working...'
+    );
+
+  return button;
+}
+
+
+function setActionSuccess(
+  button,
+  label
+) {
+
+  button =
+    resolveActionButton_(
+      button
+    );
+
+  if (!button) {
+    return null;
+  }
+
+  captureActionState_(
+    button
+  );
+
+  button.disabled =
+    true;
+
+  button.removeAttribute(
+    'aria-busy'
+  );
+
+  button.innerHTML =
+    '<i class="fa-solid fa-check me-2 action-state-icon"></i>' +
+    escapeHtml(
+      label || 'Done'
+    );
+
+  scheduleActionRestore_(
+    button
+  );
+
+  return button;
+}
+
+
+function setActionError(
+  button,
+  label
+) {
+
+  button =
+    resolveActionButton_(
+      button
+    );
+
+  if (!button) {
+    return null;
+  }
+
+  captureActionState_(
+    button
+  );
+
+  button.disabled =
+    false;
+
+  button.removeAttribute(
+    'aria-busy'
+  );
+
+  button.innerHTML =
+    '<i class="fa-solid fa-triangle-exclamation me-2 action-state-icon"></i>' +
+    escapeHtml(
+      label || 'Failed'
+    );
+
+  scheduleActionRestore_(
+    button
+  );
+
+  return button;
+}
+
+
+function restoreAction(
+  button
+) {
+
+  button =
+    resolveActionButton_(
+      button
+    );
+
+  if (
+    !button ||
+    !button._networkDashboardActionState
+  ) {
+    return;
+  }
+
+  const state =
+    button._networkDashboardActionState;
+
+  if (state.restoreTimer) {
+    clearTimeout(
+      state.restoreTimer
+    );
+  }
+
+  button.innerHTML =
+    state.html;
+
+  button.disabled =
+    state.disabled;
+
+  button.style.minWidth =
+    state.minWidth;
+
+  button.removeAttribute(
+    'aria-busy'
+  );
+
+  delete button._networkDashboardActionState;
+}
+
+
+function resolveActionButton_(
+  button
+) {
+
+  if (button) {
+    return button;
+  }
+
+  const active =
+    document.activeElement;
+
+  return active &&
+    active.tagName === 'BUTTON'
+    ? active
+    : null;
+}
+
+
+function captureActionState_(
+  button
+) {
+
+  if (
+    button._networkDashboardActionState
+  ) {
+    if (
+      button._networkDashboardActionState.restoreTimer
+    ) {
+      clearTimeout(
+        button._networkDashboardActionState.restoreTimer
+      );
+      button._networkDashboardActionState.restoreTimer =
+        null;
+    }
+    return;
+  }
+
+  const width =
+    button.offsetWidth || 0;
+
+  button._networkDashboardActionState = {
+    html:
+      button.innerHTML,
+    disabled:
+      button.disabled,
+    minWidth:
+      button.style.minWidth || '',
+    restoreTimer:
+      null
+  };
+
+  if (width) {
+    button.style.minWidth =
+      width + 'px';
+  }
+}
+
+
+function scheduleActionRestore_(
+  button
+) {
+
+  if (
+    !button ||
+    !button._networkDashboardActionState
+  ) {
+    return;
+  }
+
+  button._networkDashboardActionState.restoreTimer =
+    setTimeout(
+      function() {
+        restoreAction(
+          button
+        );
+      },
+      ACTION_SUCCESS_RESET_MS
+    );
+}
+
+
+/*******************************************************
  * PAGE LOADING
  *******************************************************/
 
+function nextNavigationGeneration_() {
+
+  navigationGeneration += 1;
+
+  return navigationGeneration;
+}
+
+
+function getBootstrapPage_(
+  pageKey
+) {
+
+  return appBootstrap &&
+    appBootstrap.pages
+      ? appBootstrap.pages.find(
+          item =>
+            item.key === pageKey
+        )
+      : null;
+}
+
+
+function isActivePageRequest_(
+  pageKey,
+  generation
+) {
+
+  return currentPageKey === pageKey &&
+    generation === navigationGeneration;
+}
+
+
 function loadPage(
   pageKey,
-  forceRefresh
+  forceRefresh,
+  options
 ) {
+
+  options =
+    options || {};
 
   closeRowActionMenu();
 
 
   const page =
-    appBootstrap.pages.find(
-      item =>
-        item.key === pageKey
+    getBootstrapPage_(
+      pageKey
     );
 
 
@@ -676,56 +1280,144 @@ function loadPage(
     return;
   }
 
+  if (
+    currentPageKey !== pageKey
+  ) {
+    console.log(
+      '[Navigation] inactive load ignored for ' +
+      pageKey
+    );
+    return;
+  }
 
-  const cached =
+  const generation =
+    options.generation ||
+    nextNavigationGeneration_();
+
+  const requestReason =
+    options.reason ||
+    (
+      forceRefresh
+        ? 'refresh'
+        : 'navigation'
+    );
+
+  const actionButton =
+    options.actionButton || null;
+
+  const cacheEntry =
     forceRefresh ||
     !shouldClientCachePage_(
       pageKey
     )
       ? null
-      : getClientCache(
+      : getClientCacheEntry_(
           pageKey
         );
 
+  if (
+    cacheEntry &&
+    cacheEntry.data
+  ) {
 
-  if (cached) {
+    const cacheState =
+      isClientCacheFresh_(cacheEntry)
+        ? 'hit'
+        : 'stale';
+
+    logCacheEvent_(
+      pageKey,
+      cacheState
+    );
+
+    const renderStart =
+      nowClient_();
 
     Promise
-      .all([
+      .resolve()
+      .then(() =>
         ensurePageRendererPromise_(
           pageKey,
           page
-        ),
-        Promise.resolve(cached)
-      ])
-      .then(results => {
+        )
+      )
+      .then(() => {
 
-        if (currentPageKey !== pageKey) {
+        if (
+          !isActivePageRequest_(
+            pageKey,
+            generation
+          )
+        ) {
+          console.log(
+            '[Navigation] stale cached render ignored for ' +
+            pageKey
+          );
           return;
         }
 
         currentPageData =
-          results[1];
+          cacheEntry.data;
 
         renderPage(
           pageKey,
-          results[1]
+          cacheEntry.data
         );
+
+        logClientPerformance_(
+          pageKey,
+          'cache=' +
+            cacheState +
+            ' render=' +
+            Math.round(
+              nowClient_() - renderStart
+            ) +
+            'ms'
+        );
+
+        if (
+          pageKey === 'dashboard'
+        ) {
+          scheduleOperationalPrefetch_();
+        }
+
+        if (
+          isClientCacheStale_(
+            cacheEntry
+          )
+        ) {
+          refreshPageQuietly_(
+            pageKey,
+            generation,
+            requestReason
+          );
+        }
 
       })
       .catch(error => {
 
-        if (currentPageKey === pageKey) {
+        if (
+          isActivePageRequest_(
+            pageKey,
+            generation
+          )
+        ) {
           showPageError(
             pageKey,
             error
           );
-        }
 
-        handleFailure(
-          error,
-          'page load: ' + pageKey
-        );
+          handleFailure(
+            error,
+            'cached page render: ' + pageKey
+          );
+        } else {
+          console.warn(
+            '[Navigation] stale cached render failed for ' +
+            pageKey,
+            error
+          );
+        }
 
       });
 
@@ -736,63 +1428,182 @@ function loadPage(
 
   showPageLoading();
 
+  logCacheEvent_(
+    pageKey,
+    forceRefresh
+      ? 'refresh'
+      : 'miss'
+  );
 
-  Promise
-    .all([
-      ensurePageRendererPromise_(
-        pageKey,
-        page
-      ),
-      getPageDataPromise_(
-        pageKey,
-        !!forceRefresh
-      )
-    ])
-    .then(results => {
+  const requestStart =
+    nowClient_();
 
-      if (currentPageKey !== pageKey) {
-        return;
-      }
-
-      const data =
-        results[1];
+  requestPageData_(
+    pageKey,
+    !!forceRefresh,
+    {
+      mode: 'foreground',
+      reason: requestReason
+    }
+  )
+    .then(data => {
 
       if (
-        shouldClientCachePage_(
-          pageKey
+        !isActivePageRequest_(
+          pageKey,
+          generation
         )
       ) {
-        setClientCache(
-          pageKey,
-          data
+        console.log(
+          '[Navigation] stale response ignored for ' +
+          pageKey
         );
+        return;
       }
-
 
       currentPageData =
         data;
 
+      const renderStart =
+        nowClient_();
 
       renderPage(
         pageKey,
         data
       );
 
+      logClientPerformance_(
+        pageKey,
+        'cache=miss roundTrip=' +
+          Math.round(
+            renderStart - requestStart
+          ) +
+          'ms render=' +
+          Math.round(
+            nowClient_() - renderStart
+          ) +
+          'ms'
+      );
+
+      if (
+        pageKey === 'dashboard'
+      ) {
+        scheduleOperationalPrefetch_();
+      }
+
+      if (actionButton) {
+        setActionSuccess(
+          actionButton,
+          'Refreshed'
+        );
+      }
+
     })
     .catch(error => {
 
-      if (currentPageKey === pageKey) {
+      if (
+        isActivePageRequest_(
+          pageKey,
+          generation
+        )
+      ) {
         showPageError(
+          pageKey,
+          error
+        );
+
+        handleFailure(
+          error,
+          'page load: ' + pageKey
+        );
+      } else {
+        console.warn(
+          '[Navigation] stale request failed for ' +
           pageKey,
           error
         );
       }
 
-      handleFailure(
-        error,
-        'page load: ' + pageKey
+      if (actionButton) {
+        setActionError(
+          actionButton,
+          'Refresh Failed'
+        );
+      }
+
+    });
+}
+
+
+function refreshPageQuietly_(
+  pageKey,
+  generation,
+  reason
+) {
+
+  console.log(
+    '[Cache] ' +
+    pageKey +
+    ': stale-while-revalidate'
+  );
+
+  const requestStart =
+    nowClient_();
+
+  requestPageData_(
+    pageKey,
+    true,
+    {
+      mode: 'quiet-refresh',
+      reason: reason || 'stale'
+    }
+  )
+    .then(data => {
+
+      if (
+        !isActivePageRequest_(
+          pageKey,
+          generation
+        )
+      ) {
+        console.log(
+          '[Navigation] quiet refresh cached stale page ' +
+          pageKey
+        );
+        return;
+      }
+
+      currentPageData =
+        data;
+
+      const renderStart =
+        nowClient_();
+
+      renderPage(
+        pageKey,
+        data
       );
 
+      logClientPerformance_(
+        pageKey,
+        'cache=stale roundTrip=' +
+          Math.round(
+            renderStart - requestStart
+          ) +
+          'ms render=' +
+          Math.round(
+            nowClient_() - renderStart
+          ) +
+          'ms'
+      );
+
+    })
+    .catch(error => {
+      console.warn(
+        '[Cache] quiet refresh failed for ' +
+        pageKey,
+        error
+      );
     });
 }
 
@@ -801,7 +1612,268 @@ function shouldClientCachePage_(
   pageKey
 ) {
 
-  return pageKey !== 'dashboard';
+  return !!pageKey;
+}
+
+
+function scheduleOperationalPrefetch_() {
+
+  if (
+    prefetchStarted ||
+    !appBootstrap ||
+    !appBootstrap.pages
+  ) {
+    return;
+  }
+
+  setTimeout(
+    startOperationalPrefetch_,
+    250
+  );
+}
+
+
+function startOperationalPrefetch_() {
+
+  if (
+    prefetchStarted ||
+    !appBootstrap ||
+    !appBootstrap.pages
+  ) {
+    return;
+  }
+
+  prefetchStarted =
+    true;
+
+  prefetchQueue =
+    buildPrefetchQueue_();
+
+  if (!prefetchQueue.length) {
+    return;
+  }
+
+  console.log(
+    '[Prefetch] queued ' +
+    prefetchQueue.length +
+    ' page(s)'
+  );
+
+  drainPrefetchQueue_();
+}
+
+
+function buildPrefetchQueue_() {
+
+  const pages =
+    appBootstrap.pages || [];
+
+  const keyed = {};
+
+  pages.forEach(page => {
+    keyed[page.key] = page;
+  });
+
+  const queue = [];
+
+  PREFETCH_PAGE_PRIORITY
+    .forEach(pageKey => {
+
+      const page =
+        keyed[pageKey];
+
+      if (
+        shouldPrefetchPage_(page) &&
+        !queue.includes(pageKey)
+      ) {
+        queue.push(pageKey);
+      }
+
+    });
+
+  pages.forEach(page => {
+
+    if (
+      shouldPrefetchPage_(page) &&
+      !queue.includes(page.key)
+    ) {
+      queue.push(page.key);
+    }
+
+  });
+
+  return queue.filter(pageKey => {
+
+    const entry =
+      getClientCacheEntry_(
+        pageKey
+      );
+
+    return !(
+      entry &&
+      (
+        entry.data ||
+        entry.inFlight
+      )
+    );
+
+  });
+}
+
+
+function shouldPrefetchPage_(
+  page
+) {
+
+  if (
+    !page ||
+    page.key === 'dashboard' ||
+    page.key === 'settings' ||
+    page.key === 'users' ||
+    page.key === 'workflow'
+  ) {
+    return false;
+  }
+
+  return page.type === 'table' ||
+    page.type === 'internetWan' ||
+    page.type === 'structured';
+}
+
+
+function prioritizePrefetchForNavigation_(
+  pageKey
+) {
+
+  const index =
+    prefetchQueue.indexOf(
+      pageKey
+    );
+
+  if (index >= 0) {
+    prefetchQueue.splice(
+      index,
+      1
+    );
+
+    console.log(
+      '[Prefetch] foreground navigation claimed ' +
+      pageKey
+    );
+  }
+}
+
+
+function drainPrefetchQueue_() {
+
+  while (
+    prefetchActiveCount <
+      PREFETCH_CONCURRENCY &&
+    prefetchQueue.length
+  ) {
+
+    const pageKey =
+      prefetchQueue.shift();
+
+    const page =
+      getBootstrapPage_(
+        pageKey
+      );
+
+    if (
+      !shouldPrefetchPage_(page)
+    ) {
+      continue;
+    }
+
+    const entry =
+      getClientCacheEntry_(
+        pageKey
+      );
+
+    if (
+      entry &&
+      (
+        entry.data ||
+        entry.inFlight
+      )
+    ) {
+      continue;
+    }
+
+    prefetchActiveCount += 1;
+
+    console.log(
+      '[Prefetch] starting ' +
+      page.label
+    );
+
+    requestPageData_(
+      pageKey,
+      false,
+      {
+        mode: 'prefetch',
+        reason: 'startup-prefetch'
+      }
+    )
+      .then(() => {
+        console.log(
+          '[Prefetch] cached ' +
+          page.label
+        );
+      })
+      .catch(error => {
+        console.warn(
+          '[Prefetch] failed ' +
+          page.label,
+          error
+        );
+      })
+      .then(() => {
+
+        prefetchActiveCount =
+          Math.max(
+            0,
+            prefetchActiveCount - 1
+          );
+
+        drainPrefetchQueue_();
+
+      });
+
+  }
+}
+
+
+function nowClient_() {
+
+  return window.performance &&
+    typeof window.performance.now === 'function'
+    ? window.performance.now()
+    : Date.now();
+}
+
+
+function logClientPerformance_(
+  pageKey,
+  message
+) {
+
+  const page =
+    getBootstrapPage_(
+      pageKey
+    );
+
+  console.log(
+    '[Performance] ' +
+    (
+      page && page.label
+        ? page.label
+        : pageKey
+    ) +
+    ' ' +
+    message
+  );
 }
 
 
@@ -831,6 +1903,148 @@ function getPageDataPromise_(
 }
 
 
+function requestPageData_(
+  pageKey,
+  forceRefresh,
+  metadata
+) {
+
+  metadata =
+    metadata || {};
+
+  const page =
+    getBootstrapPage_(
+      pageKey
+    );
+
+  if (!page) {
+    return Promise.reject(
+      new Error(
+        'Unknown application page.'
+      )
+    );
+  }
+
+  const entry =
+    getClientCacheEntry_(
+      pageKey
+    );
+
+  if (
+    entry &&
+    entry.inFlight &&
+    (
+      !forceRefresh ||
+      metadata.mode === 'quiet-refresh' ||
+      metadata.mode === 'prefetch'
+    )
+  ) {
+
+    logCacheEvent_(
+      pageKey,
+      'reusing in-flight request'
+    );
+
+    return entry.inFlight;
+  }
+
+  const requestStart =
+    nowClient_();
+
+  const cacheGeneration =
+    clientCacheGeneration;
+
+  const promise =
+    Promise
+      .all([
+        ensurePageRendererPromise_(
+          pageKey,
+          page
+        ),
+        getPageDataPromise_(
+          pageKey,
+          !!forceRefresh
+        )
+      ])
+      .then(results => {
+
+        const data =
+          results[1];
+
+        if (
+          cacheGeneration ===
+            clientCacheGeneration &&
+          shouldClientCachePage_(
+            pageKey
+          )
+        ) {
+          setClientCache(
+            pageKey,
+            data,
+            metadata
+          );
+        }
+
+        if (
+          metadata.mode !== 'foreground'
+        ) {
+          logClientPerformance_(
+            pageKey,
+            (metadata.mode || 'request') +
+              ' roundTrip=' +
+              Math.round(
+                nowClient_() - requestStart
+              ) +
+              'ms'
+          );
+        }
+
+        return data;
+
+      })
+      .catch(error => {
+
+        if (
+          cacheGeneration ===
+            clientCacheGeneration
+        ) {
+          setClientPageError_(
+            pageKey,
+            error,
+            metadata
+          );
+        }
+
+        throw error;
+
+      })
+      .then(
+        data => {
+          clearClientPageInFlight_(
+            pageKey,
+            promise
+          );
+          return data;
+        },
+        error => {
+          clearClientPageInFlight_(
+            pageKey,
+            promise
+          );
+          throw error;
+        }
+      );
+
+  setClientPageInFlight_(
+    pageKey,
+    promise,
+    metadata
+  );
+
+  return promise;
+}
+
+
 function ensurePageRendererPromise_(
   pageKey,
   page
@@ -854,8 +2068,21 @@ function ensurePageRendererPromise_(
     return Promise.resolve();
   }
 
+  const rendererKey =
+    page.type;
 
-  return scriptRunPromise_(
+  if (
+    pageRendererPromises.has(
+      rendererKey
+    )
+  ) {
+    return pageRendererPromises.get(
+      rendererKey
+    );
+  }
+
+  const promise =
+    scriptRunPromise_(
     'appGetPageClientTemplate:' + pageKey,
     runner =>
       runner.appGetPageClientTemplate(
@@ -890,7 +2117,28 @@ function ensurePageRendererPromise_(
 
         }
 
-    });
+    })
+    .then(
+      result => {
+        pageRendererPromises.delete(
+          rendererKey
+        );
+        return result;
+      },
+      error => {
+        pageRendererPromises.delete(
+          rendererKey
+        );
+        throw error;
+      }
+    );
+
+  pageRendererPromises.set(
+    rendererKey,
+    promise
+  );
+
+  return promise;
 }
 
 
@@ -1031,7 +2279,17 @@ function installPageRendererTemplate_(
 }
 
 
-function refreshCurrentPage() {
+function refreshCurrentPage(
+  button
+) {
+
+  const actionButton =
+    button
+      ? setActionWorking(
+          button,
+          'Refreshing...'
+        )
+      : null;
 
   invalidateClientPage(
     currentPageKey
@@ -1040,7 +2298,14 @@ function refreshCurrentPage() {
 
   loadPage(
     currentPageKey,
-    true
+    true,
+    {
+      generation:
+        nextNavigationGeneration_(),
+      reason: 'refresh',
+      actionButton:
+        actionButton
+    }
   );
 }
 
@@ -1533,60 +2798,117 @@ function saveRecordFromModal() {
     );
 
 
-  const runner =
-    google.script.run
+  const pageKey =
+    currentPageKey;
 
-      .withSuccessHandler(
-        function() {
-
-          recordModal.hide();
-
-
-          invalidateClientPage(
-            currentPageKey
-          );
-
-
-          loadPage(
-            currentPageKey,
-            true
-          );
-
-
-          showToast(
-            'Record saved.'
-          );
-
-        }
-      )
-
-      .withFailureHandler(
-        handleFailure
-      );
+  const saveButton =
+    setActionWorking(
+      document.getElementById(
+        'saveRecordButton'
+      ),
+      editingRow
+        ? 'Updating...'
+        : 'Creating...'
+    );
 
 
   if (editingRow) {
 
-    runner.appUpdateRecord(
-      currentPageKey,
-      editingRow._row,
-      record,
-      editingRow._sourceSheet || ''
-    );
+    scriptRunPromise_(
+      'appUpdateRecord:' + pageKey,
+      runner =>
+        runner.appUpdateRecord(
+          pageKey,
+          editingRow._row,
+          record,
+          editingRow._sourceSheet || ''
+        )
+    )
+      .then(function() {
+
+        setActionSuccess(
+          saveButton,
+          'Saved'
+        );
+
+        recordModal.hide();
+
+        invalidateClientPage(
+          pageKey
+        );
+
+        loadPage(
+          pageKey,
+          true
+        );
+
+        showToast(
+          'Record saved.'
+        );
+
+      })
+      .catch(function(error) {
+        setActionError(
+          saveButton,
+          'Save Failed'
+        );
+        handleFailure(
+          error,
+          'save record: ' + pageKey
+        );
+      });
 
   } else {
 
-    runner.appAddRecord(
-      currentPageKey,
-      record
-    );
+    scriptRunPromise_(
+      'appAddRecord:' + pageKey,
+      runner =>
+        runner.appAddRecord(
+          pageKey,
+          record
+        )
+    )
+      .then(function() {
+
+        setActionSuccess(
+          saveButton,
+          'Saved'
+        );
+
+        recordModal.hide();
+
+        invalidateClientPage(
+          pageKey
+        );
+
+        loadPage(
+          pageKey,
+          true
+        );
+
+        showToast(
+          'Record saved.'
+        );
+
+      })
+      .catch(function(error) {
+        setActionError(
+          saveButton,
+          'Save Failed'
+        );
+        handleFailure(
+          error,
+          'add record: ' + pageKey
+        );
+      });
 
   }
 }
 
 
 function confirmDeleteRecord(
-  row
+  row,
+  button
 ) {
 
   if (
@@ -1600,38 +2922,55 @@ function confirmDeleteRecord(
   }
 
 
-  google.script.run
+  const pageKey =
+    currentPageKey;
 
-    .withSuccessHandler(
-      function() {
-
-        invalidateClientPage(
-          currentPageKey
-        );
-
-
-        loadPage(
-          currentPageKey,
-          true
-        );
-
-
-        showToast(
-          'Record deleted.'
-        );
-
-      }
-    )
-
-    .withFailureHandler(
-      handleFailure
-    )
-
-    .appDeleteRecord(
-      currentPageKey,
-      row._row,
-      row._sourceSheet || ''
+  const actionButton =
+    setActionWorking(
+      button,
+      'Deleting...'
     );
+
+  scriptRunPromise_(
+    'appDeleteRecord:' + pageKey,
+    runner =>
+      runner.appDeleteRecord(
+        pageKey,
+        row._row,
+        row._sourceSheet || ''
+      )
+  )
+    .then(function() {
+
+      setActionSuccess(
+        actionButton,
+        'Deleted'
+      );
+
+      invalidateClientPage(
+        pageKey
+      );
+
+      loadPage(
+        pageKey,
+        true
+      );
+
+      showToast(
+        'Record deleted.'
+      );
+
+    })
+    .catch(function(error) {
+      setActionError(
+        actionButton,
+        'Delete Failed'
+      );
+      handleFailure(
+        error,
+        'delete record: ' + pageKey
+      );
+    });
 }
 
 
@@ -1639,18 +2978,31 @@ function confirmDeleteRecord(
  * ARUBA
  *******************************************************/
 
-function runCentralSync() {
+function runCentralSync(
+  button
+) {
 
   showToast(
     'Synchronizing with Aruba Central...'
   );
 
+  const actionButton =
+    setActionWorking(
+      button,
+      'Syncing...'
+    );
 
-  google.script.run
+  scriptRunPromise_(
+    'syncArubaCentralToSheet',
+    runner =>
 
-    .withSuccessHandler(
-      function(result) {
-
+      /*
+       * EXISTING WORKING FUNCTION IN Code.gs.
+       * DO NOT CHANGE THE ARUBA API IMPLEMENTATION.
+       */
+      runner.syncArubaCentralToSheet()
+  )
+    .then(function(result) {
         invalidateClientPage(
           'switches'
         );
@@ -1665,6 +3017,10 @@ function runCentralSync() {
           'dashboard'
         );
 
+        setActionSuccess(
+          actionButton,
+          'Synced'
+        );
 
         showToast(
 
@@ -1690,18 +3046,17 @@ function runCentralSync() {
           true
         );
 
-      }
-    )
-
-    .withFailureHandler(
-      handleFailure
-    )
-
-    /*
-     * EXISTING WORKING FUNCTION IN Code.gs.
-     * DO NOT CHANGE THE ARUBA API IMPLEMENTATION.
-     */
-    .syncArubaCentralToSheet();
+    })
+    .catch(function(error) {
+      setActionError(
+        actionButton,
+        'Sync Failed'
+      );
+      handleFailure(
+        error,
+        'Aruba Central sync'
+      );
+    });
 }
 
 
@@ -1718,10 +3073,14 @@ function viewRunningConfig(
   configModal.show();
 
 
-  google.script.run
-
-    .withSuccessHandler(
-      function(result) {
+  scriptRunPromise_(
+    'fetchSwitchRunningConfig',
+    runner =>
+      runner.fetchSwitchRunningConfig(
+        serial
+      )
+  )
+    .then(function(result) {
 
         document.getElementById(
           'configDisplay'
@@ -1730,16 +3089,13 @@ function viewRunningConfig(
             ? result.config
             : result.message;
 
-      }
-    )
-
-    .withFailureHandler(
-      handleFailure
-    )
-
-    .fetchSwitchRunningConfig(
-      serial
-    );
+    })
+    .catch(function(error) {
+      handleFailure(
+        error,
+        'fetch running config'
+      );
+    });
 }
 
 

@@ -19,7 +19,7 @@ function renderUsersPage(data) {
 
     <button
       class="btn btn-sm btn-light border"
-      onclick="refreshCurrentPage()"
+      onclick="refreshCurrentPage(this)"
     >
       <i class="fa-solid fa-rotate me-2"></i>
       Refresh
@@ -156,7 +156,7 @@ function renderUsersPage(data) {
 
                       <button
                         class="btn btn-sm btn-light border text-danger"
-                        onclick='removeAppUser(${JSON.stringify(user.email)})'
+                        onclick='removeAppUser(${JSON.stringify(user.email)}, this)'
                       >
                         <i class="fa-solid fa-trash"></i>
                       </button>
@@ -526,9 +526,28 @@ function saveUserFromModal() {
   };
 
 
-  google.script.run
+  const saveButton =
+    setActionWorking(
+      document.getElementById(
+        'saveRecordButton'
+      ),
+      'Saving...'
+    );
 
-    .withSuccessHandler(function() {
+
+  scriptRunPromise_(
+    'saveAppUser',
+    runner =>
+      runner.saveAppUser(
+        user
+      )
+  )
+    .then(function() {
+
+      setActionSuccess(
+        saveButton,
+        'Saved'
+      );
 
       recordModal.hide();
 
@@ -541,14 +560,23 @@ function saveUserFromModal() {
       );
 
     })
-
-    .withFailureHandler(handleFailure)
-
-    .saveAppUser(user);
+    .catch(function(error) {
+      setActionError(
+        saveButton,
+        'Save Failed'
+      );
+      handleFailure(
+        error,
+        'save user'
+      );
+    });
 }
 
 
-function removeAppUser(email) {
+function removeAppUser(
+  email,
+  button
+) {
 
   if (
     !confirm(
@@ -559,9 +587,26 @@ function removeAppUser(email) {
   }
 
 
-  google.script.run
+  const actionButton =
+    setActionWorking(
+      button,
+      'Removing...'
+    );
 
-    .withSuccessHandler(function() {
+
+  scriptRunPromise_(
+    'deleteAppUser',
+    runner =>
+      runner.deleteAppUser(
+        email
+      )
+  )
+    .then(function() {
+
+      setActionSuccess(
+        actionButton,
+        'Removed'
+      );
 
       invalidateClientPage('users');
 
@@ -572,10 +617,16 @@ function removeAppUser(email) {
       );
 
     })
-
-    .withFailureHandler(handleFailure)
-
-    .deleteAppUser(email);
+    .catch(function(error) {
+      setActionError(
+        actionButton,
+        'Remove Failed'
+      );
+      handleFailure(
+        error,
+        'remove user'
+      );
+    });
 }
 
 </script>

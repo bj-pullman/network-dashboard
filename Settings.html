@@ -14,7 +14,7 @@ function renderSettingsPage(data) {
 
     <button
       class="btn btn-sm btn-brand"
-      onclick="saveSettingsForm()"
+      onclick="saveSettingsForm(this)"
     >
       <i class="fa-solid fa-floppy-disk me-2"></i>
       Save Settings
@@ -22,7 +22,7 @@ function renderSettingsPage(data) {
 
     <button
       class="btn btn-sm btn-light border"
-      onclick="runSettingsValidation()"
+      onclick="runSettingsValidation(this)"
     >
       <i class="fa-solid fa-shield-halved me-2"></i>
       Validate
@@ -30,7 +30,7 @@ function renderSettingsPage(data) {
 
     <button
       class="btn btn-sm btn-light border"
-      onclick="refreshCurrentPage()"
+      onclick="refreshCurrentPage(this)"
     >
       <i class="fa-solid fa-rotate me-2"></i>
       Refresh
@@ -92,15 +92,33 @@ function renderSettingsPage(data) {
           ${settingsColorField('branding.accent_color', 'Accent Color', values)}
         </div>
 
-        <div class="settings-brand-preview">
+        <div
+          id="settingsBrandPreview"
+          class="settings-brand-preview"
+        >
           <div class="settings-preview-mark">
-            <i class="fa-solid fa-network-wired"></i>
+            <img
+              id="settingsPreviewLogo"
+              class="settings-preview-logo"
+              alt=""
+              hidden
+            >
+            <i
+              id="settingsPreviewFallbackIcon"
+              class="fa-solid fa-network-wired"
+            ></i>
           </div>
           <div>
-            <div class="settings-preview-title">
+            <div
+              id="settingsPreviewTitle"
+              class="settings-preview-title"
+            >
               ${escapeHtml(values['organization.short_name'] || values['app.name'] || 'Network Dashboard')}
             </div>
-            <div class="settings-preview-subtitle">
+            <div
+              id="settingsPreviewSubtitle"
+              class="settings-preview-subtitle"
+            >
               Network infrastructure overview
             </div>
           </div>
@@ -188,6 +206,9 @@ function renderSettingsPage(data) {
 
     </div>
   `;
+
+  attachSettingsPreviewHandlers_();
+  updateSettingsBrandPreview_();
 }
 
 
@@ -337,6 +358,8 @@ function syncSettingsColorInputs(input) {
     }
 
   });
+
+  updateSettingsBrandPreview_();
 }
 
 
@@ -425,7 +448,7 @@ function renderIntegrationCard(integration) {
           <input
             type="checkbox"
             ${integration.enabled ? 'checked' : ''}
-            onchange="saveIntegrationEnabled('${escapeAttribute(integration.id)}', this.checked)"
+            onchange="saveIntegrationEnabled('${escapeAttribute(integration.id)}', this.checked, this)"
           >
           <span>Enabled</span>
         </label>
@@ -450,7 +473,7 @@ function renderIntegrationCard(integration) {
             ? `
               <button
                 class="btn btn-sm btn-light border"
-                onclick="testSettingsIntegration('${escapeAttribute(integration.id)}')"
+                onclick="testSettingsIntegration('${escapeAttribute(integration.id)}', this)"
                 ${canRun ? '' : 'disabled'}
               >
                 <i class="fa-solid fa-plug-circle-check me-2"></i>
@@ -465,7 +488,7 @@ function renderIntegrationCard(integration) {
             ? `
               <button
                 class="btn btn-sm btn-brand"
-                onclick="syncSettingsIntegration('${escapeAttribute(integration.id)}')"
+                onclick="syncSettingsIntegration('${escapeAttribute(integration.id)}', this)"
                 ${canRun ? '' : 'disabled'}
               >
                 <i class="fa-solid fa-cloud-arrow-down me-2"></i>
@@ -490,9 +513,37 @@ function renderIntegrationCard(integration) {
 }
 
 
-function saveSettingsForm() {
+function attachSettingsPreviewHandlers_() {
 
-  const settings = {};
+  document
+    .querySelectorAll(
+      '[data-setting-key]'
+    )
+    .forEach(input => {
+
+      input.addEventListener(
+        'input',
+        handleSettingsFormInput_
+      );
+
+      input.addEventListener(
+        'change',
+        handleSettingsFormInput_
+      );
+
+    });
+}
+
+
+function handleSettingsFormInput_() {
+
+  updateSettingsBrandPreview_();
+}
+
+
+function collectSettingsFormValues_() {
+
+  const values = {};
 
   document
     .querySelectorAll('[data-setting-key]')
@@ -506,25 +557,190 @@ function saveSettingsForm() {
       }
 
       if (input.type === 'checkbox') {
-        settings[key] =
+        values[key] =
           input.checked
             ? 'true'
             : 'false';
       } else {
-        settings[key] =
+        values[key] =
           input.value;
       }
 
     });
 
+  return values;
+}
 
-  google.script.run
-    .withSuccessHandler(function(data) {
+
+function normalizeSettingsPreviewColor_(
+  value,
+  fallback
+) {
+
+  const text =
+    String(value || '').trim();
+
+  return /^#[0-9a-fA-F]{6}$/.test(text)
+    ? text
+    : fallback;
+}
+
+
+function updateSettingsBrandPreview_() {
+
+  const preview =
+    document.getElementById(
+      'settingsBrandPreview'
+    );
+
+  if (!preview) {
+    return;
+  }
+
+  const values =
+    collectSettingsFormValues_();
+
+  const title =
+    values['organization.short_name'] ||
+    values['app.name'] ||
+    'Network Dashboard';
+
+  const subtitle =
+    values['organization.name'] ||
+    'Network infrastructure overview';
+
+  preview.style.setProperty(
+    '--settings-preview-primary',
+    normalizeSettingsPreviewColor_(
+      values['branding.primary_color'],
+      '#17345f'
+    )
+  );
+
+  preview.style.setProperty(
+    '--settings-preview-secondary',
+    normalizeSettingsPreviewColor_(
+      values['branding.secondary_color'],
+      '#0d2342'
+    )
+  );
+
+  preview.style.setProperty(
+    '--settings-preview-accent',
+    normalizeSettingsPreviewColor_(
+      values['branding.accent_color'],
+      '#f4c430'
+    )
+  );
+
+  const titleEl =
+    document.getElementById(
+      'settingsPreviewTitle'
+    );
+
+  if (titleEl) {
+    titleEl.textContent =
+      title;
+  }
+
+  const subtitleEl =
+    document.getElementById(
+      'settingsPreviewSubtitle'
+    );
+
+  if (subtitleEl) {
+    subtitleEl.textContent =
+      subtitle;
+  }
+
+  const logo =
+    document.getElementById(
+      'settingsPreviewLogo'
+    );
+
+  const fallback =
+    document.getElementById(
+      'settingsPreviewFallbackIcon'
+    );
+
+  const logoUrl =
+    String(
+      values['branding.logo_url'] || ''
+    ).trim();
+
+  if (
+    logo &&
+    fallback
+  ) {
+
+    if (logoUrl) {
+      logo.onerror =
+        function() {
+          logo.hidden =
+            true;
+          fallback.hidden =
+            false;
+        };
+
+      logo.onload =
+        function() {
+          logo.hidden =
+            false;
+          fallback.hidden =
+            true;
+        };
+
+      logo.src =
+        logoUrl;
+      logo.hidden =
+        false;
+      fallback.hidden =
+        true;
+    } else {
+      logo.onerror =
+        null;
+      logo.onload =
+        null;
+
+      logo.removeAttribute(
+        'src'
+      );
+      logo.hidden =
+        true;
+      fallback.hidden =
+        false;
+    }
+
+  }
+}
+
+
+function saveSettingsForm(
+  button
+) {
+
+  const settings =
+    collectSettingsFormValues_();
+
+  const actionButton =
+    setActionWorking(
+      button,
+      'Saving...'
+    );
+
+  scriptRunPromise_(
+    'saveAppSettings',
+    runner =>
+      runner.saveAppSettings(
+        settings
+      )
+  )
+    .then(function(data) {
 
       currentPageData =
         data;
 
-      clientPageCache.clear();
+      clearClientPageCache_();
 
       if (
         data.bootstrap
@@ -545,24 +761,73 @@ function saveSettingsForm() {
 
       }
 
-      renderSettingsPage(
-        data
+      setActionSuccess(
+        actionButton,
+        'Saved'
       );
 
       showToast(
         'Settings saved.'
       );
 
+      setTimeout(
+        function() {
+          renderSettingsPage(
+            data
+          );
+          setClientCache(
+            'settings',
+            data,
+            {
+              source: 'settings-save'
+            }
+          );
+          scheduleOperationalPrefetch_();
+        },
+        450
+      );
+
     })
-    .withFailureHandler(handleFailure)
-    .saveAppSettings(settings);
+    .catch(function(error) {
+      setActionError(
+        actionButton,
+        'Save Failed'
+      );
+      handleFailure(
+        error,
+        'save settings'
+      );
+    });
 }
 
 
-function saveIntegrationEnabled(id, enabled) {
+function saveIntegrationEnabled(
+  id,
+  enabled,
+  input
+) {
 
-  google.script.run
-    .withSuccessHandler(function(data) {
+  if (input) {
+    input.disabled =
+      true;
+    input.setAttribute(
+      'aria-busy',
+      'true'
+    );
+  }
+
+  scriptRunPromise_(
+    'saveIntegrationConfig:' + id,
+    runner =>
+      runner.saveIntegrationConfig(
+        id,
+        {
+          enabled: enabled,
+          settings: {}
+        }
+      )
+  )
+    .then(function(data) {
 
       currentPageData =
         data;
@@ -575,59 +840,160 @@ function saveIntegrationEnabled(id, enabled) {
         'Integration setting saved.'
       );
 
-    })
-    .withFailureHandler(handleFailure)
-    .saveIntegrationConfig(
-      id,
-      {
-        enabled: enabled,
-        settings: {}
+      if (input) {
+        input.disabled =
+          false;
+        input.removeAttribute(
+          'aria-busy'
+        );
       }
-    );
+
+    })
+    .catch(function(error) {
+
+      if (input) {
+        input.checked =
+          !enabled;
+        input.disabled =
+          false;
+        input.removeAttribute(
+          'aria-busy'
+        );
+      }
+
+      handleFailure(
+        error,
+        'save integration setting: ' + id
+      );
+
+    });
 }
 
 
-function testSettingsIntegration(id) {
+function testSettingsIntegration(
+  id,
+  button
+) {
 
-  showToast(
-    'Testing integration connection...'
-  );
+  const actionButton =
+    setActionWorking(
+      button,
+      'Testing...'
+    );
 
-  google.script.run
-    .withSuccessHandler(function(result) {
+  scriptRunPromise_(
+    'testIntegrationConnection:' + id,
+    runner =>
+      runner.testIntegrationConnection(
+        id
+      )
+  )
+    .then(function(result) {
+
+      setActionSuccess(
+        actionButton,
+        'Test Complete'
+      );
+
       showToast(
         result.message ||
         result.status ||
         'Connection test complete.'
       );
-      refreshCurrentPage();
+
+      setTimeout(
+        function() {
+          refreshCurrentPage();
+        },
+        450
+      );
+
     })
-    .withFailureHandler(handleFailure)
-    .testIntegrationConnection(id);
+    .catch(function(error) {
+      setActionError(
+        actionButton,
+        'Test Failed'
+      );
+      handleFailure(
+        error,
+        'test integration: ' + id
+      );
+    });
 }
 
 
-function syncSettingsIntegration(id) {
+function syncSettingsIntegration(
+  id,
+  button
+) {
 
-  showToast(
-    'Running integration sync...'
-  );
+  const actionButton =
+    setActionWorking(
+      button,
+      'Syncing...'
+    );
 
-  google.script.run
-    .withSuccessHandler(function(result) {
+  scriptRunPromise_(
+    'runIntegrationSync:' + id,
+    runner =>
+      runner.runIntegrationSync(
+        id
+      )
+  )
+    .then(function(result) {
+
+      setActionSuccess(
+        actionButton,
+        'Synced'
+      );
+
+      if (id === 'aruba_central') {
+        invalidateClientPage('switches');
+        invalidateClientPage('accessPoints');
+      }
+
+      if (id === 'threatdown') {
+        invalidateClientPage('servers');
+      }
+
+      invalidateClientPage('dashboard');
+
       showToast(
         result.status === 'success'
           ? 'Integration sync complete.'
           : 'Integration sync finished: ' + result.status
       );
-      refreshCurrentPage();
+
+      setTimeout(
+        function() {
+          refreshCurrentPage();
+        },
+        450
+      );
+
     })
-    .withFailureHandler(handleFailure)
-    .runIntegrationSync(id);
+    .catch(function(error) {
+      setActionError(
+        actionButton,
+        'Sync Failed'
+      );
+      handleFailure(
+        error,
+        'sync integration: ' + id
+      );
+    });
 }
 
 
-function runSettingsValidation() {
+function runSettingsValidation(
+  button
+) {
+
+  const actionButton =
+    setActionWorking(
+      button,
+      'Validating...'
+    );
 
   const output =
     document.getElementById(
@@ -639,13 +1005,22 @@ function runSettingsValidation() {
       'Running validation...';
   }
 
-  google.script.run
-    .withSuccessHandler(function(result) {
+  scriptRunPromise_(
+    'appValidateNetworkDashboard',
+    runner =>
+      runner.appValidateNetworkDashboard()
+  )
+    .then(function(result) {
 
       if (output) {
         output.textContent =
           formatClientValidationResult(result);
       }
+
+      setActionSuccess(
+        actionButton,
+        'Validation Complete'
+      );
 
       showToast(
         result.healthy
@@ -654,8 +1029,26 @@ function runSettingsValidation() {
       );
 
     })
-    .withFailureHandler(handleFailure)
-    .appValidateNetworkDashboard();
+    .catch(function(error) {
+
+      if (output) {
+        output.textContent =
+          getSafeErrorMessage_(
+            error
+          );
+      }
+
+      setActionError(
+        actionButton,
+        'Validation Failed'
+      );
+
+      handleFailure(
+        error,
+        'validate installation'
+      );
+
+    });
 }
 
 

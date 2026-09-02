@@ -20,7 +20,7 @@ function renderDashboard(data) {
   document.getElementById('pageActions').innerHTML = `
     <button
       class="btn btn-sm btn-light border"
-      onclick="refreshCurrentPage()"
+      onclick="refreshCurrentPage(this)"
     >
       <i class="fa-solid fa-rotate me-2"></i>
       Refresh

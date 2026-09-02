@@ -32,7 +32,7 @@ function renderInternetWanPage(data) {
 
     <button
       class="btn btn-sm btn-light border"
-      onclick="refreshCurrentPage()"
+      onclick="refreshCurrentPage(this)"
     >
       <i class="fa-solid fa-rotate me-2"></i>
       Refresh
@@ -295,7 +295,10 @@ function buildInternetWanTable(data) {
               } else if (action.dataset.wanAction === 'edit') {
                 openInternetWanEditCircuit(row);
               } else if (action.dataset.wanAction === 'delete') {
-                confirmDeleteInternetWanCircuit(row);
+                confirmDeleteInternetWanCircuit(
+                  row,
+                  action
+                );
               }
             }
           }
@@ -737,12 +740,14 @@ function saveInternetWanCircuitFromModal() {
   }
 
   const saveButton =
-    document.getElementById(
-      'saveRecordButton'
+    setActionWorking(
+      document.getElementById(
+        'saveRecordButton'
+      ),
+      editingRow
+        ? 'Updating...'
+        : 'Creating...'
     );
-
-  saveButton.disabled =
-    true;
 
   scriptRunPromise_(
     'appSaveInternetWanCircuit',
@@ -753,15 +758,17 @@ function saveInternetWanCircuitFromModal() {
   )
     .then(data => {
 
-      recordModal.hide();
+      setActionSuccess(
+        saveButton,
+        'Saved'
+      );
 
-      saveButton.disabled =
-        false;
+      recordModal.hide();
 
       currentPageData =
         data;
 
-      setClientCache(
+      markClientPageWritten(
         'internetWan',
         data
       );
@@ -777,8 +784,10 @@ function saveInternetWanCircuitFromModal() {
     })
     .catch(error => {
 
-      saveButton.disabled =
-        false;
+      setActionError(
+        saveButton,
+        'Save Failed'
+      );
 
       handleFailure(
         error,
@@ -861,7 +870,8 @@ function internetWanPublicIpLines_(
 
 
 function confirmDeleteInternetWanCircuit(
-  row
+  row,
+  button
 ) {
 
   if (
@@ -872,6 +882,12 @@ function confirmDeleteInternetWanCircuit(
     return;
   }
 
+  const actionButton =
+    setActionWorking(
+      button,
+      'Deleting...'
+    );
+
   scriptRunPromise_(
     'appDeleteInternetWanCircuit',
     runner =>
@@ -881,10 +897,15 @@ function confirmDeleteInternetWanCircuit(
   )
     .then(data => {
 
+      setActionSuccess(
+        actionButton,
+        'Deleted'
+      );
+
       currentPageData =
         data;
 
-      setClientCache(
+      markClientPageWritten(
         'internetWan',
         data
       );
@@ -899,6 +920,10 @@ function confirmDeleteInternetWanCircuit(
 
     })
     .catch(error => {
+      setActionError(
+        actionButton,
+        'Delete Failed'
+      );
       handleFailure(
         error,
         'delete Internet WAN circuit'

@@ -351,7 +351,7 @@ function renderTablePageActions(
 
         <button
           class="btn btn-sm btn-gold"
-          onclick="runCentralSync()"
+          onclick="runCentralSync(this)"
         >
 
           <i class="fa-solid fa-cloud-arrow-down me-2"></i>
@@ -406,7 +406,7 @@ function renderTablePageActions(
 
     <button
       class="btn btn-sm btn-light border"
-      onclick="refreshCurrentPage()"
+      onclick="refreshCurrentPage(this)"
     >
 
       <i class="fa-solid fa-rotate me-2"></i>
@@ -722,7 +722,8 @@ function buildTabulator(data) {
               event.stopPropagation();
 
               confirmDeleteRecord(
-                rowData
+                rowData,
+                remove
               );
 
             }
