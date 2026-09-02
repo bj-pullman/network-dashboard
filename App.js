@@ -237,13 +237,13 @@ const APP_PAGE_CONFIG = {
 
       {
         key:
-          'legacy',
+          'software',
 
         title:
-          'Old Software',
+          'Camera Software',
 
         subtitle:
-          'Legacy camera systems and reference information',
+          'Camera software systems and reference information',
 
         type:
           'table',

@@ -200,7 +200,7 @@ function getNetworkDashboardSchema_() {
           ]
         },
         {
-          key: 'legacy',
+          key: 'software',
           row: 19,
           column: 1,
           headers: [
@@ -605,7 +605,10 @@ function getNetworkDashboardSheetNames_() {
 }
 
 
-function setupNetworkDashboard() {
+function setupNetworkDashboard(options) {
+
+  options =
+    options || {};
 
   const result =
     createSetupResult_();
@@ -649,7 +652,9 @@ function setupNetworkDashboard() {
 
 
   result.validation =
-    validateNetworkDashboard();
+    validateNetworkDashboard({
+      silent: true
+    });
 
   result.healthy =
     result.validation.healthy;
@@ -658,27 +663,16 @@ function setupNetworkDashboard() {
     getSetupNextSteps_();
 
 
-  try {
-    SpreadsheetApp
-      .getActive()
-      .toast(
-        'Network Dashboard setup complete.',
-        'Network Dashboard',
-        8
-      );
-  } catch (error) {}
-
-
-  try {
-    SpreadsheetApp
-      .getUi()
-      .alert(
-        formatSetupSummary_(result)
-      );
-  } catch (error) {}
+  if (!options.silent) {
+    showNetworkDashboardToast_(
+      buildSetupToastMessage_(result),
+      8
+    );
+  }
 
 
   console.log(
+    'Network Dashboard setup result: ' +
     JSON.stringify(
       result,
       null,
@@ -691,7 +685,10 @@ function setupNetworkDashboard() {
 }
 
 
-function validateNetworkDashboard() {
+function validateNetworkDashboard(options) {
+
+  options =
+    options || {};
 
   const result = {
     healthy: true,
@@ -736,6 +733,23 @@ function validateNetworkDashboard() {
 
   result.healthy =
     result.errors.length === 0;
+
+  if (!options.silent) {
+    showNetworkDashboardToast_(
+      buildValidationToastMessage_(result),
+      8
+    );
+  }
+
+
+  console.log(
+    'Network Dashboard validation result: ' +
+    JSON.stringify(
+      result,
+      null,
+      2
+    )
+  );
 
 
   return result;
@@ -872,6 +886,13 @@ function setupSchemaSheet_(
       definition.frozenRows
     );
   }
+
+
+  removeObsoleteManagedProtections_(
+    sheet,
+    sheetName,
+    definition
+  );
 
 
   formatManagedHeaderRanges_(
@@ -1280,6 +1301,85 @@ function protectManagedHeaderRanges_(
           );
 
       }
+
+    });
+}
+
+
+function removeObsoleteManagedProtections_(
+  sheet,
+  sheetName,
+  definition
+) {
+
+  const expected = {};
+
+  getManagedHeaderRangeDefinitions_(
+    definition
+  )
+    .forEach(item => {
+
+      const range =
+        sheet.getRange(
+          item.row,
+          item.column,
+          item.rows || 1,
+          item.columns
+        );
+
+      expected[
+        getManagedProtectionDescription_(
+          sheetName,
+          item.key
+        )
+      ] =
+        range.getA1Notation();
+
+    });
+
+
+  const prefix =
+    getManagedProtectionDescription_(
+      sheetName,
+      ''
+    );
+
+
+  sheet
+    .getProtections(
+      SpreadsheetApp.ProtectionType.RANGE
+    )
+    .forEach(protection => {
+
+      const description =
+        protection.getDescription();
+
+      if (
+        !description ||
+        description.indexOf(prefix) !== 0
+      ) {
+        return;
+      }
+
+
+      const expectedRange =
+        expected[description];
+
+      const actualRange =
+        protection
+          .getRange()
+          .getA1Notation();
+
+      if (
+        expectedRange === actualRange
+      ) {
+        return;
+      }
+
+
+      try {
+        protection.remove();
+      } catch (error) {}
 
     });
 }
@@ -1849,6 +1949,73 @@ function formatValidationSummary_(result) {
       ? result.warnings.join('\n')
       : 'None'
   ].join('\n');
+}
+
+
+function buildSetupToastMessage_(result) {
+
+  const validation =
+    result.validation || {};
+
+  const sheetCount =
+    validation.sheets
+      ? validation.sheets.length
+      : getNetworkDashboardSheetNames_().length;
+
+  return [
+    'Setup complete',
+    sheetCount + ' sheets validated',
+    'Schema ' + NETWORK_DASHBOARD_SCHEMA_VERSION,
+    result.healthy ? 'Healthy' : 'Needs attention'
+  ].join(' - ');
+}
+
+
+function buildValidationToastMessage_(result) {
+
+  if (result.errors.length) {
+    return (
+      'Validation complete - ' +
+      result.errors.length +
+      ' error' +
+      (result.errors.length === 1 ? '' : 's') +
+      ' found'
+    );
+  }
+
+
+  if (result.warnings.length) {
+    return (
+      'Validation complete - ' +
+      result.warnings.length +
+      ' warning' +
+      (result.warnings.length === 1 ? '' : 's') +
+      ' found'
+    );
+  }
+
+
+  return (
+    'Validation complete - Installation healthy - Schema ' +
+    NETWORK_DASHBOARD_SCHEMA_VERSION
+  );
+}
+
+
+function showNetworkDashboardToast_(
+  message,
+  timeoutSeconds
+) {
+
+  try {
+    SpreadsheetApp
+      .getActiveSpreadsheet()
+      .toast(
+        message,
+        'Network Dashboard',
+        timeoutSeconds || 5
+      );
+  } catch (error) {}
 }
 
 

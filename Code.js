@@ -103,16 +103,7 @@ function onOpen() {
 
 function validateNetworkDashboardFromMenu() {
 
-  const result =
-    validateNetworkDashboard();
-
-  SpreadsheetApp
-    .getUi()
-    .alert(
-      formatValidationSummary_(
-        result
-      )
-    );
+  return validateNetworkDashboard();
 }
 
 
