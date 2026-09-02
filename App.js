@@ -155,7 +155,7 @@ const APP_PAGE_CONFIG = {
       'Security Cameras',
 
     type:
-      'structured',
+      'table',
 
     icon:
       'fa-video',
@@ -163,110 +163,15 @@ const APP_PAGE_CONFIG = {
     group:
       'Physical Systems',
 
-    sections: [
-
-      {
-        key:
-          'primary',
-
-        title:
-          'Primary Sites',
-
-        subtitle:
-          'Primary camera infrastructure',
-
-        type:
-          'table',
-
-        headerRow:
-          1,
-
-        startColumn:
-          1,
-
-        endColumn:
-          6,
-
-        endRow:
-          12,
-
-        defaultColumns: [
-          'Site',
-          'IP',
-          'User',
-          'Password',
-          'Server Location',
-          'Notes'
-        ]
-      },
-
-      {
-        key:
-          'secondary',
-
-        title:
-          'Secondary Sites',
-
-        subtitle:
-          'Secondary camera infrastructure',
-
-        type:
-          'table',
-
-        headerRow:
-          13,
-
-        startColumn:
-          1,
-
-        endColumn:
-          6,
-
-        endRow:
-          18,
-
-        defaultColumns: [
-          'Site',
-          'IP',
-          'User',
-          'Password',
-          'Server Location',
-          'Notes'
-        ]
-      },
-
-      {
-        key:
-          'software',
-
-        title:
-          'Camera Software',
-
-        subtitle:
-          'Camera software systems and reference information',
-
-        type:
-          'table',
-
-        headerRow:
-          19,
-
-        startColumn:
-          1,
-
-        endColumn:
-          6,
-
-        defaultColumns: [
-          'Site',
-          'IP',
-          'Type',
-          'User',
-          'Server Location',
-          'Notes'
-        ]
-      }
-
+    defaultColumns: [
+      'Location',
+      'Asset / System',
+      'Category',
+      'Type',
+      'IP Address',
+      'Username',
+      'Server Location',
+      'Notes'
     ]
 
   },
@@ -358,26 +263,6 @@ const APP_PAGE_CONFIG = {
     ]
   },
 
-  replacementSwitches: {
-    key: 'replacementSwitches',
-    label: 'Replacement Switches',
-    sheet: 'Replacement Switches',
-    type: 'table',
-    icon: 'fa-repeat',
-    group: 'Operations',
-
-    defaultColumns: [
-      'Status',
-      'Device Label',
-      'Model',
-      'IP Address',
-      'Replacement Priority',
-      'Target Replacement',
-      'Campus',
-      'Notes'
-    ]
-  },
-
   settings: {
     key: 'settings',
     label: 'Settings',
@@ -401,6 +286,173 @@ const APP_PAGE_CONFIG = {
 };
 
 
+const APP_MODULE_CACHE_KEY =
+  'network_dashboard_modules';
+
+
+const APP_MODULE_REGISTRY = {
+
+  dashboard: {
+    id: 'dashboard',
+    name: 'Dashboard',
+    description: 'Infrastructure summary and health indicators.',
+    classification: 'core',
+    enabledByDefault: true,
+    pageKey: 'dashboard',
+    requiredSheets: [
+      'Dashboard'
+    ],
+    permissionKey: 'dashboard'
+  },
+
+  switches: {
+    id: 'switches',
+    name: 'Switches',
+    description: 'Switch inventory, status and network attributes.',
+    classification: 'core',
+    enabledByDefault: true,
+    pageKey: 'switches',
+    requiredSheets: [
+      'Switches'
+    ],
+    permissionKey: 'switches'
+  },
+
+  accessPoints: {
+    id: 'accessPoints',
+    name: 'Access Points',
+    description: 'Wireless access point inventory and status.',
+    classification: 'core',
+    enabledByDefault: true,
+    pageKey: 'accessPoints',
+    requiredSheets: [
+      'Access Points'
+    ],
+    permissionKey: 'accessPoints'
+  },
+
+  servers: {
+    id: 'servers',
+    name: 'Servers',
+    description: 'Active and offline server inventory.',
+    classification: 'core',
+    enabledByDefault: true,
+    pageKey: 'servers',
+    requiredSheets: [
+      'Servers',
+      'Offline Servers'
+    ],
+    permissionKey: 'servers'
+  },
+
+  routes: {
+    id: 'routes',
+    name: 'IP Route Tables',
+    description: 'Network route and VLAN reference data.',
+    classification: 'core',
+    enabledByDefault: true,
+    pageKey: 'routes',
+    requiredSheets: [
+      'IP Route Tables'
+    ],
+    permissionKey: 'routes'
+  },
+
+  securityCameras: {
+    id: 'securityCameras',
+    name: 'Security Cameras',
+    description: 'Camera systems and related access information by location.',
+    classification: 'core',
+    enabledByDefault: true,
+    pageKey: 'securityCameras',
+    requiredSheets: [
+      'Security Cameras'
+    ],
+    permissionKey: 'securityCameras'
+  },
+
+  workflow: {
+    id: 'workflow',
+    name: 'Department Workflow',
+    description: 'Support ownership, tiers, priorities and workflow rules.',
+    classification: 'administration',
+    enabledByDefault: true,
+    pageKey: 'workflow',
+    requiredSheets: [
+      'Department Workflow'
+    ],
+    permissionKey: 'workflow'
+  },
+
+  users: {
+    id: 'users',
+    name: 'Users & Permissions',
+    description: 'Administrative access and page-level permissions.',
+    classification: 'administration',
+    enabledByDefault: true,
+    pageKey: 'users',
+    requiredSheets: [
+      APP_USERS_SHEET
+    ],
+    permissionKey: 'users'
+  },
+
+  settings: {
+    id: 'settings',
+    name: 'Settings',
+    description: 'Instance configuration, modules and integrations.',
+    classification: 'administration',
+    enabledByDefault: true,
+    pageKey: 'settings',
+    requiredSheets: [
+      'App Settings',
+      'App Integrations'
+    ],
+    permissionKey: 'settings'
+  },
+
+  busCameras: {
+    id: 'busCameras',
+    name: 'Bus Cameras',
+    description: 'Track and manage camera systems installed on buses.',
+    classification: 'optional',
+    enabledByDefault: false,
+    pageKey: 'busCameras',
+    requiredSheets: [
+      'Bus Cameras'
+    ],
+    permissionKey: 'busCameras'
+  },
+
+  intercom: {
+    id: 'intercom',
+    name: 'Intercom & Bell System',
+    description: 'Track intercom, bell and related network infrastructure.',
+    classification: 'optional',
+    enabledByDefault: false,
+    pageKey: 'intercom',
+    requiredSheets: [
+      'Intercom Bell System'
+    ],
+    permissionKey: 'intercom'
+  },
+
+  backups: {
+    id: 'backups',
+    name: 'Backup Schedule',
+    description: 'Track infrastructure backup schedules and jobs.',
+    classification: 'optional',
+    enabledByDefault: false,
+    pageKey: 'backups',
+    requiredSheets: [
+      'Backup Schedule'
+    ],
+    permissionKey: 'backups'
+  }
+
+};
+
+
 /*******************************************************
  * HTML
  *******************************************************/
@@ -409,6 +461,388 @@ function include(filename) {
   return HtmlService
     .createHtmlOutputFromFile(filename)
     .getContent();
+}
+
+
+/*******************************************************
+ * MODULES
+ *******************************************************/
+
+function getModuleSettingKey_(
+  moduleId
+) {
+
+  return 'modules.' +
+    moduleId +
+    '.enabled';
+}
+
+
+function normalizeModuleDefinition_(
+  module
+) {
+
+  const normalized =
+    Object.assign(
+      {},
+      module
+    );
+
+  const sheets =
+    normalized.requiredSheets || [];
+
+  normalized.resourceId =
+    normalized.resourceId ||
+    normalized.permissionKey ||
+    normalized.pageKey ||
+    normalized.id;
+
+  normalized.navigationTarget =
+    normalized.navigationTarget ||
+    normalized.pageKey ||
+    '';
+
+  normalized.setupSheets =
+    normalized.setupSheets ||
+    sheets;
+
+  normalized.schemaSheets =
+    normalized.schemaSheets ||
+    sheets;
+
+  return normalized;
+}
+
+
+function getModuleDefinitions_() {
+
+  return Object.keys(APP_MODULE_REGISTRY)
+    .map(key =>
+      normalizeModuleDefinition_(
+        APP_MODULE_REGISTRY[key]
+      )
+    );
+}
+
+
+function getModuleSettingDefinitions_() {
+
+  return getModuleDefinitions_()
+    .filter(module =>
+      module.classification === 'optional'
+    )
+    .map(module => ({
+      key:
+        getModuleSettingKey_(
+          module.id
+        ),
+      label:
+        module.name,
+      category:
+        'Modules',
+      type:
+        'boolean',
+      defaultValue:
+        module.enabledByDefault
+          ? 'true'
+          : 'false',
+      editable:
+        true,
+      description:
+        module.description
+    }));
+}
+
+
+function normalizeModuleEnabledValue_(
+  value,
+  defaultEnabled
+) {
+
+  if (
+    value === undefined ||
+    value === null ||
+    String(value).trim() === ''
+  ) {
+    return !!defaultEnabled;
+  }
+
+
+  const normalized =
+    String(value)
+      .trim()
+      .toLowerCase();
+
+  return (
+    normalized === 'true' ||
+    normalized === 'yes' ||
+    normalized === '1'
+  );
+}
+
+
+function getModuleStateMap_() {
+
+  const cache =
+    CacheService.getScriptCache();
+
+  const cached =
+    cache.get(
+      APP_MODULE_CACHE_KEY
+    );
+
+
+  if (cached) {
+    try {
+      return JSON.parse(cached);
+    } catch (error) {}
+  }
+
+
+  const settings =
+    AppConfig.getAll();
+
+  const states = {};
+
+
+  getModuleDefinitions_()
+    .forEach(module => {
+
+      const optional =
+        module.classification === 'optional';
+
+      const enabled =
+        optional
+          ? normalizeModuleEnabledValue_(
+              settings[
+                getModuleSettingKey_(
+                  module.id
+                )
+              ],
+              module.enabledByDefault
+            )
+          : true;
+
+
+      states[module.id] = {
+        id: module.id,
+        enabled: enabled,
+        optional: optional,
+        classification:
+          module.classification
+      };
+
+    });
+
+
+  cacheJson_(
+    APP_MODULE_CACHE_KEY,
+    states,
+    300
+  );
+
+
+  return states;
+}
+
+
+function invalidateModuleCache_() {
+
+  try {
+    CacheService
+      .getScriptCache()
+      .remove(
+        APP_MODULE_CACHE_KEY
+      );
+  } catch (error) {}
+}
+
+
+function getModuleByPageKey_(
+  pageKey
+) {
+
+  return getModuleDefinitions_()
+    .find(module =>
+      module.pageKey === pageKey
+    ) || null;
+}
+
+
+function isModuleEnabled_(
+  moduleId
+) {
+
+  const states =
+    getModuleStateMap_();
+
+  return !!(
+    states[moduleId] &&
+    states[moduleId].enabled
+  );
+}
+
+
+function isPageEnabled_(
+  pageKey
+) {
+
+  const module =
+    getModuleByPageKey_(
+      pageKey
+    );
+
+
+  if (!module) {
+    return false;
+  }
+
+
+  return isModuleEnabled_(
+    module.id
+  );
+}
+
+
+function getActiveModuleSheetNames_() {
+
+  const names = [];
+
+
+  getModuleDefinitions_()
+    .filter(module =>
+      isModuleEnabled_(
+        module.id
+      )
+    )
+    .forEach(module => {
+
+      (module.setupSheets || module.requiredSheets || [])
+        .forEach(sheetName => {
+
+          if (
+            sheetName &&
+            !names.includes(sheetName)
+          ) {
+            names.push(sheetName);
+          }
+
+        });
+
+    });
+
+
+  return names;
+}
+
+
+function getActiveNetworkDashboardSchema_() {
+
+  const schema =
+    getNetworkDashboardSchema_();
+
+  const active = {};
+
+
+  getActiveModuleSheetNames_()
+    .forEach(sheetName => {
+
+      if (schema[sheetName]) {
+        active[sheetName] =
+          schema[sheetName];
+      }
+
+    });
+
+
+  return active;
+}
+
+
+function getModuleStatusList_(
+  options
+) {
+
+  options =
+    options || {};
+
+  const states =
+    getModuleStateMap_();
+
+
+  return getModuleDefinitions_()
+    .filter(module =>
+      options.includeCore ||
+      module.classification === 'optional'
+    )
+    .map(module => {
+
+      const state =
+        states[module.id] || {};
+
+      return {
+        id: module.id,
+        name: module.name,
+        description: module.description,
+        classification:
+          module.classification,
+        optional:
+          module.classification === 'optional',
+        enabled:
+          !!state.enabled,
+        enabledByDefault:
+          !!module.enabledByDefault,
+        pageKey:
+          module.pageKey || '',
+        navigationTarget:
+          module.pageKey || '',
+        permissionKey:
+          module.permissionKey || module.pageKey || module.id,
+        resourceId:
+          module.resourceId,
+        requiredSheets:
+          module.requiredSheets || [],
+        setupSheets:
+          module.setupSheets || module.requiredSheets || [],
+        schemaSheets:
+          module.schemaSheets || module.requiredSheets || [],
+        settingKey:
+          module.classification === 'optional'
+            ? getModuleSettingKey_(
+                module.id
+              )
+            : ''
+      };
+
+    });
+}
+
+
+function requirePageModuleEnabled_(
+  pageKey
+) {
+
+  if (
+    isPageEnabled_(
+      pageKey
+    )
+  ) {
+    return true;
+  }
+
+
+  const module =
+    getModuleByPageKey_(
+      pageKey
+    );
+
+  throw new Error(
+    module &&
+    module.classification === 'optional'
+      ? module.name +
+        ' is disabled for this Network Dashboard.'
+      : 'This Network Dashboard page is not enabled.'
+  );
 }
 
 
@@ -642,18 +1076,14 @@ function getUserAccess_(email) {
     ensureAppUsersSheet_();
 
 
-  const headerMap =
-    getAppUsersHeaderMap_(
+  const indexes =
+    getAppUsersHeaderIndexes_(
       sheet
     );
 
 
   const emailIndex =
-    getHeaderIndex_(
-      headerMap,
-      'Email',
-      0
-    );
+    indexes.email;
 
 
   if (sheet.getLastRow() < 2) {
@@ -700,28 +1130,18 @@ function getUserAccess_(email) {
   }
 
 
+  const activeValue =
+    match[indexes.active];
+
+
   const activeText =
-    String(
-      match[
-        getHeaderIndex_(
-          headerMap,
-          'Active',
-          2
-        )
-      ] || ''
-    )
+    String(activeValue || '')
       .trim()
       .toLowerCase();
 
 
   const active =
-    match[
-      getHeaderIndex_(
-        headerMap,
-        'Active',
-        2
-      )
-    ] === true ||
+    activeValue === true ||
     activeText === 'true' ||
     activeText === 'yes' ||
     activeText === 'active';
@@ -741,25 +1161,15 @@ function getUserAccess_(email) {
 
   const defaultPermission =
     normalizePermission_(
-      match[
-        getHeaderIndex_(
-          headerMap,
-          'Default Permission',
-          4
-        )
-      ] || 'view'
+      match[indexes.defaultPermission] ||
+      'view'
     );
 
 
   const role =
     normalizeRole_(
-      match[
-        getHeaderIndex_(
-          headerMap,
-          'Role',
-          3
-        )
-      ] || 'user'
+      match[indexes.role] ||
+      'user'
     );
 
 
@@ -769,11 +1179,7 @@ function getUserAccess_(email) {
   try {
 
     const pagePermissionsIndex =
-      getHeaderIndex_(
-        headerMap,
-        'Page Permissions',
-        5
-      );
+      indexes.pagePermissions;
 
 
     overrides =
@@ -811,13 +1217,7 @@ function getUserAccess_(email) {
 
       name:
         String(
-          match[
-            getHeaderIndex_(
-              headerMap,
-              'Name',
-              1
-            )
-          ] ||
+          match[indexes.name] ||
           email.split('@')[0]
         ),
 
@@ -882,13 +1282,7 @@ function getUserAccess_(email) {
 
     name:
       String(
-        match[
-          getHeaderIndex_(
-            headerMap,
-            'Name',
-            1
-          )
-        ] ||
+        match[indexes.name] ||
         email.split('@')[0]
       ),
 
@@ -1000,6 +1394,107 @@ function getHeaderIndex_(
 }
 
 
+function getRequiredHeaderIndex_(
+  headerMap,
+  header,
+  context,
+  expectedHeaders
+) {
+
+  if (
+    Object.prototype
+      .hasOwnProperty
+      .call(
+        headerMap,
+        header
+      )
+  ) {
+    return headerMap[header];
+  }
+
+  const expected =
+    expectedHeaders &&
+    expectedHeaders.length
+      ? ' Expected headers: ' +
+        expectedHeaders.join(', ') +
+        '.'
+      : '';
+
+  throw new Error(
+    context +
+    ' is missing required header "' +
+    header +
+    '".' +
+    expected
+  );
+}
+
+
+function getAppUsersHeaderIndexes_(sheet) {
+
+  const headerMap =
+    getAppUsersHeaderMap_(
+      sheet
+    );
+
+  const expectedHeaders =
+    getAppUserHeaders_();
+
+  return {
+    headerMap: headerMap,
+    email:
+      getRequiredHeaderIndex_(
+        headerMap,
+        'Email',
+        APP_USERS_SHEET,
+        expectedHeaders
+      ),
+    name:
+      getRequiredHeaderIndex_(
+        headerMap,
+        'Name',
+        APP_USERS_SHEET,
+        expectedHeaders
+      ),
+    active:
+      getRequiredHeaderIndex_(
+        headerMap,
+        'Active',
+        APP_USERS_SHEET,
+        expectedHeaders
+      ),
+    role:
+      getRequiredHeaderIndex_(
+        headerMap,
+        'Role',
+        APP_USERS_SHEET,
+        expectedHeaders
+      ),
+    defaultPermission:
+      getRequiredHeaderIndex_(
+        headerMap,
+        'Default Permission',
+        APP_USERS_SHEET,
+        expectedHeaders
+      ),
+    pagePermissions:
+      getRequiredHeaderIndex_(
+        headerMap,
+        'Page Permissions',
+        APP_USERS_SHEET,
+        expectedHeaders
+      ),
+    notes:
+      getRequiredHeaderIndex_(
+        headerMap,
+        'Notes',
+        APP_USERS_SHEET,
+        expectedHeaders
+      )
+  };
+}
+
+
 function normalizePermission_(permission) {
 
   const value = String(permission || '')
@@ -1015,6 +1510,15 @@ function normalizePermission_(permission) {
 
 function getPagePermission_(pageKey) {
 
+  if (
+    !isPageEnabled_(
+      pageKey
+    )
+  ) {
+    return 'none';
+  }
+
+
   const access =
     getUserAccess_(getCurrentUserEmail_());
 
@@ -1027,6 +1531,11 @@ function getPagePermission_(pageKey) {
 
 
 function requirePagePermission_(pageKey, level) {
+
+  requirePageModuleEnabled_(
+    pageKey
+  );
+
 
   const access =
     getUserAccess_(getCurrentUserEmail_());
@@ -1092,10 +1601,36 @@ function requireAdmin_() {
  * BOOTSTRAP
  *******************************************************/
 
-function getAppBootstrap() {
+function withPerformanceTiming_(
+  label,
+  callback
+) {
 
-  const access =
-    getUserAccess_(getCurrentUserEmail_());
+  const start =
+    Date.now();
+
+  try {
+    return callback();
+  } finally {
+    console.log(
+      '[Network Dashboard timing] ' +
+      label +
+      ': ' +
+      (Date.now() - start) +
+      ' ms'
+    );
+  }
+}
+
+
+function buildAppBootstrap_(
+  access,
+  config
+) {
+
+  const clientConfig =
+    config ||
+    AppConfig.getClientConfig_();
 
 
   if (!access.authorized) {
@@ -1111,6 +1646,15 @@ function getAppBootstrap() {
 
       const config =
         APP_PAGE_CONFIG[key];
+
+
+      if (
+        !isPageEnabled_(
+          key
+        )
+      ) {
+        return;
+      }
 
 
       if (
@@ -1157,10 +1701,97 @@ function getAppBootstrap() {
 
     pages: pages,
 
+    modules:
+      getModuleStatusList_({
+        includeCore: true
+      }),
+
     config:
-      AppConfig.getClientConfig_()
+      clientConfig
 
   };
+}
+
+
+function getAppBootstrap() {
+
+  return withPerformanceTiming_(
+    'getAppBootstrap',
+    function() {
+
+      const access =
+        getUserAccess_(
+          getCurrentUserEmail_()
+        );
+
+      return buildAppBootstrap_(
+        access,
+        AppConfig.getClientConfig_()
+      );
+
+    }
+  );
+}
+
+
+function getClientTemplateNameForPageType_(
+  type
+) {
+
+  const templates = {
+    table: 'TablePage',
+    structured: 'StructuredPage',
+    workflow: 'DepartmentWorkflow',
+    users: 'UserManagement',
+    settings: 'Settings'
+  };
+
+  return templates[type] || '';
+}
+
+
+function appGetPageClientTemplate(
+  pageKey
+) {
+
+  return withPerformanceTiming_(
+    'appGetPageClientTemplate:' + pageKey,
+    function() {
+
+      const config =
+        APP_PAGE_CONFIG[pageKey];
+
+
+      if (!config) {
+        throw new Error(
+          'Unknown application page.'
+        );
+      }
+
+
+      requirePagePermission_(
+        pageKey,
+        'view'
+      );
+
+
+      const templateName =
+        getClientTemplateNameForPageType_(
+          config.type
+        );
+
+
+      if (!templateName) {
+        return '';
+      }
+
+
+      return include(
+        templateName
+      );
+
+    }
+  );
 }
 
 
@@ -1170,58 +1801,64 @@ function getAppBootstrap() {
 
 function appGetPageData(pageKey, forceRefresh) {
 
-  const config =
-    APP_PAGE_CONFIG[pageKey];
+  return withPerformanceTiming_(
+    'appGetPageData:' + pageKey,
+    function() {
+
+      const config =
+        APP_PAGE_CONFIG[pageKey];
 
 
-  if (!config) {
-    throw new Error(
-      'Unknown application page.'
-    );
-  }
+      if (!config) {
+        throw new Error(
+          'Unknown application page.'
+        );
+      }
 
 
-  requirePagePermission_(
-    pageKey,
-    'view'
-  );
+      requirePagePermission_(
+        pageKey,
+        'view'
+      );
 
 
-  if (config.type === 'dashboard') {
-    return getAppDashboardData_(
-      forceRefresh
-    );
-  }
+      if (config.type === 'dashboard') {
+        return getAppDashboardData_(
+          forceRefresh
+        );
+      }
 
 
-  if (config.type === 'workflow') {
-    return getDepartmentWorkflowData_(
-      forceRefresh
-    );
-  }
+      if (config.type === 'workflow') {
+        return getDepartmentWorkflowData_(
+          forceRefresh
+        );
+      }
 
 
-  if (config.type === 'users') {
-    return getAppUsers_();
-  }
+      if (config.type === 'users') {
+        return getAppUsers_();
+      }
 
 
-  if (config.type === 'settings') {
-    return getSettingsPageData_();
-  }
+      if (config.type === 'settings') {
+        return getSettingsPageData_();
+      }
 
 
-  if (config.type === 'structured') {
-    return getStructuredPageData_(
-      pageKey,
-      forceRefresh
-    );
-  }
+      if (config.type === 'structured') {
+        return getStructuredPageData_(
+          pageKey,
+          forceRefresh
+        );
+      }
 
+      return getAppTableData_(
+        pageKey,
+        forceRefresh
+      );
 
-  return getAppTableData_(
-    pageKey,
-    forceRefresh
+    }
   );
 }
 
@@ -1274,6 +1911,261 @@ function sanitizeHeaders_(headers) {
 
   return headers.filter(
     header => !isCredentialHeader_(header)
+  );
+}
+
+
+/*******************************************************
+ * SHEET READ HELPERS
+ *******************************************************/
+
+function getNetworkDashboardReadColumnCount_(
+  sheetName,
+  fallback,
+  includeSheetWidth
+) {
+
+  let definition = null;
+
+  try {
+
+    definition =
+      getNetworkDashboardSchema_()[sheetName];
+
+  } catch (error) {
+    definition = null;
+  }
+
+
+  let schemaWidth =
+    0;
+
+
+  if (
+    definition &&
+    definition.headers
+  ) {
+    schemaWidth =
+      definition.headers.length;
+  }
+
+
+  if (
+    definition &&
+    definition.headerRanges
+  ) {
+
+    definition.headerRanges
+      .forEach(range => {
+
+        schemaWidth =
+          Math.max(
+            schemaWidth,
+            Number(range.column || 1) +
+              (range.headers || []).length -
+              1
+          );
+
+      });
+
+  }
+
+
+  if (
+    schemaWidth &&
+    !includeSheetWidth
+  ) {
+    return Math.max(
+      schemaWidth,
+      1
+    );
+  }
+
+
+  return Math.max(
+    schemaWidth,
+    Number(fallback || 0),
+    1
+  );
+}
+
+
+function getStructuredPageReadColumnCount_(
+  config,
+  fallback
+) {
+
+  let columnCount =
+    getNetworkDashboardReadColumnCount_(
+      config.sheet,
+      fallback,
+      true
+    );
+
+
+  (config.sections || [])
+    .forEach(section => {
+
+      if (section.endColumn) {
+
+        columnCount =
+          Math.max(
+            columnCount,
+            Number(section.endColumn)
+          );
+
+        return;
+      }
+
+
+      const startColumn =
+        Number(section.startColumn || 1);
+
+      const defaultColumnCount =
+        (section.defaultColumns || []).length;
+
+
+      if (defaultColumnCount) {
+        columnCount =
+          Math.max(
+            columnCount,
+            startColumn +
+              defaultColumnCount -
+              1
+          );
+      }
+
+    });
+
+
+  return Math.max(
+    columnCount,
+    1
+  );
+}
+
+
+function getStructuredPageMinimumRows_(config) {
+
+  let rowCount =
+    1;
+
+
+  (config.sections || [])
+    .forEach(section => {
+
+      rowCount =
+        Math.max(
+          rowCount,
+          Number(section.headerRow || 0),
+          Number(section.startRow || 0),
+          Number(section.endRow || 0)
+        );
+
+    });
+
+
+  return rowCount;
+}
+
+
+function readAppSheetDisplayValues_(
+  sheet,
+  columnCount,
+  minimumRows
+) {
+
+  if (!sheet) {
+    return [];
+  }
+
+
+  const rows =
+    Math.max(
+      sheet.getLastRow(),
+      Number(minimumRows || 1),
+      1
+    );
+
+  const columns =
+    Math.max(
+      Number(columnCount || sheet.getLastColumn() || 1),
+      1
+    );
+
+
+  return sheet
+    .getRange(
+      1,
+      1,
+      rows,
+      columns
+    )
+    .getDisplayValues();
+}
+
+
+function readNetworkDashboardSheetValues_(
+  ss,
+  sheetName,
+  minimumRows
+) {
+
+  const sheet =
+    ss.getSheetByName(
+      sheetName
+    );
+
+
+  if (!sheet) {
+    return [];
+  }
+
+
+  return readAppSheetDisplayValues_(
+    sheet,
+    getNetworkDashboardReadColumnCount_(
+      sheetName,
+      1,
+      false
+    ),
+    minimumRows
+  );
+}
+
+
+function readConfiguredPageValues_(
+  sheet,
+  config
+) {
+
+  if (
+    config &&
+    config.type === 'structured'
+  ) {
+
+    return readAppSheetDisplayValues_(
+      sheet,
+      getStructuredPageReadColumnCount_(
+        config,
+        sheet.getLastColumn()
+      ),
+      getStructuredPageMinimumRows_(
+        config
+      )
+    );
+
+  }
+
+
+  return readAppSheetDisplayValues_(
+    sheet,
+    getNetworkDashboardReadColumnCount_(
+      config ? config.sheet : sheet.getName(),
+      sheet.getLastColumn(),
+      true
+    ),
+    1
   );
 }
 
@@ -1364,9 +2256,10 @@ function getAppTableData_(
 
 
   const values =
-    sheet
-      .getDataRange()
-      .getDisplayValues();
+    readConfiguredPageValues_(
+      sheet,
+      config
+    );
 
 
   if (!values.length) {
@@ -1844,9 +2737,15 @@ function readServerSourceSheet_(
 
 
   const values =
-    sheet
-      .getDataRange()
-      .getDisplayValues();
+    readAppSheetDisplayValues_(
+      sheet,
+      getNetworkDashboardReadColumnCount_(
+        sheet.getName(),
+        sheet.getLastColumn(),
+        true
+      ),
+      1
+    );
 
 
   if (!values.length) {
@@ -2127,7 +3026,10 @@ function getStructuredPageData_(
    * Spreadsheet service calls for every section.
    */
   const values =
-    sheet.getDataRange().getDisplayValues();
+    readConfiguredPageValues_(
+      sheet,
+      config
+    );
 
 
   const sections =
@@ -2735,7 +3637,10 @@ function appGetCredentials(
 
 
   const values =
-    sheet.getDataRange().getDisplayValues();
+    readConfiguredPageValues_(
+      sheet,
+      config
+    );
 
 
   /*
@@ -3367,6 +4272,10 @@ function getAppDashboardData_(
   forceRefresh
 ) {
 
+  return withPerformanceTiming_(
+    'getAppDashboardData',
+    function() {
+
   const cache =
     CacheService.getScriptCache();
 
@@ -3395,72 +4304,156 @@ function getAppDashboardData_(
     SpreadsheetApp.getActiveSpreadsheet();
 
 
-  /*
-   * Pull counts using lightweight reads.
-   */
+  const switchValues =
+    readNetworkDashboardSheetValues_(
+      ss,
+      'Switches',
+      1
+    );
+
+
+  const apValues =
+    readNetworkDashboardSheetValues_(
+      ss,
+      'Access Points',
+      1
+    );
+
+
+  const serverValues =
+    readNetworkDashboardSheetValues_(
+      ss,
+      'Servers',
+      1
+    );
+
+
+  const offlineServerValues =
+    readNetworkDashboardSheetValues_(
+      ss,
+      'Offline Servers',
+      1
+    );
+
+
+  const securityCameraValues =
+    readNetworkDashboardSheetValues_(
+      ss,
+      'Security Cameras',
+      1
+    );
+
+  const backupsEnabled =
+    isModuleEnabled_(
+      'backups'
+    );
+
+
   const metrics = {
 
     switches:
-      countAppRowsFromSheet_(
-        ss.getSheetByName('Switches')
+      countAppRowsFromData_(
+        switchValues
       ),
 
     accessPoints:
-      countAppRowsFromSheet_(
-        ss.getSheetByName('Access Points')
+      countAppRowsFromData_(
+        apValues
       ),
 
     servers:
-      countAppRowsFromSheet_(
-        ss.getSheetByName('Servers')
+      countAppRowsFromData_(
+        serverValues
       ),
 
     offlineServers:
-      countAppRowsFromSheet_(
-        ss.getSheetByName('Offline Servers')
+      countAppRowsFromData_(
+        offlineServerValues
+      ),
+
+    securityCameras:
+      countAppRowsFromData_(
+        securityCameraValues
       ),
 
     backups:
-      countAppRowsFromSheet_(
-        ss.getSheetByName('Backup Schedule')
-      )
+      0
 
   };
 
 
-  const switchSheet =
-    ss.getSheetByName('Switches');
+  if (backupsEnabled) {
+
+    const backupValues =
+      readNetworkDashboardSheetValues_(
+        ss,
+        'Backup Schedule',
+        1
+      );
+
+    metrics.backups =
+      countAppRowsFromData_(
+        backupValues
+      );
+
+  }
 
 
-  const apSheet =
-    ss.getSheetByName('Access Points');
+  const metricCards = [
+    {
+      key: 'switches',
+      label: 'Switches',
+      value: metrics.switches,
+      icon: 'fa-network-wired'
+    },
+    {
+      key: 'accessPoints',
+      label: 'Access Points',
+      value: metrics.accessPoints,
+      icon: 'fa-wifi'
+    },
+    {
+      key: 'servers',
+      label: 'Servers',
+      value: metrics.servers,
+      icon: 'fa-server'
+    },
+    {
+      key: 'offlineServers',
+      label: 'Offline Servers',
+      value: metrics.offlineServers,
+      icon: 'fa-triangle-exclamation'
+    },
+    {
+      key: 'securityCameras',
+      label: 'Security Cameras',
+      value: metrics.securityCameras,
+      icon: 'fa-video'
+    }
+  ];
 
 
-  const switchValues =
-    switchSheet
-      ? switchSheet
-          .getDataRange()
-          .getDisplayValues()
-      : [];
+  if (backupsEnabled) {
 
+    metricCards.push({
+      key: 'backups',
+      label: 'Backup Jobs',
+      value: metrics.backups,
+      icon: 'fa-database'
+    });
 
-  const apValues =
-    apSheet
-      ? apSheet
-          .getDataRange()
-          .getDisplayValues()
-      : [];
+  }
 
 
   const workflow =
-    getDepartmentWorkflowData_(
-      false
-    );
+    getDepartmentWorkflowSummary_();
 
 
   const result = {
 
     metrics: metrics,
+
+    metricCards: metricCards,
 
     switchStatus:
       countColumnValuesFromData_(
@@ -3482,19 +4475,19 @@ function getAppDashboardData_(
 
     workflow: {
       groups:
-        workflow.groups.length,
+        workflow.groups,
 
       tiers:
-        workflow.tiers.length,
+        workflow.tiers,
 
       ticketSteps:
-        workflow.ticketSteps.length,
+        workflow.ticketSteps,
 
       priorities:
-        workflow.priorities.length,
+        workflow.priorities,
 
       workflows:
-        workflow.workflows.length
+        workflow.workflows
     }
 
   };
@@ -3508,45 +4501,258 @@ function getAppDashboardData_(
 
 
   return result;
+
+    }
+  );
+}
+
+
+function getDepartmentWorkflowSummary_() {
+
+  const summary = {
+    groups: 0,
+    tiers: 0,
+    ticketSteps: 0,
+    priorities: 0,
+    workflows: 0
+  };
+
+
+  const schema =
+    getNetworkDashboardSchema_();
+
+  const definition =
+    schema['Department Workflow'];
+
+  const sheet =
+    SpreadsheetApp
+      .getActiveSpreadsheet()
+      .getSheetByName(
+        'Department Workflow'
+      );
+
+
+  if (
+    !sheet ||
+    !definition ||
+    !definition.headerRanges
+  ) {
+    return summary;
+  }
+
+
+  const values =
+    readAppSheetDisplayValues_(
+      sheet,
+      getNetworkDashboardReadColumnCount_(
+        'Department Workflow',
+        sheet.getLastColumn(),
+        false
+      ),
+      1
+    );
+
+
+  definition.headerRanges
+    .forEach(section => {
+
+      const nextHeaderRow =
+        definition.headerRanges
+          .map(item =>
+            Number(item.row || 0)
+          )
+          .filter(row =>
+            row > Number(section.row || 0)
+          )
+          .sort((left, right) =>
+            left - right
+          )[0] || 0;
+
+      const startIndex =
+        Number(section.row || 1);
+
+      const endIndex =
+        nextHeaderRow
+          ? Math.min(
+              nextHeaderRow - 1,
+              values.length
+            )
+          : values.length;
+
+      let count =
+        0;
+
+      for (
+        let rowIndex = startIndex;
+        rowIndex < endIndex;
+        rowIndex++
+      ) {
+
+        const sourceRow =
+          values[rowIndex] || [];
+
+        const startColumn =
+          Math.max(
+            0,
+            Number(section.column || 1) - 1
+          );
+
+        const row =
+          sourceRow.slice(
+            startColumn,
+            startColumn +
+              section.headers.length
+          );
+
+        if (
+          rowHasMeaningfulData_(
+            row,
+            section.headers
+          )
+        ) {
+          count++;
+        }
+
+      }
+
+      summary[section.key] =
+        count;
+
+    });
+
+
+  return summary;
 }
 
 
 function countAppRowsFromSheet_(sheet) {
 
-  if (
-    !sheet ||
-    sheet.getLastRow() < 2
-  ) {
+  if (!sheet) {
     return 0;
   }
 
 
   const values =
-      sheet
-        .getRange(
-          2,
-          emailIndex + 1,
-          sheet.getLastRow() - 1,
-          1
-        )
-      .getDisplayValues();
+    readAppSheetDisplayValues_(
+      sheet,
+      getNetworkDashboardReadColumnCount_(
+        sheet.getName(),
+        sheet.getLastColumn(),
+        false
+      ),
+      1
+    );
 
 
-  return values.filter(row => {
+  return countAppRowsFromData_(
+    values
+  );
+}
 
-    const value =
+
+function countAppRowsFromData_(values) {
+
+  if (
+    !values ||
+    values.length < 2
+  ) {
+    return 0;
+  }
+
+
+  const headers =
+    values[0].map(value =>
+      String(value || '').trim()
+    );
+
+
+  let count =
+    0;
+
+
+  for (
+    let rowIndex = 1;
+    rowIndex < values.length;
+    rowIndex++
+  ) {
+
+    const row =
+      values[rowIndex] || [];
+
+
+    if (
+      !rowHasMeaningfulData_(
+        row,
+        headers
+      )
+    ) {
+      continue;
+    }
+
+
+    const firstValue =
       String(row[0] || '')
         .trim();
 
 
-    return (
-      value &&
-      !value
-        .toLowerCase()
-        .includes('color legend')
-    );
+    const normalizedFirst =
+      firstValue.toLowerCase();
 
-  }).length;
+
+    if (
+      !firstValue ||
+      normalizedFirst.includes(
+        'color legend'
+      ) ||
+      normalizedFirst.startsWith(
+        'count ='
+      )
+    ) {
+      continue;
+    }
+
+
+    count++;
+
+  }
+
+
+  return count;
+}
+
+
+function rowShouldBeCountedForSummary_(
+  row,
+  headers
+) {
+
+  if (
+    !rowHasMeaningfulData_(
+      row,
+      headers
+    )
+  ) {
+    return false;
+  }
+
+
+  const firstValue =
+    String(row[0] || '')
+      .trim();
+
+  const normalizedFirst =
+    firstValue.toLowerCase();
+
+
+  return (
+    !!firstValue &&
+    !normalizedFirst.includes(
+      'color legend'
+    ) &&
+    !normalizedFirst.startsWith(
+      'count ='
+    )
+    );
 }
 
 
@@ -3583,6 +4789,15 @@ function countColumnValuesFromData_(
     rowIndex < data.length;
     rowIndex++
   ) {
+
+    if (
+      !rowShouldBeCountedForSummary_(
+        data[rowIndex] || [],
+        headers
+      )
+    ) {
+      continue;
+    }
 
     const value =
       String(
@@ -3660,9 +4875,15 @@ function getDepartmentWorkflowData_(
 
 
   const data =
-    sheet
-      .getDataRange()
-      .getDisplayValues();
+    readAppSheetDisplayValues_(
+      sheet,
+      getNetworkDashboardReadColumnCount_(
+        'Department Workflow',
+        sheet.getLastColumn(),
+        false
+      ),
+      30
+    );
 
 
   let section = '';
@@ -4308,32 +5529,21 @@ function invalidateAppPage_(
 }
 
 
-function appClearCache() {
-
-  const access =
-    getUserAccess_(
-      getCurrentUserEmail_()
-    );
-
-
-  if (!access.authorized) {
-    throw new Error(
-      'Unauthorized access.'
-    );
-  }
-
+function clearAppDataCaches_() {
 
   const cache =
     CacheService.getScriptCache();
-
 
   cache.remove(
     'app_dashboard'
   );
 
-
   cache.remove(
     'app_department_workflow'
+  );
+
+  cache.remove(
+    APP_MODULE_CACHE_KEY
   );
 
 
@@ -4349,6 +5559,34 @@ function appClearCache() {
       );
 
     });
+
+
+  getNetworkDashboardSheetNames_()
+    .forEach(sheetName => {
+      cache.remove(
+        'tab_data_' +
+        sheetName.replace(/\s+/g, '_')
+      );
+    });
+}
+
+
+function appClearCache() {
+
+  const access =
+    getUserAccess_(
+      getCurrentUserEmail_()
+    );
+
+
+  if (!access.authorized) {
+    throw new Error(
+      'Unauthorized access.'
+    );
+  }
+
+
+  clearAppDataCaches_();
 
 
   return {
@@ -4368,6 +5606,12 @@ function getAppUsers_() {
 
   const sheet =
     ensureAppUsersSheet_();
+
+
+  const indexes =
+    getAppUsersHeaderIndexes_(
+      sheet
+    );
 
 
   if (sheet.getLastRow() < 2) {
@@ -4396,23 +5640,11 @@ function getAppUsers_() {
       .getDisplayValues();
 
 
-  const headerMap =
-    getAppUsersHeaderMap_(
-      sheet
-    );
-
-
   const users =
     values
       .filter(row =>
         String(
-          row[
-            getHeaderIndex_(
-              headerMap,
-              'Email',
-              0
-            )
-          ] || ''
+          row[indexes.email] || ''
         ).trim()
       )
       .map((row, index) => {
@@ -4423,11 +5655,7 @@ function getAppUsers_() {
         try {
 
           const pagePermissionsIndex =
-            getHeaderIndex_(
-              headerMap,
-              'Page Permissions',
-              5
-            );
+            indexes.pagePermissions;
 
 
           permissions =
@@ -4445,55 +5673,27 @@ function getAppUsers_() {
           row: index + 2,
 
           email:
-            row[
-              getHeaderIndex_(
-                headerMap,
-                'Email',
-                0
-              )
-            ],
+            row[indexes.email],
 
           name:
-            row[
-              getHeaderIndex_(
-                headerMap,
-                'Name',
-                1
-              )
-            ],
+            row[indexes.name],
 
           active:
             String(
-              row[
-                getHeaderIndex_(
-                  headerMap,
-                  'Active',
-                  2
-                )
-              ]
+              row[indexes.active]
             )
               .toLowerCase() === 'true',
 
           role:
             normalizeRole_(
-              row[
-                getHeaderIndex_(
-                  headerMap,
-                  'Role',
-                  3
-                )
-              ] || 'user'
+              row[indexes.role] ||
+              'user'
             ),
 
           defaultPermission:
             normalizePermission_(
-              row[
-                getHeaderIndex_(
-                  headerMap,
-                  'Default Permission',
-                  4
-                )
-              ] || 'view'
+              row[indexes.defaultPermission] ||
+              'view'
             ),
 
           permissions:
@@ -4520,13 +5720,49 @@ function getPermissionPageList_() {
 
   return Object.keys(APP_PAGE_CONFIG)
     .filter(key =>
-      !APP_PAGE_CONFIG[key].adminOnly
+      !APP_PAGE_CONFIG[key].adminOnly &&
+      isPageEnabled_(
+        key
+      )
     )
     .map(key => ({
       key: key,
       label:
         APP_PAGE_CONFIG[key].label
     }));
+}
+
+
+function sanitizeAppUserPermissions_(
+  permissions
+) {
+
+  const allowed = {};
+
+  getPermissionPageList_()
+    .forEach(page => {
+      allowed[page.key] = true;
+    });
+
+
+  const sanitized = {};
+
+  Object.keys(permissions || {})
+    .forEach(key => {
+
+      if (!allowed[key]) {
+        return;
+      }
+
+      sanitized[key] =
+        normalizePermission_(
+          permissions[key]
+        );
+
+    });
+
+
+  return sanitized;
 }
 
 
@@ -4564,18 +5800,14 @@ function saveAppUser(user) {
     ensureAppUsersSheet_();
 
 
-  const headerMap =
-    getAppUsersHeaderMap_(
+  const indexes =
+    getAppUsersHeaderIndexes_(
       sheet
     );
 
 
   const emailIndex =
-    getHeaderIndex_(
-      headerMap,
-      'Email',
-      0
-    );
+    indexes.email;
 
 
   let targetRow = null;
@@ -4629,7 +5861,9 @@ function saveAppUser(user) {
       ),
     'Page Permissions':
       JSON.stringify(
-        user.permissions || {}
+        sanitizeAppUserPermissions_(
+          user.permissions || {}
+        )
       ),
     'Notes': String(user.notes || '').trim()
   };
@@ -4785,6 +6019,12 @@ function deleteAppUser(email) {
     ensureAppUsersSheet_();
 
 
+  const indexes =
+    getAppUsersHeaderIndexes_(
+      sheet
+    );
+
+
   if (sheet.getLastRow() < 2) {
 
     return {
@@ -4798,7 +6038,7 @@ function deleteAppUser(email) {
     sheet
       .getRange(
         2,
-        1,
+        indexes.email + 1,
         sheet.getLastRow() - 1,
         1
       )

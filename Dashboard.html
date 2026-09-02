@@ -27,33 +27,8 @@ function renderDashboard(data) {
     </button>
   `;
 
-  const metrics = [
-    {
-      label: 'Switches',
-      value: data.metrics.switches,
-      icon: 'fa-network-wired'
-    },
-    {
-      label: 'Access Points',
-      value: data.metrics.accessPoints,
-      icon: 'fa-wifi'
-    },
-    {
-      label: 'Servers',
-      value: data.metrics.servers,
-      icon: 'fa-server'
-    },
-    {
-      label: 'Offline Servers',
-      value: data.metrics.offlineServers,
-      icon: 'fa-triangle-exclamation'
-    },
-    {
-      label: 'Backup Jobs',
-      value: data.metrics.backups,
-      icon: 'fa-database'
-    }
-  ];
+  const metrics =
+    data.metricCards || [];
 
   document.getElementById('pageContent').innerHTML = `
 

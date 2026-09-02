@@ -42,7 +42,7 @@ function getAppSettingsSheetHeaders_() {
 
 function getAppSettingDefinitions_() {
 
-  return [
+  const definitions = [
     {
       key: 'app.name',
       label: 'Application Name',
@@ -188,6 +188,18 @@ function getAppSettingDefinitions_() {
       description: 'Domain allowed when user-domain restriction is enabled.'
     }
   ];
+
+
+  if (
+    typeof getModuleSettingDefinitions_ === 'function'
+  ) {
+    return definitions.concat(
+      getModuleSettingDefinitions_()
+    );
+  }
+
+
+  return definitions;
 }
 
 
@@ -727,11 +739,11 @@ var AppConfig = (function() {
 
   function seedMissing_() {
 
+    const existing =
+      readSheetValues_();
+
     getAppSettingDefinitions_()
       .forEach(definition => {
-
-        const existing =
-          readSheetValues_();
 
         if (
           Object.prototype
@@ -749,6 +761,9 @@ var AppConfig = (function() {
           definition.defaultValue,
           'setup'
         );
+
+        existing[definition.key] =
+          String(definition.defaultValue || '');
 
       });
 
@@ -846,7 +861,11 @@ var AppConfig = (function() {
 
 function getSettingsPageData_() {
 
-  requireAdmin_();
+  const access =
+    requireAdmin_();
+
+  const config =
+    AppConfig.getClientConfig_();
 
   return {
     settings: {
@@ -859,7 +878,16 @@ function getSettingsPageData_() {
           )
     },
     config:
-      AppConfig.getClientConfig_(),
+      config,
+    modules:
+      getModuleStatusList_({
+        includeCore: false
+      }),
+    bootstrap:
+      buildAppBootstrap_(
+        access,
+        config
+      ),
     integrations:
       getIntegrationStatusList_()
   };
@@ -875,6 +903,16 @@ function saveAppSettings(settings) {
     settings || {},
     access.email
   );
+
+  invalidateModuleCache_();
+
+  if (
+    typeof ensureEnabledOptionalModuleSheets_ === 'function'
+  ) {
+    ensureEnabledOptionalModuleSheets_();
+  }
+
+  clearAppDataCaches_();
 
   return getSettingsPageData_();
 }

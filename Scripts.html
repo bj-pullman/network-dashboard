@@ -67,6 +67,21 @@ const structuredTables =
   {};
 
 
+const PAGE_RENDERER_FUNCTIONS = {
+  dashboard: 'renderDashboard',
+  table: 'renderTablePage',
+  structured: 'renderStructuredPage',
+  workflow: 'renderWorkflowPage',
+  users: 'renderUsersPage',
+  settings: 'renderSettingsPage'
+};
+
+
+const loadedPageRendererTypes = {
+  dashboard: true
+};
+
+
 /*******************************************************
  * STARTUP
  *******************************************************/
@@ -90,6 +105,16 @@ window.addEventListener(
           'configModal'
         )
       );
+
+
+    if (window.INITIAL_APP_BOOTSTRAP) {
+
+      initializeApplication(
+        window.INITIAL_APP_BOOTSTRAP
+      );
+
+      return;
+    }
 
 
     google.script.run
@@ -116,41 +141,72 @@ function initializeApplication(
   data
 ) {
 
+  applyBootstrapShell(
+    data
+  );
+
+
+  navigateTo(
+    'dashboard'
+  );
+}
+
+
+function applyBootstrapShell(
+  data
+) {
+
+  data =
+    data || {};
+
   appBootstrap =
     data;
 
 
   applyBranding(
-    data.config
+    data.config || {}
   );
 
+
+  const user =
+    data.user || {};
 
   document.getElementById(
     'sidebarUserName'
   ).textContent =
-    data.user.name ||
-    data.user.email;
+    user.name ||
+    user.email ||
+    '';
 
 
   document.getElementById(
     'sidebarUserRole'
   ).textContent =
-    data.user.admin
+    user.admin
       ? (
-          data.user.breakglass
+          user.breakglass
             ? 'Break-glass Administrator'
             : 'Administrator'
         )
       : 'Authorized User';
 
 
+  const pages =
+    data.pages || [];
+
+  if (
+    !pages.some(
+      page =>
+        page.key === currentPageKey
+    )
+  ) {
+    currentPageKey =
+      'dashboard';
+  }
+
+
   buildNavigation(
-    data.pages
-  );
-
-
-  navigateTo(
-    'dashboard'
+    pages
   );
 }
 
@@ -367,7 +423,12 @@ function buildNavigation(
 
 
             button.className =
-              'app-nav-item';
+              'app-nav-item' +
+              (
+                page.key === currentPageKey
+                  ? ' active'
+                  : ''
+              );
 
 
             button.dataset.page =
@@ -565,29 +626,54 @@ function loadPage(
   closeRowActionMenu();
 
 
-  if (!forceRefresh) {
-
-    const cached =
-      getClientCache(
-        pageKey
-      );
-
-
-    if (cached) {
-
-      currentPageData =
-        cached;
+  const page =
+    appBootstrap.pages.find(
+      item =>
+        item.key === pageKey
+    );
 
 
-      renderPage(
-        pageKey,
-        cached
-      );
+  if (!page) {
+    return;
+  }
 
 
-      return;
+  const cached =
+    forceRefresh
+      ? null
+      : getClientCache(
+          pageKey
+        );
 
-    }
+
+  if (cached) {
+
+    Promise
+      .all([
+        ensurePageRendererPromise_(
+          pageKey,
+          page
+        ),
+        Promise.resolve(cached)
+      ])
+      .then(results => {
+
+        if (currentPageKey !== pageKey) {
+          return;
+        }
+
+        currentPageData =
+          results[1];
+
+        renderPage(
+          pageKey,
+          results[1]
+        );
+
+      })
+      .catch(handleFailure);
+
+    return;
 
   }
 
@@ -595,50 +681,180 @@ function loadPage(
   showPageLoading();
 
 
-  google.script.run
+  Promise
+    .all([
+      ensurePageRendererPromise_(
+        pageKey,
+        page
+      ),
+      getPageDataPromise_(
+        pageKey,
+        !!forceRefresh
+      )
+    ])
+    .then(results => {
 
-    .withSuccessHandler(
-      function(data) {
+      if (currentPageKey !== pageKey) {
+        return;
+      }
 
-        setClientCache(
-          pageKey,
-          data
-        );
+      const data =
+        results[1];
 
-
-        currentPageData =
-          data;
-
-
-        renderPage(
-          pageKey,
-          data
-        );
+      setClientCache(
+        pageKey,
+        data
+      );
 
 
-        /*
-         * Once Dashboard is visible, quietly start warming
-         * pages the user is likely to click next.
-         */
-        if (
-          pageKey === 'dashboard'
-        ) {
+      currentPageData =
+        data;
 
-          schedulePrefetch();
+
+      renderPage(
+        pageKey,
+        data
+      );
+
+    })
+    .catch(handleFailure);
+}
+
+
+function getPageDataPromise_(
+  pageKey,
+  forceRefresh
+) {
+
+  return new Promise((resolve, reject) => {
+
+    google.script.run
+      .withSuccessHandler(resolve)
+      .withFailureHandler(reject)
+      .appGetPageData(
+        pageKey,
+        !!forceRefresh
+      );
+
+  });
+}
+
+
+function ensurePageRendererPromise_(
+  pageKey,
+  page
+) {
+
+  if (
+    isPageRendererReady_(page)
+  ) {
+
+    loadedPageRendererTypes[page.type] =
+      true;
+
+    return Promise.resolve();
+
+  }
+
+
+  if (
+    loadedPageRendererTypes[page.type]
+  ) {
+    return Promise.resolve();
+  }
+
+
+  return new Promise((resolve, reject) => {
+
+    google.script.run
+      .withSuccessHandler(function(html) {
+
+        try {
+
+          installPageRendererTemplate_(
+            html
+          );
+
+          if (
+            !isPageRendererReady_(page)
+          ) {
+            throw new Error(
+              'Page renderer failed to load: ' +
+                page.type
+            );
+          }
+
+          loadedPageRendererTypes[page.type] =
+            true;
+
+          resolve();
+
+        } catch (error) {
+
+          reject(error);
 
         }
 
-      }
-    )
+      })
+      .withFailureHandler(reject)
+      .appGetPageClientTemplate(
+        pageKey
+      );
 
-    .withFailureHandler(
-      handleFailure
-    )
+  });
+}
 
-    .appGetPageData(
-      pageKey,
-      !!forceRefresh
+
+function isPageRendererReady_(
+  page
+) {
+
+  const functionName =
+    PAGE_RENDERER_FUNCTIONS[
+      page.type
+    ];
+
+  return (
+    !functionName ||
+    typeof window[functionName] === 'function'
+  );
+}
+
+
+function installPageRendererTemplate_(
+  html
+) {
+
+  const wrapper =
+    document.createElement(
+      'div'
     );
+
+  wrapper.innerHTML =
+    html || '';
+
+
+  wrapper
+    .querySelectorAll(
+      'script'
+    )
+    .forEach(source => {
+
+      const script =
+        document.createElement(
+          'script'
+        );
+
+      script.textContent =
+        source.textContent || '';
+
+      document.body.appendChild(
+        script
+      );
+
+      source.remove();
+
+    });
 }
 
 
@@ -653,110 +869,6 @@ function refreshCurrentPage() {
     currentPageKey,
     true
   );
-}
-
-
-/*******************************************************
- * BACKGROUND PREFETCH
- *******************************************************/
-
-function schedulePrefetch() {
-
-  const preferred = [
-    'switches',
-    'accessPoints',
-    'servers',
-    'workflow'
-  ];
-
-
-  let delay =
-    350;
-
-
-  preferred.forEach(
-    pageKey => {
-
-      if (
-        !appBootstrap.pages.some(
-          page =>
-            page.key === pageKey
-        )
-      ) {
-        return;
-      }
-
-
-      if (
-        getClientCache(pageKey)
-      ) {
-        return;
-      }
-
-
-      setTimeout(
-        function() {
-
-          prefetchPage(
-            pageKey
-          );
-
-        },
-        delay
-      );
-
-
-      delay +=
-        350;
-
-    }
-  );
-}
-
-
-function prefetchPage(
-  pageKey
-) {
-
-  if (
-    getClientCache(pageKey)
-  ) {
-    return;
-  }
-
-
-  google.script.run
-
-    .withSuccessHandler(
-      function(data) {
-
-        setClientCache(
-          pageKey,
-          data
-        );
-
-      }
-    )
-
-    /*
-     * Prefetch failure should never interrupt the UI.
-     */
-    .withFailureHandler(
-      function(error) {
-
-        console.warn(
-          'Prefetch failed:',
-          pageKey,
-          error
-        );
-
-      }
-    )
-
-    .appGetPageData(
-      pageKey,
-      false
-    );
 }
 
 

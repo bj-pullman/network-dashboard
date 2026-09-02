@@ -3797,6 +3797,83 @@ textarea {
   font-size: 0.76rem;
 }
 
+.module-list {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+}
+
+.module-card {
+  display: grid;
+  grid-template-columns: minmax(108px, auto) 1fr;
+  align-items: start;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.module-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
+.module-toggle input {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+
+.module-card-body {
+  min-width: 0;
+}
+
+.module-card-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.module-card h3 {
+  margin: 0;
+  color: var(--navy-900);
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.module-card p {
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.module-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-top: 10px;
+  color: #4c5a6b;
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.module-meta span {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  gap: 6px;
+}
+
+.module-meta i {
+  color: var(--brand-primary);
+}
+
 .settings-brand-preview {
   display: flex;
   align-items: center;
@@ -3952,6 +4029,10 @@ textarea {
 @media (max-width: 720px) {
   .integration-card-main {
     flex-direction: column;
+  }
+
+  .module-card {
+    grid-template-columns: 1fr;
   }
 
   .settings-color-row {

@@ -13,6 +13,8 @@ Network Dashboard is separated into four layers:
 - Integrations: Aruba Central, ThreatDown and future provider modules.
 - Secrets: Apps Script Script Properties only.
 
+The web app uses one lightweight shell. Dashboard rendering is included for first paint; heavier page renderers are lazy-loaded by page type the first time a user opens those pages.
+
 The core application should not require source edits for a new organization.
 
 ## Requirements
@@ -40,7 +42,7 @@ Do not run `clasp push` to a production script until you have reviewed the chang
 
 `setupNetworkDashboard()` is the official installer. It is idempotent and safe to run again.
 
-Setup creates missing sheets, creates canonical headers, freezes header rows, applies standard header formatting, protects managed header ranges, seeds `App Settings`, seeds `App Integrations`, seeds the first admin user when possible, records application/schema version metadata and reports integration Script Property status.
+Setup creates missing sheets for enabled modules, creates canonical headers, freezes header rows, applies standard header formatting, protects managed header ranges, seeds `App Settings`, seeds `App Integrations`, seeds the first admin user when possible, records application/schema version metadata and reports integration Script Property status.
 
 Setup does not store secrets in Sheets, erase operational data, duplicate settings, duplicate integration definitions or duplicate managed header protections.
 
@@ -48,7 +50,13 @@ Setup does not store secrets in Sheets, erase operational data, duplicate settin
 
 Run `validateNetworkDashboard()` from Apps Script or use Network Dashboard -> Validate Installation in the spreadsheet menu.
 
-Validation checks required sheets, headers, header order, frozen rows, managed header protections, settings rows, integration definitions, enabled integration property completeness, application version, schema version and break-glass configuration. It returns structured results suitable for future UI display and never includes secret values.
+Validation checks enabled-module sheets, headers, header order, frozen rows, managed header protections, settings rows, integration definitions, enabled integration property completeness, application version, schema version and break-glass configuration. Disabled optional module sheets and obsolete legacy sheets are reported as unmanaged warnings without making the installation unhealthy. It returns structured results suitable for future UI display and never includes secret values.
+
+## Modules
+
+Core modules are always enabled: Dashboard, Switches, Access Points, Servers, IP Route Tables and Security Cameras. System administration pages remain enabled for Department Workflow, User Management and Settings.
+
+Optional modules are disabled by default and can be enabled in Settings: Bus Cameras, Intercom Bell System and Backup Schedule. Enabling a module provisions its canonical sheet and protections. Disabling a module hides navigation, blocks server-side page access, removes dashboard calculations where applicable and preserves existing sheet data.
 
 ## Header Protection
 
@@ -142,9 +150,15 @@ Operational data rows remain editable. Google Sheets owners can intentionally re
 
 `Security Cameras`
 
-- Primary Sites row 1: `Site`, `IP`, `User`, `Password`, `Server Location`, `Notes`
-- Secondary Sites row 13: `Site`, `IP`, `User`, `Password`, `Server Location`, `Notes`
-- Legacy Systems row 19: `Site`, `IP`, `Type`, `User`, `Server Location`, `Notes`
+- `Location`
+- `Asset / System`
+- `Category`
+- `Type`
+- `IP Address`
+- `Username`
+- `Password`
+- `Server Location`
+- `Notes`
 
 `Intercom Bell System`
 
@@ -170,22 +184,6 @@ Operational data rows remain editable. Google Sheets owners can intentionally re
 - `Target Location`
 - `Wasabi Job`
 - `Wasabi Schedule`
-- `Notes`
-
-`Replacement Switches`
-
-- `Status`
-- `Device Label`
-- `Model`
-- `Type`
-- `IP Address`
-- `Serial Number`
-- `MAC Address`
-- `Role`
-- `Replacement Priority`
-- `Target Replacement`
-- `Campus`
-- `Location`
 - `Notes`
 
 `Department Workflow`

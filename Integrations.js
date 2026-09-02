@@ -274,6 +274,58 @@ function readIntegrationStateMap_(
   });
 
 
+  const expectedHeaders =
+    getAppIntegrationsSheetHeaders_();
+
+  const integrationIdIndex =
+    getRequiredHeaderIndex_(
+      index,
+      'Integration ID',
+      'App Integrations',
+      expectedHeaders
+    );
+
+  const enabledIndex =
+    getRequiredHeaderIndex_(
+      index,
+      'Enabled',
+      'App Integrations',
+      expectedHeaders
+    );
+
+  const lastSyncIndex =
+    getRequiredHeaderIndex_(
+      index,
+      'Last Sync',
+      'App Integrations',
+      expectedHeaders
+    );
+
+  const lastStatusIndex =
+    getRequiredHeaderIndex_(
+      index,
+      'Last Status',
+      'App Integrations',
+      expectedHeaders
+    );
+
+  const configJsonIndex =
+    getRequiredHeaderIndex_(
+      index,
+      'Config JSON',
+      'App Integrations',
+      expectedHeaders
+    );
+
+  const notesIndex =
+    getRequiredHeaderIndex_(
+      index,
+      'Notes',
+      'App Integrations',
+      expectedHeaders
+    );
+
+
   const values =
     sheet
       .getRange(
@@ -289,7 +341,7 @@ function readIntegrationStateMap_(
 
     const id =
       String(
-        row[index['Integration ID']] || ''
+        row[integrationIdIndex] || ''
       ).trim();
 
     if (!id) {
@@ -300,16 +352,16 @@ function readIntegrationStateMap_(
       row: offset + 2,
       enabled:
         normalizeBooleanText_(
-          row[index['Enabled']]
+          row[enabledIndex]
         ),
       lastSync:
-        row[index['Last Sync']] || '',
+        row[lastSyncIndex] || '',
       lastStatus:
-        row[index['Last Status']] || '',
+        row[lastStatusIndex] || '',
       configJson:
-        row[index['Config JSON']] || '{}',
+        row[configJsonIndex] || '{}',
       notes:
-        row[index['Notes']] || ''
+        row[notesIndex] || ''
     };
 
   });

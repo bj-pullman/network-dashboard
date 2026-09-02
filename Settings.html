@@ -7,7 +7,7 @@ function renderSettingsPage(data) {
 
   setPageHeader(
     'Settings',
-    'Instance configuration, branding, user policy and integrations'
+    'Instance configuration, modules, branding, user policy and integrations'
   );
 
   document.getElementById('pageActions').innerHTML = `
@@ -43,6 +43,9 @@ function renderSettingsPage(data) {
   const integrations =
     data.integrations || [];
 
+  const modules =
+    data.modules || [];
+
   document.getElementById('pageContent').innerHTML = `
 
     <div class="settings-layout">
@@ -66,6 +69,9 @@ function renderSettingsPage(data) {
         </div>
 
       </section>
+
+
+      ${renderModuleSection(modules)}
 
 
       <section class="app-card settings-panel">
@@ -181,6 +187,83 @@ function renderSettingsPage(data) {
       </section>
 
     </div>
+  `;
+}
+
+
+function renderModuleSection(modules) {
+
+  if (
+    !modules.length
+  ) {
+    return '';
+  }
+
+
+  return `
+    <section class="app-card settings-panel">
+
+      <div class="card-header-clean">
+        <div>
+          <h2 class="card-title-clean">Modules</h2>
+          <div class="settings-card-subtitle">
+            Optional pages and backing sheets preserved when disabled.
+          </div>
+        </div>
+      </div>
+
+      <div class="module-list">
+        ${modules.map(renderModuleCard).join('')}
+      </div>
+
+    </section>
+  `;
+}
+
+
+function renderModuleCard(module) {
+
+  const sheets =
+    module.requiredSheets || [];
+
+  const sheetLabel =
+    sheets.length
+      ? sheets.join(', ')
+      : 'No managed sheet';
+
+  return `
+    <article class="module-card">
+
+      <label class="module-toggle">
+        <input
+          type="checkbox"
+          data-setting-key="${escapeAttribute(module.settingKey)}"
+          ${module.enabled ? 'checked' : ''}
+        >
+        <span>Enabled</span>
+      </label>
+
+      <div class="module-card-body">
+        <div class="module-card-title-row">
+          <h3>${escapeHtml(module.name)}</h3>
+          ${statusPill(module.enabled ? 'Active' : 'Inactive')}
+        </div>
+
+        <p>${escapeHtml(module.description || '')}</p>
+
+        <div class="module-meta">
+          <span>
+            <i class="fa-solid fa-compass"></i>
+            ${escapeHtml(module.navigationTarget || module.pageKey || 'No navigation target')}
+          </span>
+          <span>
+            <i class="fa-solid fa-table"></i>
+            ${escapeHtml(sheetLabel)}
+          </span>
+        </div>
+      </div>
+
+    </article>
   `;
 }
 
@@ -441,12 +524,26 @@ function saveSettingsForm() {
       currentPageData =
         data;
 
-      appBootstrap.config =
-        data.config;
+      clientPageCache.clear();
 
-      applyBranding(
-        data.config
-      );
+      if (
+        data.bootstrap
+      ) {
+
+        applyBootstrapShell(
+          data.bootstrap
+        );
+
+      } else {
+
+        appBootstrap.config =
+          data.config;
+
+        applyBranding(
+          data.config
+        );
+
+      }
 
       renderSettingsPage(
         data
@@ -571,6 +668,7 @@ function formatClientValidationResult(result) {
     '',
     'Sheets checked: ' + (result.sheets || []).length,
     'Protections checked: ' + (result.protections || []).length,
+    'Unmanaged sheets: ' + (result.unmanagedSheets || []).length,
     '',
     'Errors:',
     result.errors && result.errors.length
@@ -580,6 +678,17 @@ function formatClientValidationResult(result) {
     'Warnings:',
     result.warnings && result.warnings.length
       ? result.warnings.join('\n')
+      : 'None',
+    '',
+    'Unmanaged Sheets:',
+    result.unmanagedSheets && result.unmanagedSheets.length
+      ? result.unmanagedSheets
+          .map(item =>
+            item.sheet +
+            ': ' +
+            item.reason
+          )
+          .join('\n')
       : 'None'
   ].join('\n');
 }

@@ -169,49 +169,25 @@ function getNetworkDashboardSchema_() {
     'Security Cameras': {
       type: 'operational',
       category: 'Physical Systems',
-      structured: true,
       frozenRows: 1,
       tabColor: '#7c3aed',
-      headerRanges: [
-        {
-          key: 'primary',
-          row: 1,
-          column: 1,
-          headers: [
-            'Site',
-            'IP',
-            'User',
-            'Password',
-            'Server Location',
-            'Notes'
-          ]
-        },
-        {
-          key: 'secondary',
-          row: 13,
-          column: 1,
-          headers: [
-            'Site',
-            'IP',
-            'User',
-            'Password',
-            'Server Location',
-            'Notes'
-          ]
-        },
-        {
-          key: 'software',
-          row: 19,
-          column: 1,
-          headers: [
-            'Site',
-            'IP',
-            'Type',
-            'User',
-            'Server Location',
-            'Notes'
-          ]
-        }
+      migration:
+        'unifySecurityCameras',
+      headers: [
+        'Location',
+        'Asset / System',
+        'Category',
+        'Type',
+        'IP Address',
+        'Username',
+        'Password',
+        'Server Location',
+        'Notes'
+      ],
+      requiredHeaders: [
+        'Location',
+        'Category',
+        'IP Address'
       ]
     },
 
@@ -323,34 +299,6 @@ function getNetworkDashboardSchema_() {
         'Server Name',
         'Backup Time',
         'Backup Job Name'
-      ],
-      frozenRows: 1,
-      tabColor: '#059669'
-    },
-
-    'Replacement Switches': {
-      type: 'operational',
-      category: 'Operations',
-      headers: [
-        'Status',
-        'Device Label',
-        'Model',
-        'Type',
-        'IP Address',
-        'Serial Number',
-        'MAC Address',
-        'Role',
-        'Replacement Priority',
-        'Target Replacement',
-        'Campus',
-        'Location',
-        'Notes'
-      ],
-      requiredHeaders: [
-        'Status',
-        'Device Label',
-        'Model',
-        'Replacement Priority'
       ],
       frozenRows: 1,
       tabColor: '#059669'
@@ -616,8 +564,10 @@ function setupNetworkDashboard(options) {
   const ss =
     SpreadsheetApp.getActiveSpreadsheet();
 
+  invalidateModuleCache_();
+
   const schema =
-    getNetworkDashboardSchema_();
+    getActiveNetworkDashboardSchema_();
 
 
   Object.keys(schema)
@@ -685,6 +635,48 @@ function setupNetworkDashboard(options) {
 }
 
 
+function ensureEnabledOptionalModuleSheets_() {
+
+  const result =
+    createSetupResult_();
+
+  const ss =
+    SpreadsheetApp.getActiveSpreadsheet();
+
+  const schema =
+    getNetworkDashboardSchema_();
+
+
+  getModuleStatusList_({
+    includeCore: true
+  })
+    .filter(module =>
+      module.optional &&
+      module.enabled
+    )
+    .forEach(module => {
+
+      (module.setupSheets || module.requiredSheets || [])
+        .forEach(sheetName => {
+
+          if (schema[sheetName]) {
+            setupSchemaSheet_(
+              ss,
+              sheetName,
+              schema[sheetName],
+              result
+            );
+          }
+
+        });
+
+    });
+
+
+  return result;
+}
+
+
 function validateNetworkDashboard(options) {
 
   options =
@@ -701,6 +693,7 @@ function validateNetworkDashboard(options) {
     settings: [],
     integrations: [],
     scriptProperties: [],
+    unmanagedSheets: [],
     warnings: [],
     errors: []
   };
@@ -709,8 +702,10 @@ function validateNetworkDashboard(options) {
   const ss =
     SpreadsheetApp.getActiveSpreadsheet();
 
+  invalidateModuleCache_();
+
   const schema =
-    getNetworkDashboardSchema_();
+    getActiveNetworkDashboardSchema_();
 
 
   Object.keys(schema)
@@ -722,6 +717,12 @@ function validateNetworkDashboard(options) {
         result
       );
     });
+
+  validateInactiveAndObsoleteSheets_(
+    ss,
+    schema,
+    result
+  );
 
 
   validateSettings_(result);
@@ -779,6 +780,7 @@ function createSetupResult_() {
     settings: {
       seeded: true
     },
+    migrations: [],
     integrations: {
       seeded: true
     },
@@ -820,6 +822,14 @@ function setupSchemaSheet_(
       sheet.setTabColor(definition.tabColor);
     } catch (error) {}
   }
+
+
+  runSchemaMigrationIfNeeded_(
+    sheet,
+    sheetName,
+    definition,
+    result
+  );
 
 
   if (definition.seedCells) {
@@ -907,6 +917,458 @@ function setupSchemaSheet_(
     definition,
     result
   );
+}
+
+
+function runSchemaMigrationIfNeeded_(
+  sheet,
+  sheetName,
+  definition,
+  result
+) {
+
+  if (
+    definition.migration !==
+    'unifySecurityCameras'
+  ) {
+    return;
+  }
+
+
+  migrateLegacySecurityCamerasIfNeeded_(
+    sheet,
+    sheetName,
+    definition,
+    result
+  );
+}
+
+
+function migrateLegacySecurityCamerasIfNeeded_(
+  sheet,
+  sheetName,
+  definition,
+  result
+) {
+
+  if (
+    isCanonicalSecurityCameraSheet_(
+      sheet,
+      definition
+    )
+  ) {
+    return;
+  }
+
+
+  if (
+    !isLegacySecurityCameraSheet_(
+      sheet
+    )
+  ) {
+    return;
+  }
+
+
+  const ss =
+    sheet.getParent();
+
+  const backupName =
+    getUniqueSheetName_(
+      ss,
+      sheetName +
+      ' Legacy Backup'
+    );
+
+
+  let backupCreated =
+    false;
+
+
+  try {
+
+    sheet
+      .copyTo(ss)
+      .setName(
+        backupName
+      );
+
+    backupCreated =
+      true;
+
+  } catch (error) {
+
+    result.warnings.push(
+      sheetName +
+      ' uses the old multi-section layout. Automatic migration was skipped because a backup sheet could not be created: ' +
+      error.message
+    );
+
+    return;
+
+  }
+
+
+  const legacyValues =
+    sheet
+      .getRange(
+        1,
+        1,
+        Math.max(
+          sheet.getLastRow(),
+          20
+        ),
+        Math.max(
+          sheet.getLastColumn(),
+          6
+        )
+      )
+      .getDisplayValues();
+
+  const migratedRows =
+    buildUnifiedSecurityCameraRows_(
+      legacyValues
+    );
+
+
+  sheet.clear();
+
+  sheet
+    .getRange(
+      1,
+      1,
+      1,
+      definition.headers.length
+    )
+    .setValues([
+      definition.headers
+    ]);
+
+
+  if (migratedRows.length) {
+
+    sheet
+      .getRange(
+        2,
+        1,
+        migratedRows.length,
+        definition.headers.length
+      )
+      .setValues(
+        migratedRows
+      );
+
+  }
+
+
+  result.migrations.push({
+    sheet: sheetName,
+    message:
+      'Migrated old multi-section Security Cameras layout to one canonical table.',
+    backupSheet:
+      backupCreated
+        ? backupName
+        : '',
+    rowsMigrated:
+      migratedRows.length
+  });
+}
+
+
+function isCanonicalSecurityCameraSheet_(
+  sheet,
+  definition
+) {
+
+  if (sheet.getLastRow() < 1) {
+    return false;
+  }
+
+
+  const headers =
+    sheet
+      .getRange(
+        1,
+        1,
+        1,
+        definition.headers.length
+      )
+      .getDisplayValues()[0]
+      .map(value =>
+        String(value || '').trim()
+      );
+
+
+  return definition.requiredHeaders
+    .every(header =>
+      headers.includes(header)
+    );
+}
+
+
+function isLegacySecurityCameraSheet_(
+  sheet
+) {
+
+  if (sheet.getLastRow() < 1) {
+    return false;
+  }
+
+
+  const width =
+    Math.max(
+      sheet.getLastColumn(),
+      6
+    );
+
+  const readRows =
+    Math.max(
+      Math.min(
+        sheet.getLastRow(),
+        20
+      ),
+      1
+    );
+
+  const values =
+    sheet
+      .getRange(
+        1,
+        1,
+        readRows,
+        width
+      )
+      .getDisplayValues();
+
+  const row1 =
+    normalizeHeaderSlice_(
+      values[0] || [],
+      6
+    );
+
+  const row13 =
+    normalizeHeaderSlice_(
+      values[12] || [],
+      6
+    );
+
+  const row19 =
+    normalizeHeaderSlice_(
+      values[18] || [],
+      6
+    );
+
+
+  return (
+    isLegacyCameraSystemHeader_(row1) &&
+    (
+      isLegacyCameraSystemHeader_(row13) ||
+      isLegacyCameraSoftwareHeader_(row19)
+    )
+  );
+}
+
+
+function normalizeHeaderSlice_(
+  row,
+  width
+) {
+
+  return row
+    .slice(0, width)
+    .map(value =>
+      String(value || '').trim()
+    );
+}
+
+
+function isLegacyCameraSystemHeader_(
+  headers
+) {
+
+  return (
+    headers[0] === 'Site' &&
+    headers[1] === 'IP' &&
+    headers[2] === 'User' &&
+    headers[3] === 'Password'
+  );
+}
+
+
+function isLegacyCameraSoftwareHeader_(
+  headers
+) {
+
+  return (
+    headers[0] === 'Site' &&
+    headers[1] === 'IP' &&
+    headers[2] === 'Type' &&
+    headers[3] === 'User'
+  );
+}
+
+
+function buildUnifiedSecurityCameraRows_(
+  values
+) {
+
+  const rows = [];
+
+  appendLegacyCameraSectionRows_(
+    rows,
+    values,
+    {
+      category: 'Primary Site',
+      type: 'Camera System',
+      startIndex: 1,
+      endIndex: 12,
+      software: false
+    }
+  );
+
+  appendLegacyCameraSectionRows_(
+    rows,
+    values,
+    {
+      category: 'Secondary Site',
+      type: 'Camera System',
+      startIndex: 13,
+      endIndex: 18,
+      software: false
+    }
+  );
+
+  appendLegacyCameraSectionRows_(
+    rows,
+    values,
+    {
+      category: 'Software',
+      type: '',
+      startIndex: 19,
+      endIndex: values.length,
+      software: true
+    }
+  );
+
+  return rows;
+}
+
+
+function appendLegacyCameraSectionRows_(
+  output,
+  values,
+  section
+) {
+
+  for (
+    let rowIndex = section.startIndex;
+    rowIndex < section.endIndex;
+    rowIndex++
+  ) {
+
+    const row =
+      values[rowIndex] || [];
+
+    const location =
+      String(row[0] || '').trim();
+
+    const ipAddress =
+      String(row[1] || '').trim();
+
+    const type =
+      section.software
+        ? String(row[2] || '').trim()
+        : section.type;
+
+    const username =
+      String(
+        row[section.software ? 3 : 2] ||
+        ''
+      ).trim();
+
+    const password =
+      section.software
+        ? ''
+        : String(row[3] || '').trim();
+
+    const serverLocation =
+      String(
+        row[4] ||
+        ''
+      ).trim();
+
+    const notes =
+      String(
+        row[5] ||
+        ''
+      ).trim();
+
+
+    if (
+      !location &&
+      !ipAddress &&
+      !type &&
+      !username &&
+      !password &&
+      !serverLocation &&
+      !notes
+    ) {
+      continue;
+    }
+
+
+    output.push([
+      location,
+      '',
+      section.category,
+      type,
+      ipAddress,
+      username,
+      password,
+      serverLocation,
+      notes
+    ]);
+
+  }
+}
+
+
+function getUniqueSheetName_(
+  ss,
+  baseName
+) {
+
+  const timestamp =
+    Utilities.formatDate(
+      new Date(),
+      Session.getScriptTimeZone() ||
+        'Etc/UTC',
+      'yyyyMMdd-HHmmss'
+    );
+
+  let name =
+    baseName +
+    ' ' +
+    timestamp;
+
+  let suffix =
+    2;
+
+
+  while (ss.getSheetByName(name)) {
+
+    name =
+      baseName +
+      ' ' +
+      timestamp +
+      ' ' +
+      suffix;
+
+    suffix++;
+  }
+
+
+  return name;
 }
 
 
@@ -1499,6 +1961,24 @@ function validateSchemaSheet_(
   }
 
 
+  if (
+    definition.migration ===
+    'unifySecurityCameras' &&
+    isLegacySecurityCameraSheet_(
+      sheet
+    ) &&
+    !isCanonicalSecurityCameraSheet_(
+      sheet,
+      definition
+    )
+  ) {
+    result.warnings.push(
+      sheetName +
+      ' uses the old multi-section layout. Run setupNetworkDashboard() to migrate it into the unified table with a backup sheet.'
+    );
+  }
+
+
   sheetResult.frozenRowsOk =
     sheet.getFrozenRows() >=
     Number(definition.frozenRows || 0);
@@ -1555,6 +2035,68 @@ function validateSchemaSheet_(
   result.sheets.push(
     sheetResult
   );
+}
+
+
+function validateInactiveAndObsoleteSheets_(
+  ss,
+  activeSchema,
+  result
+) {
+
+  const allSchema =
+    getNetworkDashboardSchema_();
+
+  const activeSheets =
+    Object.keys(activeSchema);
+
+
+  Object.keys(allSchema)
+    .filter(sheetName =>
+      !activeSheets.includes(sheetName)
+    )
+    .forEach(sheetName => {
+
+      if (
+        ss.getSheetByName(
+          sheetName
+        )
+      ) {
+
+        result.unmanagedSheets.push({
+          sheet: sheetName,
+          reason:
+            'Inactive optional module sheet is preserved but not validated.'
+        });
+
+        result.warnings.push(
+          sheetName +
+          ' exists for a disabled optional module and is preserved but inactive.'
+        );
+
+      }
+
+    });
+
+
+  if (
+    ss.getSheetByName(
+      'Replacement Switches'
+    )
+  ) {
+
+    result.unmanagedSheets.push({
+      sheet:
+        'Replacement Switches',
+      reason:
+        'Obsolete sheet from a previous template version; no longer managed.'
+    });
+
+    result.warnings.push(
+      'Replacement Switches exists but is no longer a managed Network Dashboard sheet.'
+    );
+
+  }
 }
 
 
@@ -1898,6 +2440,18 @@ function formatSetupSummary_(result) {
     result.protections.protected.length +
       ' managed header ranges protected',
     '',
+    'Migrations',
+    result.migrations &&
+      result.migrations.length
+      ? result.migrations
+          .map(item =>
+            item.sheet +
+            ': ' +
+            item.message
+          )
+          .join('\n')
+      : 'None',
+    '',
     'Application',
     NETWORK_DASHBOARD_APP_NAME +
       ' ' +
@@ -1938,6 +2492,8 @@ function formatValidationSummary_(result) {
       result.sheets.length,
     'Header protections checked: ' +
       result.protections.length,
+    'Unmanaged sheets: ' +
+      (result.unmanagedSheets || []).length,
     '',
     'Errors',
     result.errors.length
@@ -1947,6 +2503,18 @@ function formatValidationSummary_(result) {
     'Warnings',
     result.warnings.length
       ? result.warnings.join('\n')
+      : 'None',
+    '',
+    'Unmanaged Sheets',
+    result.unmanagedSheets &&
+      result.unmanagedSheets.length
+      ? result.unmanagedSheets
+          .map(item =>
+            item.sheet +
+            ': ' +
+            item.reason
+          )
+          .join('\n')
       : 'None'
   ].join('\n');
 }

@@ -1,5 +1,9 @@
 function doGet() {
 
+  return withPerformanceTiming_(
+    'doGet',
+    function() {
+
   const config =
     AppConfig.getClientConfig_();
 
@@ -54,6 +58,13 @@ function doGet() {
         'Index'
       );
 
+  const bootstrap =
+    buildAppBootstrap_(
+      access,
+      config
+    );
+
+
   template.userEmail =
     userEmail;
 
@@ -62,6 +73,11 @@ function doGet() {
 
   template.appName =
     config.appName;
+
+  template.initialBootstrapJson =
+    safeJsonForHtml_(
+      bootstrap
+    );
 
   return template
     .evaluate()
@@ -72,6 +88,9 @@ function doGet() {
       'viewport',
       'width=device-width, initial-scale=1'
     );
+
+    }
+  );
 }
 
 
@@ -191,34 +210,7 @@ function checkAuth() {
 
 function clearAllCache() {
 
-  const cache =
-    CacheService.getScriptCache();
-
-  cache.remove(
-    'app_dashboard'
-  );
-
-  cache.remove(
-    'app_department_workflow'
-  );
-
-  Object.keys(APP_PAGE_CONFIG)
-    .forEach(key => {
-      cache.remove(
-        'app_page_' + key
-      );
-      cache.remove(
-        'app_structured_' + key
-      );
-    });
-
-  getNetworkDashboardSheetNames_()
-    .forEach(sheetName => {
-      cache.remove(
-        'tab_data_' +
-        sheetName.replace(/\s+/g, '_')
-      );
-    });
+  clearAppDataCaches_();
 
   return {
     status: 'success'
@@ -234,4 +226,21 @@ function escapeHtmlServer_(value) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+
+function safeJsonForHtml_(value) {
+
+  const json =
+    JSON.stringify(
+      value == null ? null : value
+    );
+
+
+  return json
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/&/g, '\\u0026')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
 }
