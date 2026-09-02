@@ -295,7 +295,17 @@ function syncArubaCentralToSheet() {
     'Sync succeeded'
   );
 
-  clearAllCache();
+  invalidateAppPage_(
+    'switches'
+  );
+
+  invalidateAppPage_(
+    'accessPoints'
+  );
+
+  invalidateAppPage_(
+    'dashboard'
+  );
 
   return {
     status: 'success',
@@ -907,19 +917,25 @@ function runNightlyDatabaseSync() {
       return;
     }
 
-    if (status.id === 'aruba_central') {
-      result[status.id] =
-        syncArubaCentralToSheet();
-    }
-
-    if (status.id === 'threatdown') {
-      result[status.id] =
-        syncThreatDownToSheet();
+    if (status.supportsScheduledSync) {
+      try {
+        result[status.id] =
+          runIntegrationSync(
+            status.id
+          );
+      } catch (error) {
+        result[status.id] = {
+          status: 'error',
+          message:
+            sanitizeIntegrationError_(
+              error,
+              'Scheduled integration sync failed.'
+            )
+        };
+      }
     }
 
   });
-
-  clearAllCache();
 
   return result;
 }

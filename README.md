@@ -170,6 +170,21 @@ Operational data rows remain editable. Google Sheets owners can intentionally re
 - `Status`
 - `Notes`
 
+`UptimeRobot` (created when the UptimeRobot integration is enabled)
+
+- `Monitor ID`
+- `Monitor Name`
+- `Monitor Type`
+- `Target`
+- `Health`
+- `Provider Status`
+- `Last Checked`
+- `Created At`
+- `Last Incident ID`
+- `Current State Duration`
+- `Tags`
+- `Last Sync`
+
 `Security Cameras`
 
 - `Location`
@@ -245,6 +260,13 @@ Operational data rows remain editable. Google Sheets owners can intentionally re
 - `Implementation Status`
 - `Last Sync`
 - `Last Status`
+- `Connection Status`
+- `Data Status`
+- `Last Attempt`
+- `Last Successful Sync`
+- `Record Count`
+- `Record Counts JSON`
+- `Latest Error`
 - `Config JSON`
 - `Notes`
 
@@ -256,12 +278,15 @@ Metric rows use `Section = metric` and keys such as `switches.total`, `access_po
 
 When an optional module is enabled or disabled, setup refreshes the Dashboard formula layer so optional metrics such as Backup Schedule appear only when that module is active.
 
+The Dashboard web page also has a widget registry in source code. Instance-wide admin customization stores compact widget visibility/order preferences in `App Settings` key `dashboard.widgets`; it does not use the Dashboard sheet as a layout database. Integration-driven widgets, such as UptimeRobot monitor KPIs and WAN monitor health, render from local managed sheets and do not call external APIs during Dashboard render.
+
 ## App Settings Keys
 
 - `app.name`
 - `app.version`
 - `app.web_app_url`
 - `schema.version`
+- `dashboard.widgets`
 - `organization.name`
 - `organization.short_name`
 - `branding.logo_url`
@@ -290,7 +315,7 @@ The page supports viewing, filtering, adding, editing and deleting circuits subj
 
 WAN `Status` is administrative/configured state and must be one of `Active`, `Standby`, `Maintenance` or `Disabled`. Runtime health is separate and, when UptimeRobot is enabled, appears as `Online`, `Down`, `Paused`, `Unknown` or `Not Monitored`. Health refreshes do not write to the `Status` column.
 
-`APSCN Device Name` is an optional local device/reference name. `UptimeRobot Monitor ID` is optional and should contain the numeric monitor ID from UptimeRobot when a circuit is monitored externally.
+`APSCN Device Name` is an optional local device/reference name. `UptimeRobot Monitor ID` is optional and should contain the numeric monitor ID from the synchronized local `UptimeRobot` sheet when a circuit is monitored externally.
 
 Do not store circuit portal passwords, ISP credentials or shared secrets in Internet/WAN rows. Public IP ranges, public gateways, provider names, non-secret circuit/account references and operational notes are acceptable.
 
@@ -337,7 +362,18 @@ Never store API secrets, client secrets, refresh tokens, passwords or access tok
 
 ## Integrations
 
-Integration definitions live in the registry in `Integrations.js`. Non-secret enabled/status/configuration state lives in `App Integrations`.
+Integration definitions live in the registry in `Integrations.js`. Non-secret enabled/status/configuration/runtime state lives in `App Integrations`.
+
+The integration model separates:
+
+- Save integration configuration.
+- Test connection.
+- Manual sync.
+- Scheduled sync support.
+- Local dataset availability.
+- Operational page availability.
+- Dashboard widget availability.
+- Module enrichment.
 
 Adding a future integration should generally involve:
 
@@ -391,11 +427,12 @@ UptimeRobot requirements:
 - For WAN circuits, a Ping monitor should target the circuit IP address or hostname that represents the observable WAN endpoint.
 - Store a read-only UptimeRobot API key in Apps Script Script Properties as `UPTIMEROBOT_API_KEY`.
 - Enable UptimeRobot in Settings -> Integrations.
-- Use Test in Settings to verify the key.
-- Map monitor IDs on `Internet WAN` rows in the `UptimeRobot Monitor ID` column.
-- Use Refresh Health on the Internet / WAN page to fetch and cache current monitor health.
+- Use Test in Settings to verify the key. Test performs a minimal provider metadata read and does not write sheet data.
+- Use Sync Now to fetch the paginated monitor collection and write the local managed `UptimeRobot` sheet.
+- Map monitor IDs on `Internet WAN` rows in the `UptimeRobot Monitor ID` column. The WAN selector reads synchronized local monitor rows and stores only the monitor ID.
+- Use Sync Health on the Internet / WAN page, or Sync Now on the UptimeRobot page, to refresh the local monitor dataset.
 
-The dashboard does not create, edit or delete UptimeRobot monitors. UptimeRobot's v3 documentation lists Free-plan rate limiting at 10 requests per minute, so health refreshes fetch the monitor collection in paginated requests, respect rate-limit responses and cache normalized monitor state briefly.
+The dashboard and operational pages do not create, edit or delete UptimeRobot monitors. Dashboard, UptimeRobot and Internet/WAN renders read local sheet data only. UptimeRobot's v3 documentation lists Free-plan rate limiting at 10 requests per minute, so sync fetches the monitor collection in paginated requests, respects rate-limit responses and does not retry tightly. Sync failures update runtime metadata but do not clear existing local monitor rows.
 
 ## Department Workflow
 

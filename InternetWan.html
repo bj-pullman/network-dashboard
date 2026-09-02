@@ -16,6 +16,11 @@ function renderInternetWanPage(data) {
   const monitoring =
     data.monitoring || {};
 
+  const canAdminAction =
+    appBootstrap &&
+    appBootstrap.user &&
+    appBootstrap.user.admin;
+
   const showHealthButton =
     !!monitoring.enabled ||
     !!monitoring.configurationComplete ||
@@ -26,7 +31,8 @@ function renderInternetWanPage(data) {
     );
 
   const canRefreshHealth =
-    !!monitoring.canRefresh;
+    !!monitoring.canRefresh &&
+    !!canAdminAction;
 
   setPageHeader(
     'Internet / WAN',
@@ -40,6 +46,7 @@ function renderInternetWanPage(data) {
       canEdit
         ? `
           <button
+            type="button"
             class="btn btn-sm btn-brand"
             onclick="openInternetWanAddCircuit()"
           >
@@ -54,18 +61,20 @@ function renderInternetWanPage(data) {
       showHealthButton
         ? `
           <button
+            type="button"
             class="btn btn-sm btn-light border"
             onclick="refreshInternetWanHealth(this)"
             ${canRefreshHealth ? '' : 'disabled'}
           >
             <i class="fa-solid fa-heart-pulse me-2"></i>
-            Refresh Health
+            Sync Health
           </button>
         `
         : ''
     }
 
     <button
+      type="button"
       class="btn btn-sm btn-light border"
       onclick="refreshCurrentPage(this)"
     >
@@ -276,7 +285,15 @@ function internetWanMonitoringBanner_(
   if (monitoring.status === 'not_fetched') {
     return `
       <div class="internet-wan-monitoring-banner">
-        UptimeRobot health has not been refreshed yet.
+        UptimeRobot monitor data has not been synced locally yet.
+      </div>
+    `;
+  }
+
+  if (monitoring.status === 'not_synced') {
+    return `
+      <div class="internet-wan-monitoring-banner">
+        UptimeRobot monitor data has not been synced locally yet.
       </div>
     `;
   }
@@ -987,7 +1004,7 @@ function refreshInternetWanHealth(
   const actionButton =
     setActionWorking(
       button,
-      'Refreshing...'
+      'Syncing...'
     );
 
   scriptRunPromise_(
@@ -1004,7 +1021,7 @@ function refreshInternetWanHealth(
 
         setActionError(
           actionButton,
-          'Refresh Failed'
+          'Sync Failed'
         );
 
         applyInternetWanHealthToData_(
@@ -1025,9 +1042,9 @@ function refreshInternetWanHealth(
           {
             message:
               monitoring.message ||
-              'WAN health refresh failed.'
+              'WAN health sync failed.'
           },
-          'refresh WAN health'
+          'sync WAN health'
         );
 
         return;
@@ -1035,7 +1052,7 @@ function refreshInternetWanHealth(
 
       setActionSuccess(
         actionButton,
-        'Refreshed'
+        'Synced'
       );
 
       applyInternetWanHealthToData_(
@@ -1055,7 +1072,7 @@ function refreshInternetWanHealth(
       showToast(
         monitoring && monitoring.message
           ? monitoring.message
-          : 'WAN health refreshed.'
+          : 'WAN health synced.'
       );
 
     })
@@ -1063,12 +1080,12 @@ function refreshInternetWanHealth(
 
       setActionError(
         actionButton,
-        'Refresh Failed'
+        'Sync Failed'
       );
 
       handleFailure(
         error,
-        'refresh WAN health'
+        'sync WAN health'
       );
 
     });
@@ -1507,15 +1524,32 @@ function internetWanMonitorField_(
             ${String(monitor.id) === selected ? 'selected' : ''}
           >
             ${escapeHtml(
-              monitor.id +
-              ' - ' +
-              (monitor.name || monitor.target || monitor.type || 'Monitor')
+              formatInternetWanMonitorOption_(
+                monitor
+              )
             )}
           </option>
         `).join('')}
       </select>
     </label>
   `;
+}
+
+
+function formatInternetWanMonitorOption_(
+  monitor
+) {
+
+  const parts = [
+    monitor.name || 'Monitor ' + monitor.id,
+    monitor.target || '',
+    monitor.type || '',
+    monitor.health || ''
+  ].filter(Boolean);
+
+  return monitor.id +
+    ' - ' +
+    parts.join(' / ');
 }
 
 

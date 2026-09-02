@@ -166,6 +166,26 @@ const APP_PAGE_CONFIG = {
     ]
   },
 
+  uptimeRobot: {
+    key: 'uptimeRobot',
+    label: 'UptimeRobot',
+    sheet: 'UptimeRobot',
+    type: 'uptimeRobot',
+    icon: 'fa-heart-pulse',
+    group: 'Monitoring',
+    integrationId: 'uptimerobot',
+
+    defaultColumns: [
+      'Monitor Name',
+      'Monitor Type',
+      'Target',
+      'Health',
+      'Provider Status',
+      'Last Checked',
+      'Last Sync'
+    ]
+  },
+
   securityCameras: {
 
     key:
@@ -768,14 +788,28 @@ function isPageEnabled_(
     );
 
 
-  if (!module) {
-    return false;
+  if (module) {
+    return isModuleEnabled_(
+      module.id
+    );
   }
 
 
-  return isModuleEnabled_(
-    module.id
-  );
+  const config =
+    APP_PAGE_CONFIG[pageKey];
+
+  if (
+    config &&
+    config.integrationId &&
+    typeof isIntegrationOperationalPageEnabled_ === 'function'
+  ) {
+    return isIntegrationOperationalPageEnabled_(
+      config.integrationId,
+      pageKey
+    );
+  }
+
+  return false;
 }
 
 
@@ -828,6 +862,20 @@ function getActiveNetworkDashboardSchema_() {
       }
 
     });
+
+  if (
+    typeof getActiveIntegrationSheetNames_ === 'function'
+  ) {
+    getActiveIntegrationSheetNames_()
+      .forEach(sheetName => {
+
+        if (schema[sheetName]) {
+          active[sheetName] =
+            schema[sheetName];
+        }
+
+      });
+  }
 
 
   return active;
@@ -1816,6 +1864,7 @@ function getClientTemplateNameForPageType_(
   const templates = {
     table: 'TablePage',
     internetWan: 'InternetWan',
+    uptimeRobot: 'UptimeRobotPage',
     structured: 'StructuredPage',
     workflow: 'DepartmentWorkflow',
     users: 'UserManagement',
@@ -1914,6 +1963,12 @@ function appGetPageData(pageKey, forceRefresh) {
 
       if (config.type === 'internetWan') {
         return getInternetWanPageData_(
+          forceRefresh
+        );
+      }
+
+      if (config.type === 'uptimeRobot') {
+        return getUptimeRobotPageData_(
           forceRefresh
         );
       }
@@ -4428,7 +4483,7 @@ function buildDashboardDataFromSheet_(
       values
     );
 
-  return {
+  const data = {
     metrics:
       buildDashboardLegacyMetricMap_(
         metricMap
@@ -4481,12 +4536,17 @@ function buildDashboardDataFromSheet_(
         )
     }
   };
+
+  return finalizeDashboardData_(
+    data,
+    metricMap
+  );
 }
 
 
 function getEmptyDashboardData_() {
 
-  return {
+  const data = {
     metrics: {},
     metricCards: [],
     switchStatus: {},
@@ -4501,6 +4561,822 @@ function getEmptyDashboardData_() {
       workflows: 0
     }
   };
+
+  return finalizeDashboardData_(
+    data,
+    {}
+  );
+}
+
+
+function finalizeDashboardData_(
+  data,
+  metricMap
+) {
+
+  data.uptimeRobot =
+    buildDashboardUptimeRobotData_();
+
+  data.availableWidgets =
+    getDashboardAvailableWidgets_();
+
+  data.widgetConfig =
+    getDashboardWidgetConfiguration_(
+      data.availableWidgets
+    );
+
+  data.widgets =
+    hydrateDashboardWidgets_(
+      data.availableWidgets,
+      data.widgetConfig,
+      data,
+      metricMap || {}
+    );
+
+  data.canCustomize =
+    canCustomizeDashboard_();
+
+  return data;
+}
+
+
+function getDashboardWidgetRegistry_() {
+
+  return [
+    {
+      id: 'switches.total',
+      display: 'Switches',
+      description: 'Total switch inventory records.',
+      category: 'Infrastructure',
+      type: 'kpi',
+      dataSource: 'Dashboard sheet metric switches.total',
+      metricKey: 'switches.total',
+      requiredModule: 'switches',
+      defaultEnabled: true,
+      defaultOrder: 10,
+      defaultSize: 'small',
+      permission: 'view',
+      icon: 'fa-network-wired'
+    },
+    {
+      id: 'access_points.total',
+      display: 'Access Points',
+      description: 'Total access point inventory records.',
+      category: 'Infrastructure',
+      type: 'kpi',
+      dataSource: 'Dashboard sheet metric access_points.total',
+      metricKey: 'access_points.total',
+      requiredModule: 'accessPoints',
+      defaultEnabled: true,
+      defaultOrder: 20,
+      defaultSize: 'small',
+      permission: 'view',
+      icon: 'fa-wifi'
+    },
+    {
+      id: 'servers.total',
+      display: 'Servers',
+      description: 'Total active server records.',
+      category: 'Infrastructure',
+      type: 'kpi',
+      dataSource: 'Dashboard sheet metric servers.total',
+      metricKey: 'servers.total',
+      requiredModule: 'servers',
+      defaultEnabled: true,
+      defaultOrder: 30,
+      defaultSize: 'small',
+      permission: 'view',
+      icon: 'fa-server'
+    },
+    {
+      id: 'internet_wan.total',
+      display: 'WAN Circuits',
+      description: 'Total Internet/WAN circuit records.',
+      category: 'Infrastructure',
+      type: 'kpi',
+      dataSource: 'Dashboard sheet metric internet_wan.total',
+      metricKey: 'internet_wan.total',
+      requiredModule: 'internetWan',
+      defaultEnabled: true,
+      defaultOrder: 40,
+      defaultSize: 'small',
+      permission: 'view',
+      icon: 'fa-globe'
+    },
+    {
+      id: 'uptimerobot.total',
+      display: 'UR Monitors',
+      description: 'Total synchronized UptimeRobot monitors.',
+      category: 'Monitoring',
+      type: 'kpi',
+      dataSource: 'UptimeRobot sheet',
+      dataPath: 'uptimeRobot.summary.total',
+      requiredIntegration: 'uptimerobot',
+      defaultEnabled: true,
+      defaultOrder: 50,
+      defaultSize: 'small',
+      permission: 'view',
+      icon: 'fa-heart-pulse'
+    },
+    {
+      id: 'uptimerobot.online',
+      display: 'UR Online',
+      description: 'Synchronized UptimeRobot monitors with Online health.',
+      category: 'Monitoring',
+      type: 'kpi',
+      dataSource: 'UptimeRobot sheet',
+      dataPath: 'uptimeRobot.summary.online',
+      requiredIntegration: 'uptimerobot',
+      defaultEnabled: true,
+      defaultOrder: 51,
+      defaultSize: 'small',
+      permission: 'view',
+      icon: 'fa-circle-check'
+    },
+    {
+      id: 'uptimerobot.down',
+      display: 'UR Down',
+      description: 'Synchronized UptimeRobot monitors with Down health.',
+      category: 'Monitoring',
+      type: 'kpi',
+      dataSource: 'UptimeRobot sheet',
+      dataPath: 'uptimeRobot.summary.down',
+      requiredIntegration: 'uptimerobot',
+      defaultEnabled: true,
+      defaultOrder: 52,
+      defaultSize: 'small',
+      permission: 'view',
+      icon: 'fa-triangle-exclamation'
+    },
+    {
+      id: 'uptimerobot.paused',
+      display: 'UR Paused',
+      description: 'Synchronized UptimeRobot monitors with Paused health.',
+      category: 'Monitoring',
+      type: 'kpi',
+      dataSource: 'UptimeRobot sheet',
+      dataPath: 'uptimeRobot.summary.paused',
+      requiredIntegration: 'uptimerobot',
+      defaultEnabled: false,
+      defaultOrder: 53,
+      defaultSize: 'small',
+      permission: 'view',
+      icon: 'fa-circle-pause'
+    },
+    {
+      id: 'campus_distribution',
+      display: 'Switch Deployment by Campus',
+      description: 'Switch count by campus.',
+      category: 'Infrastructure',
+      type: 'chart',
+      dataSource: 'Dashboard formula summary',
+      dataPath: 'campusDistribution',
+      requiredModule: 'switches',
+      defaultEnabled: true,
+      defaultOrder: 70,
+      defaultSize: 'large',
+      permission: 'view'
+    },
+    {
+      id: 'workflow_summary',
+      display: 'Department Workflow',
+      description: 'Workflow groups, tiers, ticket steps and workflows.',
+      category: 'Operations',
+      type: 'kpi_group',
+      dataSource: 'Department Workflow sheet',
+      dataPath: 'workflow',
+      requiredModule: 'workflow',
+      defaultEnabled: true,
+      defaultOrder: 80,
+      defaultSize: 'medium',
+      permission: 'view'
+    },
+    {
+      id: 'switch_health',
+      display: 'Switch Health',
+      description: 'Switch records grouped by status.',
+      category: 'Infrastructure',
+      type: 'status_summary',
+      dataSource: 'Dashboard formula summary',
+      dataPath: 'switchStatus',
+      requiredModule: 'switches',
+      defaultEnabled: true,
+      defaultOrder: 90,
+      defaultSize: 'medium',
+      permission: 'view'
+    },
+    {
+      id: 'ap_health',
+      display: 'Access Point Health',
+      description: 'Access point records grouped by status.',
+      category: 'Infrastructure',
+      type: 'status_summary',
+      dataSource: 'Dashboard formula summary',
+      dataPath: 'apStatus',
+      requiredModule: 'accessPoints',
+      defaultEnabled: true,
+      defaultOrder: 91,
+      defaultSize: 'medium',
+      permission: 'view'
+    },
+    {
+      id: 'wan_status',
+      display: 'Internet / WAN Status',
+      description: 'Internet/WAN records grouped by administrative status.',
+      category: 'Infrastructure',
+      type: 'status_summary',
+      dataSource: 'Dashboard formula summary',
+      dataPath: 'wanStatus',
+      requiredModule: 'internetWan',
+      defaultEnabled: true,
+      defaultOrder: 92,
+      defaultSize: 'medium',
+      permission: 'view'
+    },
+    {
+      id: 'uptimerobot.wan_health',
+      display: 'WAN Monitor Health',
+      description: 'WAN circuits joined to synchronized UptimeRobot monitor health.',
+      category: 'Monitoring',
+      type: 'status_summary',
+      dataSource: 'Internet WAN sheet joined to UptimeRobot sheet',
+      dataPath: 'uptimeRobot.wanHealth',
+      requiredModule: 'internetWan',
+      requiredIntegration: 'uptimerobot',
+      defaultEnabled: true,
+      defaultOrder: 93,
+      defaultSize: 'medium',
+      permission: 'view'
+    },
+    {
+      id: 'uptimerobot.down_monitors',
+      display: 'Down Monitors',
+      description: 'Synchronized UptimeRobot monitors currently down.',
+      category: 'Monitoring',
+      type: 'list',
+      dataSource: 'UptimeRobot sheet',
+      dataPath: 'uptimeRobot.downMonitors',
+      requiredIntegration: 'uptimerobot',
+      defaultEnabled: true,
+      defaultOrder: 94,
+      defaultSize: 'medium',
+      permission: 'view'
+    }
+  ];
+}
+
+
+function getDashboardAvailableWidgets_() {
+
+  return getDashboardWidgetRegistry_()
+    .filter(widget =>
+      isDashboardWidgetAvailable_(
+        widget
+      )
+    );
+}
+
+
+function isDashboardWidgetAvailable_(
+  widget
+) {
+
+  if (
+    widget.requiredModule &&
+    !isModuleEnabled_(
+      widget.requiredModule
+    )
+  ) {
+    return false;
+  }
+
+  if (widget.requiredIntegration) {
+    try {
+      const integration =
+        getIntegrationStatusById_(
+          widget.requiredIntegration
+        );
+
+      if (!integration.enabled) {
+        return false;
+      }
+    } catch (error) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+
+function getDashboardWidgetConfiguration_(
+  availableWidgets
+) {
+
+  const overrides = {};
+
+  try {
+    const raw =
+      AppConfig.get(
+        'dashboard.widgets'
+      );
+
+    const parsed =
+      raw
+        ? JSON.parse(raw)
+        : {};
+
+    (
+      parsed.widgets || []
+    ).forEach(item => {
+      if (item && item.id) {
+        overrides[item.id] =
+          item;
+      }
+    });
+  } catch (error) {}
+
+  return (availableWidgets || [])
+    .map(widget => {
+
+      const override =
+        overrides[widget.id] || {};
+
+      return {
+        id:
+          widget.id,
+        enabled:
+          override.enabled !== undefined
+            ? !!override.enabled
+            : !!widget.defaultEnabled,
+        order:
+          Number.isFinite(Number(override.order))
+            ? Number(override.order)
+            : Number(widget.defaultOrder || 0),
+        size:
+          override.size ||
+          widget.defaultSize ||
+          'medium'
+      };
+
+    });
+}
+
+
+function hydrateDashboardWidgets_(
+  availableWidgets,
+  config,
+  data,
+  metricMap
+) {
+
+  const configById = {};
+
+  (config || [])
+    .forEach(item => {
+      configById[item.id] =
+        item;
+    });
+
+  return (availableWidgets || [])
+    .map(widget => {
+
+      const itemConfig =
+        configById[widget.id] || {};
+
+      return Object.assign(
+        {},
+        widget,
+        {
+          enabled:
+            itemConfig.enabled !== undefined
+              ? !!itemConfig.enabled
+              : !!widget.defaultEnabled,
+          order:
+            Number.isFinite(Number(itemConfig.order))
+              ? Number(itemConfig.order)
+              : Number(widget.defaultOrder || 0),
+          size:
+            itemConfig.size ||
+            widget.defaultSize ||
+            'medium',
+          value:
+            getDashboardWidgetValue_(
+              widget,
+              data,
+              metricMap
+            ),
+          items:
+            widget.type === 'list'
+              ? getDashboardPathValue_(
+                  data,
+                  widget.dataPath
+                ) || []
+              : [],
+          statuses:
+            widget.type === 'status_summary'
+              ? getDashboardPathValue_(
+                  data,
+                  widget.dataPath
+                ) || {}
+              : {},
+          distribution:
+            widget.type === 'chart'
+              ? getDashboardPathValue_(
+                  data,
+                  widget.dataPath
+                ) || {}
+              : {},
+          provenance:
+            getDashboardWidgetProvenance_(
+              widget,
+              data
+            )
+        }
+      );
+
+    })
+    .filter(widget =>
+      widget.enabled
+    )
+    .sort((left, right) =>
+      Number(left.order || 0) -
+      Number(right.order || 0)
+    );
+}
+
+
+function getDashboardWidgetValue_(
+  widget,
+  data,
+  metricMap
+) {
+
+  if (widget.metricKey) {
+    return getDashboardMetricNumber_(
+      metricMap,
+      widget.metricKey
+    );
+  }
+
+  const value =
+    getDashboardPathValue_(
+      data,
+      widget.dataPath
+    );
+
+  const number =
+    Number(value);
+
+  return Number.isFinite(number)
+    ? number
+    : value || 0;
+}
+
+
+function getDashboardPathValue_(
+  source,
+  path
+) {
+
+  return String(path || '')
+    .split('.')
+    .filter(Boolean)
+    .reduce(
+      (current, key) =>
+        current &&
+        current[key] !== undefined
+          ? current[key]
+          : undefined,
+      source
+    );
+}
+
+
+function getDashboardWidgetProvenance_(
+  widget,
+  data
+) {
+
+  if (
+    widget.requiredIntegration === 'uptimerobot'
+  ) {
+    return {
+      source:
+        'UptimeRobot sheet',
+      lastUpdated:
+        data.uptimeRobot &&
+        data.uptimeRobot.lastSuccessfulSync
+          ? data.uptimeRobot.lastSuccessfulSync
+          : ''
+    };
+  }
+
+  return {
+    source:
+      widget.dataSource || '',
+    lastUpdated: ''
+  };
+}
+
+
+function buildDashboardUptimeRobotData_() {
+
+  const empty = {
+    enabled: false,
+    status: 'disabled',
+    lastSuccessfulSync: '',
+    latestError: '',
+    summary:
+      typeof buildUptimeRobotSummary_ === 'function'
+        ? buildUptimeRobotSummary_([])
+        : {
+            total: 0,
+            online: 0,
+            down: 0,
+            paused: 0,
+            unknown: 0
+          },
+    wanHealth: {
+      Online: 0,
+      Down: 0,
+      Paused: 0,
+      Unknown: 0,
+      'Not Monitored': 0
+    },
+    downMonitors: []
+  };
+
+  if (
+    typeof getUptimeRobotLocalMonitorSnapshot_ !== 'function'
+  ) {
+    return empty;
+  }
+
+  try {
+
+    const snapshot =
+      getUptimeRobotLocalMonitorSnapshot_();
+
+    const monitors =
+      snapshot.monitors || [];
+
+    return {
+      enabled:
+        !!snapshot.enabled,
+      status:
+        snapshot.status || '',
+      lastSuccessfulSync:
+        snapshot.lastSuccessfulSync ||
+        snapshot.fetchedAt ||
+        '',
+      latestError:
+        snapshot.latestError || '',
+      summary:
+        snapshot.summary || empty.summary,
+      wanHealth:
+        buildDashboardUptimeRobotWanHealth_(
+          monitors
+        ),
+      downMonitors:
+        monitors
+          .filter(monitor =>
+            normalizeSimpleKey_(
+              monitor.health
+            ) === 'down'
+          )
+          .slice(0, 8)
+          .map(monitor => ({
+            id:
+              monitor.id,
+            name:
+              monitor.name || monitor.id,
+            target:
+              monitor.target || '',
+            type:
+              monitor.type || '',
+            health:
+              monitor.health || 'Down',
+            lastChecked:
+              monitor.lastChecked || ''
+          }))
+    };
+
+  } catch (error) {
+
+    return Object.assign(
+      {},
+      empty,
+      {
+        status: 'error',
+        latestError:
+          sanitizeIntegrationError_(
+            error,
+            'UptimeRobot dashboard data unavailable.'
+          )
+      }
+    );
+
+  }
+}
+
+
+function buildDashboardUptimeRobotWanHealth_(
+  monitors
+) {
+
+  const summary = {
+    Online: 0,
+    Down: 0,
+    Paused: 0,
+    Unknown: 0,
+    'Not Monitored': 0
+  };
+
+  const monitorMap =
+    buildInternetWanMonitorMap_({
+      monitors:
+        monitors || []
+    });
+
+  try {
+
+    const sheet =
+      SpreadsheetApp
+        .getActiveSpreadsheet()
+        .getSheetByName(
+          'Internet WAN'
+        );
+
+    if (!sheet) {
+      return summary;
+    }
+
+    const values =
+      readConfiguredPageValues_(
+        sheet,
+        APP_PAGE_CONFIG.internetWan
+      );
+
+    if (values.length < 2) {
+      return summary;
+    }
+
+    const headers =
+      values[0].map(value =>
+        String(value || '').trim()
+      );
+
+    const monitorIndex =
+      headers.indexOf(
+        'UptimeRobot Monitor ID'
+      );
+
+    if (monitorIndex < 0) {
+      return summary;
+    }
+
+    values
+      .slice(1)
+      .forEach(row => {
+
+        if (
+          !rowHasMeaningfulData_(
+            row,
+            headers
+          )
+        ) {
+          return;
+        }
+
+        const monitorId =
+          String(
+            row[monitorIndex] || ''
+          ).trim();
+
+        if (!monitorId) {
+          summary['Not Monitored']++;
+          return;
+        }
+
+        const monitor =
+          monitorMap[monitorId];
+
+        const health =
+          monitor
+            ? monitor.health || 'Unknown'
+            : 'Unknown';
+
+        if (summary[health] === undefined) {
+          summary.Unknown++;
+        } else {
+          summary[health]++;
+        }
+
+      });
+
+  } catch (error) {}
+
+  return summary;
+}
+
+
+function canCustomizeDashboard_() {
+
+  try {
+    return !!requireAdmin_();
+  } catch (error) {
+    return false;
+  }
+}
+
+
+function saveDashboardWidgetConfiguration(
+  config
+) {
+
+  const access =
+    requireAdmin_();
+
+  const registry =
+    getDashboardWidgetRegistry_();
+
+  const allowed = {};
+
+  registry.forEach(widget => {
+    allowed[widget.id] =
+      true;
+  });
+
+  const widgets =
+    Array.isArray(
+      config && config.widgets
+    )
+      ? config.widgets
+      : [];
+
+  const sanitized =
+    widgets
+      .filter(item =>
+        item &&
+        allowed[item.id]
+      )
+      .map((item, index) => ({
+        id:
+          String(item.id || ''),
+        enabled:
+          !!item.enabled,
+        order:
+          Number.isFinite(Number(item.order))
+            ? Number(item.order)
+            : index + 1,
+        size:
+          [
+            'small',
+            'medium',
+            'large'
+          ].includes(item.size)
+            ? item.size
+            : 'medium'
+      }));
+
+  AppConfig.setSystemValue_(
+    'dashboard.widgets',
+    JSON.stringify({
+      widgets:
+        sanitized
+    }),
+    access.email
+  );
+
+  invalidateAppPage_(
+    'dashboard'
+  );
+
+  return getAppDashboardData_(
+    true
+  );
+}
+
+
+function resetDashboardWidgetConfiguration() {
+
+  const access =
+    requireAdmin_();
+
+  AppConfig.setSystemValue_(
+    'dashboard.widgets',
+    '',
+    access.email
+  );
+
+  invalidateAppPage_(
+    'dashboard'
+  );
+
+  return getAppDashboardData_(
+    true
+  );
 }
 
 
@@ -5049,8 +5925,6 @@ function getInternetWanMonitoringSnapshot_(
 
   return getUptimeRobotMonitorSnapshot_({
     forceRefresh:
-      !!forceRefresh,
-    allowFetch:
       !!forceRefresh
   });
 }
@@ -5145,31 +6019,52 @@ function buildInternetWanMonitorMap_(
 
 function appRefreshInternetWanHealth() {
 
-  requirePagePermission_(
-    'internetWan',
-    'view'
-  );
+  requireAdmin_();
 
-  const monitoring =
-    getInternetWanMonitoringSnapshot_(
-      true
-    );
+  try {
 
-  if (monitoring.status === 'fresh') {
-    updateIntegrationRuntimeStatus_(
-      'uptimerobot',
-      monitoring.fetchedAt || '',
-      'Monitor health refresh succeeded'
-    );
-  } else if (monitoring.status === 'error') {
-    updateIntegrationRuntimeStatus_(
-      'uptimerobot',
-      '',
-      'Monitor health refresh failed'
-    );
+    const syncResult =
+      runIntegrationSync(
+        'uptimerobot'
+      );
+
+    const monitoring =
+      getInternetWanMonitoringSnapshot_(
+        true
+      );
+
+    monitoring.status =
+      monitoring.status === 'not_synced'
+        ? 'empty'
+        : monitoring.status;
+
+    monitoring.message =
+      syncResult.message ||
+      monitoring.message;
+
+    monitoring.syncResult =
+      syncResult;
+
+    return monitoring;
+
+  } catch (error) {
+
+    const monitoring =
+      getInternetWanMonitoringSnapshot_(
+        true
+      );
+
+    monitoring.status =
+      'error';
+
+    monitoring.message =
+      sanitizeUptimeRobotError_(
+        error
+      );
+
+    return monitoring;
+
   }
-
-  return monitoring;
 }
 
 
@@ -7127,7 +8022,8 @@ function getAppUsers_() {
 
 function getPermissionPageList_() {
 
-  return getModuleDefinitions_()
+  const pages =
+    getModuleDefinitions_()
     .filter(module => {
 
       if (
@@ -7160,6 +8056,41 @@ function getPermissionPageList_() {
       optional:
         module.classification === 'optional'
     }));
+
+  Object.keys(APP_PAGE_CONFIG)
+    .forEach(pageKey => {
+
+      const page =
+        APP_PAGE_CONFIG[pageKey];
+
+      if (
+        !page.integrationId ||
+        page.adminOnly ||
+        !isPageEnabled_(
+          pageKey
+        )
+      ) {
+        return;
+      }
+
+      pages.push({
+        key:
+          pageKey,
+        label:
+          page.label,
+        moduleId:
+          '',
+        integrationId:
+          page.integrationId,
+        classification:
+          'integration',
+        optional:
+          true
+      });
+
+    });
+
+  return pages;
 }
 
 

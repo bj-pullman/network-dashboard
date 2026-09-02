@@ -80,6 +80,15 @@ function getAppSettingDefinitions_() {
       description: 'Installed schema version.'
     },
     {
+      key: 'dashboard.widgets',
+      label: 'Dashboard Widgets',
+      category: 'Dashboard',
+      type: 'json',
+      defaultValue: '',
+      editable: false,
+      description: 'Managed dashboard widget visibility and order configuration.'
+    },
+    {
       key: 'organization.name',
       label: 'Organization Name',
       category: 'General',
@@ -615,6 +624,24 @@ var AppConfig = (function() {
         definition.label +
         ' has an unsupported value.'
       );
+    }
+
+
+    if (
+      definition.type === 'json' &&
+      value
+    ) {
+
+      try {
+        JSON.parse(value);
+      } catch (error) {
+        throw new Error(
+          definition.label +
+          ' must contain valid JSON.'
+        );
+      }
+
+      return value;
     }
 
 

@@ -1,0 +1,776 @@
+<script>
+
+function renderUptimeRobotPage(data) {
+
+  currentPageData =
+    data || {};
+
+  currentPageData.summary =
+    currentPageData.summary || {
+      total: 0,
+      online: 0,
+      down: 0,
+      paused: 0,
+      unknown: 0
+    };
+
+  const integration =
+    currentPageData.integration || {};
+
+  const canAdminAction =
+    appBootstrap &&
+    appBootstrap.user &&
+    appBootstrap.user.admin;
+
+  setPageHeader(
+    'UptimeRobot',
+    `${currentPageData.totalCount || 0} synchronized monitors`
+  );
+
+  document.getElementById('pageActions').innerHTML = `
+    ${
+      integration.configurationComplete &&
+      canAdminAction
+        ? `
+          <button
+            type="button"
+            class="btn btn-sm btn-light border"
+            onclick="testUptimeRobotConnection(this)"
+          >
+            <i class="fa-solid fa-plug-circle-check me-2"></i>
+            Test
+          </button>
+        `
+        : ''
+    }
+
+    ${
+      integration.canSync &&
+      canAdminAction
+        ? `
+          <button
+            type="button"
+            class="btn btn-sm btn-brand"
+            onclick="syncUptimeRobotNow(this)"
+          >
+            <i class="fa-solid fa-cloud-arrow-down me-2"></i>
+            Sync Now
+          </button>
+        `
+        : ''
+    }
+
+    <button
+      type="button"
+      class="btn btn-sm btn-light border"
+      onclick="refreshCurrentPage(this)"
+    >
+      <i class="fa-solid fa-rotate me-2"></i>
+      Refresh
+    </button>
+  `;
+
+  document.getElementById('pageContent').innerHTML = `
+    <div class="uptime-robot-layout">
+      <div class="uptime-robot-summary">
+        ${uptimeRobotSummaryCard_('Total', currentPageData.summary.total, 'fa-heart-pulse')}
+        ${uptimeRobotSummaryCard_('Online', currentPageData.summary.online, 'fa-circle-check')}
+        ${uptimeRobotSummaryCard_('Down', currentPageData.summary.down, 'fa-triangle-exclamation')}
+        ${uptimeRobotSummaryCard_('Paused', currentPageData.summary.paused, 'fa-circle-pause')}
+        ${uptimeRobotSummaryCard_('Unknown', currentPageData.summary.unknown, 'fa-circle-question')}
+      </div>
+
+      ${uptimeRobotBanner_(currentPageData, canAdminAction)}
+
+      <div class="table-toolbar">
+        <div class="table-toolbar-left">
+          <div class="input-group input-group-sm table-search">
+            <span class="input-group-text bg-white">
+              <i class="fa-solid fa-magnifying-glass"></i>
+            </span>
+            <input
+              id="uptimeRobotSearch"
+              type="search"
+              class="form-control"
+              placeholder="Search monitors..."
+              oninput="applyUptimeRobotFilters()"
+            >
+          </div>
+
+          <select
+            id="uptimeRobotHealthFilter"
+            class="form-select form-select-sm uptime-robot-filter"
+            onchange="applyUptimeRobotFilters()"
+          >
+            <option value="">All health</option>
+            ${uptimeRobotFilterOptions_(
+              (
+                currentPageData.controlledOptions &&
+                currentPageData.controlledOptions.Health
+              ) ||
+              ['Online', 'Down', 'Paused', 'Unknown']
+            )}
+          </select>
+
+          <div class="dropdown">
+            <button
+              type="button"
+              class="btn btn-sm btn-light border dropdown-toggle"
+              data-bs-toggle="dropdown"
+            >
+              <i class="fa-solid fa-table-columns me-2"></i>
+              Columns
+            </button>
+            <div
+              id="uptimeRobotColumnMenu"
+              class="dropdown-menu table-column-menu p-2 shadow"
+            ></div>
+          </div>
+
+          <button
+            type="button"
+            class="btn btn-sm btn-light border"
+            onclick="clearUptimeRobotFilters()"
+          >
+            <i class="fa-solid fa-filter-circle-xmark me-2"></i>
+            Clear
+          </button>
+        </div>
+
+        <div class="table-toolbar-right">
+          <span class="uptime-robot-health-stamp">
+            ${uptimeRobotFreshnessText_(integration)}
+          </span>
+          <span
+            id="uptimeRobotRecordCount"
+            class="record-count"
+          >
+            ${currentPageData.totalCount || 0} records
+          </span>
+        </div>
+      </div>
+
+      <div class="app-card table-card">
+        <div id="uptimeRobotTable"></div>
+      </div>
+    </div>
+  `;
+
+  buildUptimeRobotTable_(
+    currentPageData
+  );
+}
+
+
+function uptimeRobotSummaryCard_(
+  label,
+  value,
+  icon
+) {
+
+  return `
+    <div class="metric-card uptime-robot-metric">
+      <div class="metric-icon">
+        <i class="fa-solid ${icon}"></i>
+      </div>
+      <div>
+        <div class="metric-label">${escapeHtml(label)}</div>
+        <div class="metric-value">${escapeHtml(value || 0)}</div>
+      </div>
+    </div>
+  `;
+}
+
+
+function uptimeRobotBanner_(
+  data,
+  canAdminAction
+) {
+
+  const integration =
+    data.integration || {};
+
+  if (!integration.enabled) {
+    return `
+      <div class="uptime-robot-banner">
+        UptimeRobot is disabled.
+      </div>
+    `;
+  }
+
+  if (!integration.configurationComplete) {
+    return `
+      <div class="uptime-robot-banner is-warning">
+        UptimeRobot is enabled but missing required Script Properties.
+      </div>
+    `;
+  }
+
+  if (integration.status === 'error') {
+    return `
+      <div class="uptime-robot-banner is-error">
+        ${escapeHtml(integration.message || 'UptimeRobot sync failed.')}
+      </div>
+    `;
+  }
+
+  if (integration.latestError) {
+    return `
+      <div class="uptime-robot-banner is-warning">
+        Latest sync failed: ${escapeHtml(integration.latestError)}.
+        ${data.totalCount ? 'Existing local monitor data is still shown.' : 'No local monitor rows were changed.'}
+      </div>
+    `;
+  }
+
+  if (!data.totalCount) {
+    return `
+      <div class="uptime-robot-empty">
+        <div>
+          <h3>No synchronized monitors</h3>
+          <p>
+            UptimeRobot is configured, but this template has not synced monitor data locally yet.
+          </p>
+        </div>
+        ${
+          canAdminAction
+            ? `
+              <div class="uptime-robot-empty-actions">
+                <button
+                  type="button"
+                  class="btn btn-sm btn-light border"
+                  onclick="testUptimeRobotConnection(this)"
+                >
+                  <i class="fa-solid fa-plug-circle-check me-2"></i>
+                  Test
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-sm btn-brand"
+                  onclick="syncUptimeRobotNow(this)"
+                >
+                  <i class="fa-solid fa-cloud-arrow-down me-2"></i>
+                  Sync Now
+                </button>
+              </div>
+            `
+            : ''
+        }
+      </div>
+    `;
+  }
+
+  return '';
+}
+
+
+function uptimeRobotFreshnessText_(
+  integration
+) {
+
+  integration =
+    integration || {};
+
+  const stamp =
+    integration.lastSuccessfulSync ||
+    integration.fetchedAt ||
+    '';
+
+  if (!stamp) {
+    return 'Local sync pending';
+  }
+
+  try {
+    return 'Local sync ' +
+      new Date(stamp).toLocaleString();
+  } catch (error) {
+    return 'Local sync available';
+  }
+}
+
+
+function uptimeRobotFilterOptions_(
+  options
+) {
+
+  return (
+    options || []
+  ).map(option => `
+    <option value="${escapeAttribute(option)}">
+      ${escapeHtml(option)}
+    </option>
+  `).join('');
+}
+
+
+function buildUptimeRobotTable_(
+  data
+) {
+
+  if (tableInstance) {
+    tableInstance.destroy();
+    tableInstance = null;
+  }
+
+  const columns =
+    getUptimeRobotColumns_(
+      data
+    );
+
+  tableInstance =
+    new Tabulator(
+      '#uptimeRobotTable',
+      {
+        data:
+          data.rows || [],
+        layout:
+          'fitColumns',
+        reactiveData:
+          false,
+        pagination:
+          'local',
+        paginationSize:
+          15,
+        placeholder:
+          'No synchronized UptimeRobot monitors found.',
+        initialSort: [
+          {
+            column: 'Health',
+            dir: 'asc'
+          },
+          {
+            column: 'Monitor Name',
+            dir: 'asc'
+          }
+        ],
+        columns:
+          columns
+      }
+    );
+
+  tableInstance.on(
+    'dataFiltered',
+    function(filters, rows) {
+      const count =
+        document.getElementById(
+          'uptimeRobotRecordCount'
+        );
+      if (count) {
+        count.textContent =
+          `${rows.length} records`;
+      }
+    }
+  );
+
+  buildUptimeRobotColumnMenu_(
+    data,
+    columns
+  );
+}
+
+
+function getUptimeRobotColumns_(
+  data
+) {
+
+  const defaults =
+    new Set(
+      data.defaultColumns || []
+    );
+
+  const preferences =
+    getColumnVisibilityPreferences_(
+      'uptimeRobot'
+    );
+
+  const requiredColumns = {
+    'Monitor Name': true
+  };
+
+  const applyVisible =
+    column => {
+      column.visible =
+        isTableColumnVisibleByPreference_(
+          column.field,
+          defaults,
+          preferences,
+          requiredColumns
+        );
+      return column;
+    };
+
+  return [
+    applyVisible({
+      title: 'Monitor',
+      field: 'Monitor Name',
+      minWidth: 190,
+      widthGrow: 1.4,
+      formatter: function(cell) {
+        const row =
+          cell.getRow().getData();
+
+        return `
+          <div class="uptime-robot-monitor-cell">
+            <strong>${escapeHtml(row['Monitor Name'] || row['Monitor ID'])}</strong>
+            <small>${escapeHtml(row['Monitor ID'])}</small>
+          </div>
+        `;
+      }
+    }),
+    applyVisible({
+      title: 'Type',
+      field: 'Monitor Type',
+      minWidth: 100
+    }),
+    applyVisible({
+      title: 'Target',
+      field: 'Target',
+      minWidth: 180,
+      widthGrow: 1.5
+    }),
+    applyVisible({
+      title: 'Health',
+      field: 'Health',
+      minWidth: 120,
+      formatter: function(cell) {
+        return statusPill(
+          cell.getValue() || 'Unknown'
+        );
+      }
+    }),
+    applyVisible({
+      title: 'Provider Status',
+      field: 'Provider Status',
+      minWidth: 135
+    }),
+    applyVisible({
+      title: 'Last Checked',
+      field: 'Last Checked',
+      minWidth: 150
+    }),
+    applyVisible({
+      title: 'Created',
+      field: 'Created At',
+      minWidth: 150
+    }),
+    applyVisible({
+      title: 'Last Incident',
+      field: 'Last Incident ID',
+      minWidth: 130
+    }),
+    applyVisible({
+      title: 'State Duration',
+      field: 'Current State Duration',
+      minWidth: 140
+    }),
+    applyVisible({
+      title: 'Tags',
+      field: 'Tags',
+      minWidth: 130
+    }),
+    applyVisible({
+      title: 'Last Sync',
+      field: 'Last Sync',
+      minWidth: 150
+    })
+  ];
+}
+
+
+function buildUptimeRobotColumnMenu_(
+  data,
+  columns
+) {
+
+  const menu =
+    document.getElementById(
+      'uptimeRobotColumnMenu'
+    );
+
+  if (
+    !menu ||
+    !tableInstance
+  ) {
+    return;
+  }
+
+  menu.innerHTML =
+    '';
+
+  const defaults =
+    new Set(
+      data.defaultColumns || []
+    );
+
+  const requiredColumns = {
+    'Monitor Name': true
+  };
+
+  columns.forEach(columnDefinition => {
+
+    const field =
+      columnDefinition.field;
+
+    const column =
+      tableInstance.getColumn(
+        field
+      );
+
+    const wrapper =
+      document.createElement(
+        'label'
+      );
+
+    wrapper.className =
+      'dropdown-item d-flex align-items-center gap-2';
+
+    wrapper.addEventListener(
+      'click',
+      function(event) {
+        event.stopPropagation();
+      }
+    );
+
+    const checkbox =
+      document.createElement(
+        'input'
+      );
+
+    checkbox.type =
+      'checkbox';
+    checkbox.className =
+      'form-check-input m-0';
+    checkbox.checked =
+      !!(
+        column &&
+        column.isVisible()
+      );
+    checkbox.disabled =
+      !!requiredColumns[field];
+
+    checkbox.addEventListener(
+      'change',
+      function(event) {
+        event.stopPropagation();
+
+        if (this.checked) {
+          tableInstance.showColumn(
+            field
+          );
+        } else {
+          tableInstance.hideColumn(
+            field
+          );
+        }
+
+        persistColumnVisibilityPreference_(
+          'uptimeRobot',
+          field,
+          this.checked,
+          defaults
+        );
+      }
+    );
+
+    const label =
+      document.createElement(
+        'span'
+      );
+
+    label.textContent =
+      requiredColumns[field]
+        ? columnDefinition.title + ' (required)'
+        : columnDefinition.title;
+
+    wrapper.appendChild(
+      checkbox
+    );
+
+    wrapper.appendChild(
+      label
+    );
+
+    menu.appendChild(
+      wrapper
+    );
+
+  });
+}
+
+
+function applyUptimeRobotFilters() {
+
+  if (!tableInstance) {
+    return;
+  }
+
+  const search =
+    String(
+      document.getElementById(
+        'uptimeRobotSearch'
+      ).value || ''
+    ).toLowerCase();
+
+  const health =
+    document.getElementById(
+      'uptimeRobotHealthFilter'
+    ).value;
+
+  tableInstance.setFilter(function(row) {
+
+    if (
+      health &&
+      row.Health !== health
+    ) {
+      return false;
+    }
+
+    if (!search) {
+      return true;
+    }
+
+    return [
+      row['Monitor ID'],
+      row['Monitor Name'],
+      row['Monitor Type'],
+      row.Target,
+      row.Health,
+      row['Provider Status'],
+      row.Tags
+    ]
+      .join(' ')
+      .toLowerCase()
+      .includes(search);
+
+  });
+}
+
+
+function clearUptimeRobotFilters() {
+
+  [
+    'uptimeRobotSearch',
+    'uptimeRobotHealthFilter'
+  ]
+    .forEach(id => {
+      const element =
+        document.getElementById(id);
+      if (element) {
+        element.value = '';
+      }
+    });
+
+  if (tableInstance) {
+    tableInstance.clearFilter();
+  }
+}
+
+
+function testUptimeRobotConnection(
+  button
+) {
+
+  const actionButton =
+    setActionWorking(
+      button,
+      'Testing...'
+    );
+
+  scriptRunPromise_(
+    'testIntegrationConnection:uptimerobot',
+    runner =>
+      runner.testIntegrationConnection(
+        'uptimerobot'
+      )
+  )
+    .then(function(result) {
+      if (
+        result.status === 'success' ||
+        result.status === 'connected'
+      ) {
+        setActionSuccess(
+          actionButton,
+          'Connected'
+        );
+      } else {
+        setActionError(
+          actionButton,
+          result.status === 'not_configured'
+            ? 'Not Configured'
+            : 'Test Failed'
+        );
+      }
+      showToast(
+        result.message ||
+        'Connection test complete.'
+      );
+    })
+    .catch(function(error) {
+      setActionError(
+        actionButton,
+        'Test Failed'
+      );
+      handleFailure(
+        error,
+        'test UptimeRobot'
+      );
+    });
+}
+
+
+function syncUptimeRobotNow(
+  button
+) {
+
+  const actionButton =
+    setActionWorking(
+      button,
+      'Syncing...'
+    );
+
+  scriptRunPromise_(
+    'runIntegrationSync:uptimerobot',
+    runner =>
+      runner.runIntegrationSync(
+        'uptimerobot'
+      )
+  )
+    .then(function(result) {
+      setActionSuccess(
+        actionButton,
+        'Synced'
+      );
+
+      invalidateClientPage(
+        'uptimeRobot'
+      );
+      invalidateClientPage(
+        'internetWan'
+      );
+      invalidateClientPage(
+        'dashboard'
+      );
+
+      showToast(
+        result.message ||
+        'UptimeRobot sync complete.'
+      );
+
+      loadPage(
+        'uptimeRobot',
+        true
+      );
+    })
+    .catch(function(error) {
+      setActionError(
+        actionButton,
+        'Sync Failed'
+      );
+      handleFailure(
+        error,
+        'sync UptimeRobot'
+      );
+    });
+}
+
+</script>

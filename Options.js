@@ -35,6 +35,12 @@ function getControlledOptionDefinitions_() {
       'Unknown',
       'Not Monitored'
     ],
+    uptimeRobotHealth: [
+      'Online',
+      'Down',
+      'Paused',
+      'Unknown'
+    ],
     workflowPriority: [
       'P1',
       'P2',
@@ -110,6 +116,15 @@ function getControlledOptionAliases_() {
       paused: 'Paused',
       unknown: 'Unknown',
       not_monitored: 'Not Monitored'
+    },
+    uptimeRobotHealth: {
+      up: 'Online',
+      online: 'Online',
+      looks_down: 'Down',
+      down: 'Down',
+      offline: 'Down',
+      paused: 'Paused',
+      unknown: 'Unknown'
     }
   };
 }
@@ -206,6 +221,13 @@ function getControlledOptionsForSheet_(
       );
   }
 
+  if (sheetName === 'UptimeRobot') {
+    map.Health =
+      getControlledOptions_(
+        'uptimeRobotHealth'
+      );
+  }
+
   if (sheetName === 'App Users') {
     map.Role =
       getControlledOptions_(
@@ -255,6 +277,13 @@ function getControlledOptionKeyForSheetField_(
     if (field === 'Status') {
       return 'wanStatus';
     }
+  }
+
+  if (
+    sheetName === 'UptimeRobot' &&
+    field === 'Health'
+  ) {
+    return 'uptimeRobotHealth';
   }
 
   if (sheetName === 'App Users') {

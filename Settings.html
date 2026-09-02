@@ -17,6 +17,7 @@ function renderSettingsPage(data) {
   document.getElementById('pageActions').innerHTML = `
 
     <button
+      type="button"
       class="btn btn-sm btn-brand"
       onclick="saveSettingsForm(this)"
     >
@@ -25,6 +26,7 @@ function renderSettingsPage(data) {
     </button>
 
     <button
+      type="button"
       class="btn btn-sm btn-light border"
       onclick="runSettingsValidation(this)"
     >
@@ -33,6 +35,7 @@ function renderSettingsPage(data) {
     </button>
 
     <button
+      type="button"
       class="btn btn-sm btn-light border"
       onclick="refreshCurrentPage(this)"
     >
@@ -424,6 +427,10 @@ function renderIntegrationCard(integration) {
   const canRun =
     integration.configurationComplete;
 
+  const canSync =
+    integration.configurationComplete &&
+    integration.enabled;
+
   return `
     <article class="integration-card">
 
@@ -484,13 +491,16 @@ function renderIntegrationCard(integration) {
         `).join('')}
       </div>
 
+      ${renderIntegrationRuntimeSummary_(integration)}
+
       <div class="integration-actions">
         ${
           integration.supportsConnectionTest
             ? `
               <button
+                type="button"
                 class="btn btn-sm btn-light border"
-                onclick="testSettingsIntegration('${escapeAttribute(integration.id)}', this)"
+                onclick="testSettingsIntegration('${escapeAttribute(integration.id)}', this, event)"
                 ${canRun ? '' : 'disabled'}
               >
                 <i class="fa-solid fa-plug-circle-check me-2"></i>
@@ -504,12 +514,30 @@ function renderIntegrationCard(integration) {
           integration.supportsSync
             ? `
               <button
+                type="button"
                 class="btn btn-sm btn-brand"
-                onclick="syncSettingsIntegration('${escapeAttribute(integration.id)}', this)"
-                ${canRun ? '' : 'disabled'}
+                onclick="syncSettingsIntegration('${escapeAttribute(integration.id)}', this, event)"
+                ${canSync ? '' : 'disabled'}
               >
                 <i class="fa-solid fa-cloud-arrow-down me-2"></i>
                 Sync Now
+              </button>
+            `
+            : ''
+        }
+
+        ${
+          integration.hasOperationalPage &&
+          integration.pageKey &&
+          integration.enabled
+            ? `
+              <button
+                type="button"
+                class="btn btn-sm btn-light border"
+                onclick="navigateTo('${escapeAttribute(integration.pageKey)}')"
+              >
+                <i class="fa-solid fa-arrow-up-right-from-square me-2"></i>
+                Open
               </button>
             `
             : ''
@@ -527,6 +555,181 @@ function renderIntegrationCard(integration) {
 
     </article>
   `;
+}
+
+
+function renderIntegrationRuntimeSummary_(
+  integration
+) {
+
+  const lastAttempt =
+    integration.lastAttempt || '';
+
+  const lastSuccessfulSync =
+    integration.lastSuccessfulSync ||
+    integration.lastSync ||
+    '';
+
+  return `
+    <div class="integration-runtime-grid">
+      <div>
+        <span>Enabled</span>
+        ${statusPill(integration.enabled ? 'Enabled' : 'Disabled')}
+      </div>
+      <div>
+        <span>Connection</span>
+        ${statusPill(formatIntegrationState_(integration.connectionStatus || 'unknown'))}
+      </div>
+      <div>
+        <span>Data</span>
+        ${statusPill(formatIntegrationState_(integration.dataStatus || 'not_synced'))}
+      </div>
+      <div>
+        <span>Last Attempt</span>
+        <strong>${escapeHtml(formatIntegrationTimestamp_(lastAttempt))}</strong>
+      </div>
+      <div>
+        <span>Last Successful Sync</span>
+        <strong>${escapeHtml(formatIntegrationTimestamp_(lastSuccessfulSync))}</strong>
+      </div>
+      <div>
+        <span>Records</span>
+        ${renderIntegrationRecordCounts_(integration)}
+      </div>
+      ${
+        integration.latestError
+          ? `
+            <div class="integration-runtime-error">
+              <span>Latest Error</span>
+              <strong>${escapeHtml(integration.latestError)}</strong>
+            </div>
+          `
+          : ''
+      }
+    </div>
+  `;
+}
+
+
+function renderIntegrationRecordCounts_(
+  integration
+) {
+
+  const counts =
+    integration.recordCounts || {};
+
+  if (integration.id === 'aruba_central') {
+    return `
+      <div class="integration-count-list">
+        ${integrationCountButton_('Switches', counts.switches || 0, 'switches')}
+        ${integrationCountButton_('APs', counts.accessPoints || 0, 'accessPoints')}
+      </div>
+    `;
+  }
+
+  if (
+    integration.pageKey &&
+    integration.recordCount !== undefined
+  ) {
+    return integrationCountButton_(
+      String(integration.recordCount || 0),
+      '',
+      integration.pageKey
+    );
+  }
+
+  const entries =
+    Object.keys(counts)
+      .filter(key =>
+        counts[key] !== undefined &&
+        counts[key] !== ''
+      );
+
+  if (!entries.length) {
+    return `<strong>${escapeHtml(integration.recordCount || 0)}</strong>`;
+  }
+
+  return `
+    <div class="integration-count-list">
+      ${entries.map(key => `
+        <span class="integration-count-chip">
+          ${escapeHtml(formatIntegrationState_(key))}: ${escapeHtml(counts[key])}
+        </span>
+      `).join('')}
+    </div>
+  `;
+}
+
+
+function integrationCountButton_(
+  label,
+  value,
+  pageKey
+) {
+
+  const text =
+    value === ''
+      ? label
+      : label + ': ' + value;
+
+  if (!pageKey) {
+    return `
+      <span class="integration-count-chip">
+        ${escapeHtml(text)}
+      </span>
+    `;
+  }
+
+  return `
+    <button
+      type="button"
+      class="integration-count-chip integration-count-button"
+      onclick="navigateTo('${escapeAttribute(pageKey)}')"
+    >
+      ${escapeHtml(text)}
+    </button>
+  `;
+}
+
+
+function formatIntegrationState_(
+  value
+) {
+
+  const text =
+    String(value || '')
+      .trim();
+
+  if (!text) {
+    return 'Unknown';
+  }
+
+  return text
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, letter =>
+      letter.toUpperCase()
+    );
+}
+
+
+function formatIntegrationTimestamp_(
+  value
+) {
+
+  const text =
+    String(value || '')
+      .trim();
+
+  if (!text) {
+    return 'Never';
+  }
+
+  try {
+    return new Date(text).toLocaleString();
+  } catch (error) {
+    return text;
+  }
 }
 
 
@@ -757,118 +960,109 @@ function saveSettingsForm(
     message: 'Applying your configuration'
   });
 
-  scriptRunPromise_(
-    'saveAppSettings',
-    runner =>
-      runner.saveAppSettings(
-        settings
-      )
-  )
-    .then(function(data) {
+  runAfterNextPaint_(function() {
 
-      currentPageData =
-        data;
+    scriptRunPromise_(
+      'saveAppSettings',
+      runner =>
+        runner.saveAppSettings(
+          settings
+        )
+    )
+      .then(function(data) {
 
-      clearClientPageCache_();
+        currentPageData =
+          data;
 
-      updateAppWorkingModal({
-        state: 'success',
-        title: 'Settings Saved',
-        message: data.moduleStateChanged
-          ? 'Reloading Dashboard...'
-          : 'Applying saved configuration'
-      });
+        clearClientPageCache_();
 
-      if (
-        data.bootstrap
-      ) {
+        updateAppWorkingModal({
+          state: 'success',
+          title: 'Settings Saved',
+          message: data.moduleStateChanged
+            ? 'Refreshing enabled modules...'
+            : 'Applying saved configuration'
+        });
 
-        applyBootstrapShell(
+        if (
           data.bootstrap
+        ) {
+
+          applyBootstrapShell(
+            data.bootstrap
+          );
+
+        } else {
+
+          appBootstrap.config =
+            data.config;
+
+          applyBranding(
+            data.config
+          );
+
+        }
+
+        setActionSuccess(
+          actionButton,
+          'Saved'
         );
 
-      } else {
-
-        appBootstrap.config =
-          data.config;
-
-        applyBranding(
-          data.config
-        );
-
-      }
-
-      setActionSuccess(
-        actionButton,
-        'Saved'
-      );
-
-      showToast(
-        'Settings saved.'
-      );
-
-      if (data.moduleStateChanged) {
-        requestNextInitialRoute_(
-          'settings'
+        showToast(
+          'Settings saved.'
         );
 
         setTimeout(
           function() {
-            window.location.reload();
+            renderSettingsPage(
+              data
+            );
+            setClientCache(
+              'settings',
+              data,
+              {
+                source: 'settings-save'
+              }
+            );
+            scheduleOperationalPrefetch_();
+            settingsSaveInProgress =
+              false;
+            hideAppWorkingModal();
           },
-          900
+          data.moduleStateChanged
+            ? 650
+            : 450
         );
 
-        return;
-      }
+      })
+      .catch(function(error) {
+        settingsSaveInProgress =
+          false;
 
-      setTimeout(
-        function() {
-          renderSettingsPage(
-            data
-          );
-          setClientCache(
-            'settings',
-            data,
-            {
-              source: 'settings-save'
-            }
-          );
-          scheduleOperationalPrefetch_();
-          settingsSaveInProgress =
-            false;
-          hideAppWorkingModal();
-        },
-        450
-      );
+        updateAppWorkingModal({
+          state: 'error',
+          title: 'Settings Save Failed',
+          message: 'Review the issue and try again.',
+          error: error,
+          retry: function() {
+            hideAppWorkingModal();
+            saveSettingsForm(
+              button
+            );
+          }
+        });
 
-    })
-    .catch(function(error) {
-      settingsSaveInProgress =
-        false;
-
-      updateAppWorkingModal({
-        state: 'error',
-        title: 'Settings Save Failed',
-        message: 'Review the issue and try again.',
-        error: error,
-        retry: function() {
-          hideAppWorkingModal();
-          saveSettingsForm(
-            button
-          );
-        }
+        setActionError(
+          actionButton,
+          'Save Failed'
+        );
+        handleFailure(
+          error,
+          'save settings'
+        );
       });
 
-      setActionError(
-        actionButton,
-        'Save Failed'
-      );
-      handleFailure(
-        error,
-        'save settings'
-      );
-    });
+  });
 }
 
 
@@ -903,9 +1097,27 @@ function saveIntegrationEnabled(
       currentPageData =
         data;
 
+      clearClientPageCache_();
+
+      if (data.bootstrap) {
+        applyBootstrapShell(
+          data.bootstrap
+        );
+      }
+
       renderSettingsPage(
         data
       );
+
+      setClientCache(
+        'settings',
+        data,
+        {
+          source: 'integration-config'
+        }
+      );
+
+      scheduleOperationalPrefetch_();
 
       showToast(
         'Integration setting saved.'
@@ -941,10 +1153,126 @@ function saveIntegrationEnabled(
 }
 
 
+function updateSettingsIntegrationFromResult_(
+  result,
+  source
+) {
+
+  if (
+    result &&
+    result.settings
+  ) {
+
+    currentPageData =
+      result.settings;
+
+    if (
+      result.settings.bootstrap
+    ) {
+      applyBootstrapShell(
+        result.settings.bootstrap
+      );
+    }
+
+    renderSettingsPage(
+      result.settings
+    );
+
+    setClientCache(
+      'settings',
+      result.settings,
+      {
+        source:
+          source || 'integration-action'
+      }
+    );
+
+    return;
+
+  }
+
+  if (
+    !result ||
+    !result.integration ||
+    !currentPageData ||
+    !Array.isArray(
+      currentPageData.integrations
+    )
+  ) {
+    return;
+  }
+
+  currentPageData.integrations =
+    currentPageData.integrations.map(
+      integration =>
+        integration.id === result.integration.id
+          ? result.integration
+          : integration
+    );
+
+  renderSettingsPage(
+    currentPageData
+  );
+
+  setClientCache(
+    'settings',
+    currentPageData,
+    {
+      source:
+        source || 'integration-action'
+    }
+  );
+}
+
+
+function invalidateIntegrationClientCaches_(
+  id,
+  result
+) {
+
+  const fallback = {
+    aruba_central: [
+      'switches',
+      'accessPoints',
+      'dashboard'
+    ],
+    threatdown: [
+      'servers',
+      'dashboard'
+    ],
+    uptimerobot: [
+      'uptimeRobot',
+      'internetWan',
+      'dashboard'
+    ]
+  };
+
+  const pages =
+    result &&
+    Array.isArray(result.invalidatePages)
+      ? result.invalidatePages
+      : fallback[id] || [
+          'dashboard'
+        ];
+
+  pages.forEach(pageKey => {
+    invalidateClientPage(
+      pageKey
+    );
+  });
+}
+
+
 function testSettingsIntegration(
   id,
-  button
+  button,
+  event
 ) {
+
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
 
   const actionButton =
     setActionWorking(
@@ -961,10 +1289,22 @@ function testSettingsIntegration(
   )
     .then(function(result) {
 
-      setActionSuccess(
-        actionButton,
-        'Test Complete'
-      );
+      if (
+        result.status === 'success' ||
+        result.status === 'connected'
+      ) {
+        setActionSuccess(
+          actionButton,
+          'Connected'
+        );
+      } else {
+        setActionError(
+          actionButton,
+          result.status === 'not_configured'
+            ? 'Not Configured'
+            : 'Test Failed'
+        );
+      }
 
       showToast(
         result.message ||
@@ -974,9 +1314,12 @@ function testSettingsIntegration(
 
       setTimeout(
         function() {
-          refreshCurrentPage();
+          updateSettingsIntegrationFromResult_(
+            result,
+            'integration-test'
+          );
         },
-        450
+        250
       );
 
     })
@@ -995,8 +1338,14 @@ function testSettingsIntegration(
 
 function syncSettingsIntegration(
   id,
-  button
+  button,
+  event
 ) {
+
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
 
   const actionButton =
     setActionWorking(
@@ -1018,28 +1367,28 @@ function syncSettingsIntegration(
         'Synced'
       );
 
-      if (id === 'aruba_central') {
-        invalidateClientPage('switches');
-        invalidateClientPage('accessPoints');
-      }
-
-      if (id === 'threatdown') {
-        invalidateClientPage('servers');
-      }
-
-      invalidateClientPage('dashboard');
+      invalidateIntegrationClientCaches_(
+        id,
+        result
+      );
 
       showToast(
-        result.status === 'success'
-          ? 'Integration sync complete.'
-          : 'Integration sync finished: ' + result.status
+        result.message ||
+        (
+          result.status === 'success'
+            ? 'Integration sync complete.'
+            : 'Integration sync finished: ' + result.status
+        )
       );
 
       setTimeout(
         function() {
-          refreshCurrentPage();
+          updateSettingsIntegrationFromResult_(
+            result,
+            'integration-sync'
+          );
         },
-        450
+        250
       );
 
     })

@@ -33,6 +33,7 @@ const PREFETCH_PAGE_PRIORITY = [
   'busCameras',
   'intercom',
   'backups',
+  'uptimeRobot',
   'workflow',
   'users'
 ];
@@ -134,6 +135,7 @@ const PAGE_RENDERER_FUNCTIONS = {
   dashboard: 'renderDashboard',
   table: 'renderTablePage',
   internetWan: 'renderInternetWanPage',
+  uptimeRobot: 'renderUptimeRobotPage',
   structured: 'renderStructuredPage',
   workflow: 'renderWorkflowPage',
   users: 'renderUsersPage',
@@ -1709,11 +1711,7 @@ function loadPage(
             'ms'
         );
 
-        if (
-          pageKey === 'dashboard'
-        ) {
-          scheduleOperationalPrefetch_();
-        }
+        scheduleOperationalPrefetch_();
 
         if (
           isClientCacheStale_(
@@ -1819,11 +1817,7 @@ function loadPage(
           'ms'
       );
 
-      if (
-        pageKey === 'dashboard'
-      ) {
-        scheduleOperationalPrefetch_();
-      }
+      scheduleOperationalPrefetch_();
 
       if (actionButton) {
         setActionSuccess(
@@ -2069,6 +2063,7 @@ function shouldPrefetchPage_(
 
   return page.type === 'table' ||
     page.type === 'internetWan' ||
+    page.type === 'uptimeRobot' ||
     page.type === 'structured' ||
     page.type === 'workflow' ||
     page.type === 'users';
@@ -2185,6 +2180,35 @@ function nowClient_() {
     typeof window.performance.now === 'function'
     ? window.performance.now()
     : Date.now();
+}
+
+
+function runAfterNextPaint_(
+  callback
+) {
+
+  const run =
+    typeof callback === 'function'
+      ? callback
+      : function() {};
+
+  if (
+    typeof window !== 'undefined' &&
+    typeof window.requestAnimationFrame === 'function'
+  ) {
+
+    window.requestAnimationFrame(function() {
+      window.requestAnimationFrame(run);
+    });
+
+    return;
+
+  }
+
+  setTimeout(
+    run,
+    0
+  );
 }
 
 
@@ -2843,6 +2867,19 @@ function renderPage(
   ) {
 
     renderInternetWanPage(
+      data
+    );
+
+    return;
+
+  }
+
+
+  if (
+    page.type === 'uptimeRobot'
+  ) {
+
+    renderUptimeRobotPage(
       data
     );
 
@@ -3538,6 +3575,9 @@ function statusPill(
     'successful',
     'completed',
     'configured',
+    'enabled',
+    'connected',
+    'synced',
     'available'
   ];
 
@@ -3553,7 +3593,9 @@ function statusPill(
     'inactive',
     'error',
     'missing',
-    'not configured'
+    'not configured',
+    'connection failed',
+    'sync failed'
   ];
 
 
@@ -3565,6 +3607,10 @@ function statusPill(
     'paused',
     'needs update',
     'pending',
+    'not synced',
+    'testing',
+    'syncing',
+    'disabled',
     'partial'
   ];
 

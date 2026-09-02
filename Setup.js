@@ -554,6 +554,17 @@ function getNetworkDashboardSchema_() {
       ]
     },
 
+    'UptimeRobot': {
+      type: 'integration',
+      category: 'Monitoring',
+      headers:
+        getUptimeRobotSheetHeaders_(),
+      requiredHeaders:
+        getUptimeRobotSheetHeaders_(),
+      frozenRows: 1,
+      tabColor: '#10b981'
+    },
+
     'App Users': {
       type: 'system',
       category: 'Administration',
@@ -1898,46 +1909,6 @@ function migrateLegacySecurityCamerasIfNeeded_(
     return;
   }
 
-
-  const ss =
-    sheet.getParent();
-
-  const backupName =
-    getUniqueSheetName_(
-      ss,
-      sheetName +
-      ' Legacy Backup'
-    );
-
-
-  let backupCreated =
-    false;
-
-
-  try {
-
-    sheet
-      .copyTo(ss)
-      .setName(
-        backupName
-      );
-
-    backupCreated =
-      true;
-
-  } catch (error) {
-
-    result.warnings.push(
-      sheetName +
-      ' uses the old multi-section layout. Automatic migration was skipped because a backup sheet could not be created: ' +
-      error.message
-    );
-
-    return;
-
-  }
-
-
   const legacyValues =
     sheet
       .getRange(
@@ -1958,6 +1929,58 @@ function migrateLegacySecurityCamerasIfNeeded_(
     buildUnifiedSecurityCameraRows_(
       legacyValues
     );
+
+
+  const ss =
+    sheet.getParent();
+
+  let backupName =
+    migratedRows.length
+      ? getExistingLegacyBackupSheetName_(
+          ss,
+          sheetName
+        )
+      : '';
+
+  let backupCreated =
+    false;
+
+  if (
+    migratedRows.length &&
+    !backupName
+  ) {
+
+    backupName =
+      getUniqueSheetName_(
+        ss,
+        sheetName +
+        ' Legacy Backup'
+      );
+
+    try {
+
+      sheet
+        .copyTo(ss)
+        .setName(
+          backupName
+        );
+
+      backupCreated =
+        true;
+
+    } catch (error) {
+
+      result.warnings.push(
+        sheetName +
+        ' uses the old multi-section layout. Automatic migration was skipped because a backup sheet could not be created: ' +
+        error.message
+      );
+
+      return;
+
+    }
+
+  }
 
 
   sheet.clear();
@@ -2298,6 +2321,28 @@ function getUniqueSheetName_(
 
 
   return name;
+}
+
+
+function getExistingLegacyBackupSheetName_(
+  ss,
+  sheetName
+) {
+
+  const prefix =
+    sheetName +
+    ' Legacy Backup ';
+
+  return ss
+    .getSheets()
+    .map(sheet =>
+      sheet.getName()
+    )
+    .filter(name =>
+      name.indexOf(prefix) === 0
+    )
+    .sort()
+    .pop() || '';
 }
 
 
@@ -3207,15 +3252,27 @@ function validateInactiveAndObsoleteSheets_(
         )
       ) {
 
+        const definition =
+          allSchema[sheetName] || {};
+
+        const inactiveReason =
+          definition.type === 'integration'
+            ? 'Disabled integration sheet is preserved but not validated.'
+            : 'Inactive optional module sheet is preserved but not validated.';
+
         result.unmanagedSheets.push({
           sheet: sheetName,
           reason:
-            'Inactive optional module sheet is preserved but not validated.'
+            inactiveReason
         });
 
         result.warnings.push(
           sheetName +
-          ' exists for a disabled optional module and is preserved but inactive.'
+          (
+            definition.type === 'integration'
+              ? ' exists for a disabled integration and is preserved but inactive.'
+              : ' exists for a disabled optional module and is preserved but inactive.'
+          )
         );
 
       }

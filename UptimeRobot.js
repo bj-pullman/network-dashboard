@@ -4,29 +4,187 @@ const UPTIMEROBOT_API_BASE_URL =
 const UPTIMEROBOT_API_KEY_PROPERTY =
   'UPTIMEROBOT_API_KEY';
 
+const UPTIMEROBOT_SHEET_NAME =
+  'UptimeRobot';
+
+const UPTIMEROBOT_LOCAL_CACHE_KEY =
+  'uptimerobot.monitors.local';
+
 const UPTIMEROBOT_MONITOR_CACHE_KEY =
   'uptimerobot.monitors.normalized';
 
-const UPTIMEROBOT_MONITOR_CACHE_SECONDS =
-  180;
+const UPTIMEROBOT_LOCAL_CACHE_SECONDS =
+  300;
+
+
+function getUptimeRobotSheetHeaders_() {
+
+  return [
+    'Monitor ID',
+    'Monitor Name',
+    'Monitor Type',
+    'Target',
+    'Health',
+    'Provider Status',
+    'Last Checked',
+    'Created At',
+    'Last Incident ID',
+    'Current State Duration',
+    'Tags',
+    'Last Sync'
+  ];
+}
 
 
 function testUptimeRobotConnection_() {
 
-  const snapshot =
-    fetchUptimeRobotMonitorSnapshot_();
+  const response =
+    fetchUptimeRobotJson_(
+      '/monitors',
+      {
+        limit: 1
+      }
+    );
+
+  const monitors =
+    extractUptimeRobotMonitorList_(
+      response.json
+    );
 
   return {
     status: 'success',
     message:
-      'UptimeRobot monitor read succeeded.',
+      'UptimeRobot monitor metadata read succeeded.',
     monitorsFound:
-      snapshot.monitors.length
+      monitors.length
   };
 }
 
 
+function syncUptimeRobotToSheet() {
+
+  requireAdmin_();
+
+  const status =
+    getIntegrationStatusById_(
+      'uptimerobot'
+    );
+
+  if (!status.configurationComplete) {
+    throw new Error(
+      'UptimeRobot cannot sync because required Script Properties are missing.'
+    );
+  }
+
+  if (!status.enabled) {
+    throw new Error(
+      'UptimeRobot is disabled in App Integrations.'
+    );
+  }
+
+  try {
+
+    const snapshot =
+      fetchUptimeRobotMonitorSnapshot_();
+
+    writeUptimeRobotMonitorsToSheet_(
+      snapshot.monitors,
+      snapshot.fetchedAt
+    );
+
+    const summary =
+      buildUptimeRobotSummary_(
+        snapshot.monitors
+      );
+
+    const counts = {
+      monitors:
+        snapshot.monitors.length,
+      online:
+        summary.online,
+      down:
+        summary.down,
+      paused:
+        summary.paused,
+      unknown:
+        summary.unknown
+    };
+
+    updateIntegrationSyncStatus_(
+      'uptimerobot',
+      {
+        success: true,
+        connectionStatus: 'connected',
+        lastSuccessfulSync:
+          snapshot.fetchedAt,
+        lastStatus:
+          'Sync succeeded',
+        recordCount:
+          snapshot.monitors.length,
+        recordCounts:
+          counts,
+        latestError: ''
+      }
+    );
+
+    invalidateUptimeRobotDataCaches_();
+
+    return {
+      status: 'success',
+      message:
+        'UptimeRobot monitors synced locally.',
+      monitorsSynced:
+        snapshot.monitors.length,
+      lastSync:
+        snapshot.fetchedAt,
+      counts:
+        counts,
+      invalidatePages: [
+        'uptimeRobot',
+        'internetWan',
+        'dashboard'
+      ]
+    };
+
+  } catch (error) {
+
+    const message =
+      sanitizeUptimeRobotError_(
+        error
+      );
+
+    updateIntegrationSyncStatus_(
+      'uptimerobot',
+      {
+        success: false,
+        lastStatus:
+          'Sync failed',
+        latestError:
+          message
+      }
+    );
+
+    invalidateUptimeRobotDataCaches_();
+
+    throw new Error(
+      message
+    );
+
+  }
+}
+
+
 function getUptimeRobotMonitorSnapshot_(
+  options
+) {
+
+  return getUptimeRobotLocalMonitorSnapshot_(
+    options
+  );
+}
+
+
+function getUptimeRobotLocalMonitorSnapshot_(
   options
 ) {
 
@@ -47,9 +205,25 @@ function getUptimeRobotMonitorSnapshot_(
     canRefresh:
       !!integrationStatus.enabled &&
       !!integrationStatus.configurationComplete,
+    canSync:
+      !!integrationStatus.enabled &&
+      !!integrationStatus.configurationComplete,
     status: 'disabled',
     message: '',
-    fetchedAt: '',
+    fetchedAt:
+      integrationStatus.lastSuccessfulSync || '',
+    lastAttempt:
+      integrationStatus.lastAttempt || '',
+    lastSuccessfulSync:
+      integrationStatus.lastSuccessfulSync || '',
+    latestError:
+      integrationStatus.latestError || '',
+    dataStatus:
+      integrationStatus.dataStatus || '',
+    recordCounts:
+      integrationStatus.recordCounts || {},
+    summary:
+      buildUptimeRobotSummary_([]),
     monitors: []
   };
 
@@ -68,80 +242,166 @@ function getUptimeRobotMonitorSnapshot_(
   }
 
   const cached =
-    getCachedUptimeRobotMonitorSnapshot_();
-
-  if (
-    cached &&
     !options.forceRefresh
-  ) {
+      ? getCachedUptimeRobotLocalSnapshot_()
+      : null;
+
+  if (cached) {
     return Object.assign(
       base,
       cached,
       {
-        status: 'cached',
+        status:
+          cached.status || 'local',
         message:
           cached.message ||
-          'Using cached UptimeRobot monitor health.'
+          'Using synchronized UptimeRobot monitor data.'
       }
     );
   }
 
-  if (!options.allowFetch) {
-    base.status =
-      cached
-        ? 'cached'
-        : 'not_fetched';
-    base.message =
-      cached
-        ? 'Using cached UptimeRobot monitor health.'
-        : 'UptimeRobot monitor health has not been fetched yet.';
-    if (cached) {
-      base.fetchedAt =
-        cached.fetchedAt || '';
-      base.monitors =
-        cached.monitors || [];
-    }
-    return base;
-  }
+  const monitors =
+    readUptimeRobotLocalMonitors_();
 
-  try {
-    return Object.assign(
+  const summary =
+    buildUptimeRobotSummary_(
+      monitors
+    );
+
+  const fetchedAt =
+    getLatestUptimeRobotSyncStamp_(
+      monitors,
+      integrationStatus
+    );
+
+  const snapshot =
+    Object.assign(
       base,
-      fetchUptimeRobotMonitorSnapshot_(),
       {
-        status: 'fresh',
+        status:
+          monitors.length
+            ? 'local'
+            : (
+                integrationStatus.lastSuccessfulSync
+                  ? 'empty'
+                  : 'not_synced'
+              ),
         message:
-          'UptimeRobot monitor health refreshed.'
+          monitors.length
+            ? 'Using synchronized UptimeRobot monitor data.'
+            : (
+                integrationStatus.lastSuccessfulSync
+                  ? 'UptimeRobot sync completed with no monitors.'
+                  : 'UptimeRobot has not been synced locally yet.'
+              ),
+        fetchedAt:
+          fetchedAt,
+        lastSuccessfulSync:
+          integrationStatus.lastSuccessfulSync || fetchedAt,
+        summary:
+          summary,
+        monitors:
+          monitors
       }
     );
-  } catch (error) {
-    base.status =
-      'error';
-    base.message =
-      sanitizeUptimeRobotError_(
-        error
-      );
-    return base;
-  }
+
+  cacheJson_(
+    UPTIMEROBOT_LOCAL_CACHE_KEY,
+    snapshot,
+    UPTIMEROBOT_LOCAL_CACHE_SECONDS
+  );
+
+  return snapshot;
 }
 
 
-function getCachedUptimeRobotMonitorSnapshot_() {
+function getUptimeRobotPageData_(
+  forceRefresh
+) {
 
-  try {
-    const cached =
-      CacheService
-        .getScriptCache()
-        .get(
-          UPTIMEROBOT_MONITOR_CACHE_KEY
+  requirePagePermission_(
+    'uptimeRobot',
+    'view'
+  );
+
+  const cacheKey =
+    'app_page_uptimeRobot';
+
+  if (!forceRefresh) {
+    try {
+      const cached =
+        CacheService
+          .getScriptCache()
+          .get(
+            cacheKey
+          );
+
+      if (cached) {
+        return JSON.parse(
+          cached
         );
-
-    return cached
-      ? JSON.parse(cached)
-      : null;
-  } catch (error) {
-    return null;
+      }
+    } catch (error) {}
   }
+
+  const snapshot =
+    getUptimeRobotLocalMonitorSnapshot_({
+      forceRefresh:
+        !!forceRefresh
+    });
+
+  const rows =
+    snapshot.monitors.map(
+      monitor =>
+        monitorToUptimeRobotPageRow_(
+          monitor
+        )
+    );
+
+  const result = {
+    pageKey: 'uptimeRobot',
+    type: 'uptimeRobot',
+    label: 'UptimeRobot',
+    sheetName:
+      UPTIMEROBOT_SHEET_NAME,
+    headers:
+      getUptimeRobotSheetHeaders_(),
+    rows:
+      rows,
+    totalCount:
+      rows.length,
+    defaultColumns: [
+      'Monitor Name',
+      'Monitor Type',
+      'Target',
+      'Health',
+      'Provider Status',
+      'Last Checked',
+      'Last Sync'
+    ],
+    controlledOptions: {
+      Health:
+        getControlledOptions_(
+          'uptimeRobotHealth'
+        )
+    },
+    permission:
+      getPagePermission_(
+        'uptimeRobot'
+      ),
+    integration:
+      snapshot,
+    summary:
+      snapshot.summary
+  };
+
+  cacheJson_(
+    cacheKey,
+    result,
+    300
+  );
+
+  return result;
 }
 
 
@@ -199,24 +459,538 @@ function fetchUptimeRobotMonitorSnapshot_() {
 
   } while (cursor);
 
-  const snapshot = {
+  monitors.sort((left, right) =>
+    String(left.name || left.id)
+      .localeCompare(
+        String(right.name || right.id)
+      )
+  );
+
+  return {
     fetchedAt:
       new Date().toISOString(),
     monitors:
       monitors
   };
+}
 
-  cacheJson_(
-    UPTIMEROBOT_MONITOR_CACHE_KEY,
-    snapshot,
-    UPTIMEROBOT_MONITOR_CACHE_SECONDS
+
+function writeUptimeRobotMonitorsToSheet_(
+  monitors,
+  fetchedAt
+) {
+
+  const sheet =
+    ensureUptimeRobotSheet_();
+
+  const headers =
+    getUptimeRobotCurrentHeaders_(
+      sheet
+    );
+
+  const lastRow =
+    sheet.getLastRow();
+
+  const rows =
+    (monitors || [])
+      .map(monitor => {
+
+        const rowObject =
+          monitorToUptimeRobotSheetRowObject_(
+            monitor,
+            fetchedAt
+          );
+
+        return headers.map(header =>
+          rowObject[header] !== undefined
+            ? rowObject[header]
+            : ''
+        );
+
+      });
+
+  if (rows.length) {
+    sheet
+      .getRange(
+        2,
+        1,
+        rows.length,
+        headers.length
+      )
+      .setValues(
+        rows
+      );
+  }
+
+  const leftoverStartRow =
+    2 + rows.length;
+
+  if (lastRow >= leftoverStartRow) {
+    sheet
+      .getRange(
+        leftoverStartRow,
+        1,
+        lastRow - leftoverStartRow + 1,
+        Math.max(
+          sheet.getLastColumn(),
+          headers.length
+        )
+      )
+      .clearContent();
+  }
+}
+
+
+function ensureUptimeRobotSheet_() {
+
+  const ss =
+    SpreadsheetApp.getActiveSpreadsheet();
+
+  let sheet =
+    ss.getSheetByName(
+      UPTIMEROBOT_SHEET_NAME
+    );
+
+  if (!sheet) {
+    sheet =
+      ss.insertSheet(
+        UPTIMEROBOT_SHEET_NAME
+      );
+  }
+
+  const headers =
+    getUptimeRobotSheetHeaders_();
+
+  const currentWidth =
+    Math.max(
+      sheet.getLastColumn(),
+      headers.length
+    );
+
+  const current =
+    sheet
+      .getRange(
+        1,
+        1,
+        1,
+        currentWidth
+      )
+      .getDisplayValues()[0]
+      .map(value =>
+        String(value || '').trim()
+      );
+
+  if (!current.some(Boolean)) {
+    sheet
+      .getRange(
+        1,
+        1,
+        1,
+        headers.length
+      )
+      .setValues([
+        headers
+      ]);
+  } else {
+
+    while (
+      current.length &&
+      !current[current.length - 1]
+    ) {
+      current.pop();
+    }
+
+    headers.forEach(header => {
+
+      if (!current.includes(header)) {
+        sheet
+          .getRange(
+            1,
+            current.length + 1
+          )
+          .setValue(header);
+
+        current.push(header);
+      }
+
+    });
+
+  }
+
+  sheet.setFrozenRows(1);
+
+  sheet
+    .getRange(
+      1,
+      1,
+      1,
+      headers.length
+    )
+    .setFontWeight('bold')
+    .setBackground('#17345f')
+    .setFontColor('#ffffff');
+
+  return sheet;
+}
+
+
+function getUptimeRobotCurrentHeaders_(
+  sheet
+) {
+
+  ensureUptimeRobotSheet_();
+
+  return sheet
+    .getRange(
+      1,
+      1,
+      1,
+      sheet.getLastColumn()
+    )
+    .getDisplayValues()[0]
+    .map(value =>
+      String(value || '').trim()
+    )
+    .filter(Boolean);
+}
+
+
+function readUptimeRobotLocalMonitors_() {
+
+  const sheet =
+    SpreadsheetApp
+      .getActiveSpreadsheet()
+      .getSheetByName(
+        UPTIMEROBOT_SHEET_NAME
+      );
+
+  if (
+    !sheet ||
+    sheet.getLastRow() < 2
+  ) {
+    return [];
+  }
+
+  const headers =
+    sheet
+      .getRange(
+        1,
+        1,
+        1,
+        sheet.getLastColumn()
+      )
+      .getDisplayValues()[0]
+      .map(value =>
+        String(value || '').trim()
+      );
+
+  const values =
+    sheet
+      .getRange(
+        2,
+        1,
+        sheet.getLastRow() - 1,
+        sheet.getLastColumn()
+      )
+      .getDisplayValues();
+
+  const rows = [];
+
+  values.forEach((row, index) => {
+
+    if (
+      typeof rowHasMeaningfulData_ === 'function' &&
+      !rowHasMeaningfulData_(
+        row,
+        headers
+      )
+    ) {
+      return;
+    }
+
+    const rowObject = {
+      _row:
+        index + 2,
+      _sourceSheet:
+        UPTIMEROBOT_SHEET_NAME
+    };
+
+    headers.forEach((header, columnIndex) => {
+      if (header) {
+        rowObject[header] =
+          String(row[columnIndex] || '').trim();
+      }
+    });
+
+    const monitor =
+      normalizeUptimeRobotLocalRow_(
+        rowObject
+      );
+
+    if (monitor.id) {
+      rows.push(
+        monitor
+      );
+    }
+
+  });
+
+  return rows;
+}
+
+
+function monitorToUptimeRobotSheetRowObject_(
+  monitor,
+  fetchedAt
+) {
+
+  return {
+    'Monitor ID':
+      monitor.id || '',
+    'Monitor Name':
+      monitor.name || '',
+    'Monitor Type':
+      monitor.type || '',
+    'Target':
+      monitor.target || '',
+    'Health':
+      monitor.health || 'Unknown',
+    'Provider Status':
+      monitor.status || '',
+    'Last Checked':
+      monitor.lastChecked || '',
+    'Created At':
+      monitor.createdAt || '',
+    'Last Incident ID':
+      monitor.lastIncidentId || '',
+    'Current State Duration':
+      monitor.currentStateDuration || '',
+    'Tags':
+      monitor.tags || '',
+    'Last Sync':
+      fetchedAt || ''
+  };
+}
+
+
+function monitorToUptimeRobotPageRow_(
+  monitor
+) {
+
+  return Object.assign(
+    {
+      'Monitor ID':
+        monitor.id || '',
+      'Monitor Name':
+        monitor.name || '',
+      'Monitor Type':
+        monitor.type || '',
+      Target:
+        monitor.target || '',
+      Health:
+        monitor.health || 'Unknown',
+      'Provider Status':
+        monitor.status || '',
+      'Last Checked':
+        monitor.lastChecked || '',
+      'Created At':
+        monitor.createdAt || '',
+      'Last Incident ID':
+        monitor.lastIncidentId || '',
+      'Current State Duration':
+        monitor.currentStateDuration || '',
+      Tags:
+        monitor.tags || '',
+      'Last Sync':
+        monitor.lastSync || ''
+    },
+    {
+      id:
+        monitor.id || '',
+      name:
+        monitor.name || '',
+      type:
+        monitor.type || '',
+      target:
+        monitor.target || '',
+      health:
+        monitor.health || 'Unknown',
+      status:
+        monitor.status || '',
+      lastChecked:
+        monitor.lastChecked || '',
+      lastSync:
+        monitor.lastSync || ''
+    }
+  );
+}
+
+
+function normalizeUptimeRobotLocalRow_(
+  row
+) {
+
+  return {
+    _row:
+      row._row,
+    _sourceSheet:
+      row._sourceSheet,
+    id:
+      String(
+        row['Monitor ID'] || ''
+      ).trim(),
+    name:
+      String(
+        row['Monitor Name'] || ''
+      ).trim(),
+    type:
+      String(
+        row['Monitor Type'] || ''
+      ).trim(),
+    target:
+      String(
+        row.Target || ''
+      ).trim(),
+    health:
+      normalizeUptimeRobotHealth_(
+        row.Health
+      ),
+    status:
+      String(
+        row['Provider Status'] || ''
+      ).trim(),
+    lastChecked:
+      String(
+        row['Last Checked'] || ''
+      ).trim(),
+    createdAt:
+      String(
+        row['Created At'] || ''
+      ).trim(),
+    lastIncidentId:
+      String(
+        row['Last Incident ID'] || ''
+      ).trim(),
+    currentStateDuration:
+      String(
+        row['Current State Duration'] || ''
+      ).trim(),
+    tags:
+      String(
+        row.Tags || ''
+      ).trim(),
+    lastSync:
+      String(
+        row['Last Sync'] || ''
+      ).trim()
+  };
+}
+
+
+function getCachedUptimeRobotLocalSnapshot_() {
+
+  try {
+    const cached =
+      CacheService
+        .getScriptCache()
+        .get(
+          UPTIMEROBOT_LOCAL_CACHE_KEY
+        );
+
+    return cached
+      ? JSON.parse(cached)
+      : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+
+function invalidateUptimeRobotDataCaches_() {
+
+  try {
+    const cache =
+      CacheService.getScriptCache();
+
+    cache.remove(
+      UPTIMEROBOT_LOCAL_CACHE_KEY
+    );
+
+    cache.remove(
+      UPTIMEROBOT_MONITOR_CACHE_KEY
+    );
+  } catch (error) {}
+
+  invalidateAppPage_(
+    'uptimeRobot'
   );
 
   invalidateAppPage_(
     'internetWan'
   );
 
-  return snapshot;
+  invalidateAppPage_(
+    'dashboard'
+  );
+}
+
+
+function buildUptimeRobotSummary_(
+  monitors
+) {
+
+  const summary = {
+    total: 0,
+    online: 0,
+    down: 0,
+    paused: 0,
+    unknown: 0
+  };
+
+  (monitors || [])
+    .forEach(monitor => {
+
+      summary.total++;
+
+      const health =
+        normalizeSimpleKey_(
+          monitor.health
+        );
+
+      if (health === 'online') {
+        summary.online++;
+      } else if (health === 'down') {
+        summary.down++;
+      } else if (health === 'paused') {
+        summary.paused++;
+      } else {
+        summary.unknown++;
+      }
+
+    });
+
+  return summary;
+}
+
+
+function getLatestUptimeRobotSyncStamp_(
+  monitors,
+  integrationStatus
+) {
+
+  const stamps =
+    (monitors || [])
+      .map(monitor =>
+        String(
+          monitor.lastSync || ''
+        ).trim()
+      )
+      .filter(Boolean)
+      .sort();
+
+  return stamps.length
+    ? stamps[stamps.length - 1]
+    : integrationStatus.lastSuccessfulSync || '';
 }
 
 
@@ -459,9 +1233,9 @@ function normalizeUptimeRobotMonitor_(
         ''
       ).trim(),
     type:
-      String(
-        monitor.type || ''
-      ).trim(),
+      normalizeUptimeRobotType_(
+        monitor.type
+      ),
     target:
       String(
         monitor.url ||
@@ -477,14 +1251,141 @@ function normalizeUptimeRobotMonitor_(
         status
       ),
     lastChecked:
-      String(
+      extractUptimeRobotTimestamp_(
         monitor.lastCheck ||
         monitor.last_check ||
         monitor.lastChecked ||
         monitor.last_checked ||
+        monitor.lastDayUptimes
+      ),
+    createdAt:
+      extractUptimeRobotTimestamp_(
+        monitor.createDateTime ||
+        monitor.createdAt ||
+        monitor.created_at
+      ),
+    lastIncidentId:
+      String(
+        monitor.lastIncidentId ||
+        monitor.last_incident_id ||
         ''
-      ).trim()
+      ).trim(),
+    currentStateDuration:
+      String(
+        monitor.currentStateDuration ||
+        monitor.current_state_duration ||
+        ''
+      ).trim(),
+    tags:
+      normalizeUptimeRobotTags_(
+        monitor.tags
+      )
   };
+}
+
+
+function normalizeUptimeRobotType_(
+  value
+) {
+
+  if (
+    value &&
+    typeof value === 'object'
+  ) {
+    return String(
+      value.name ||
+      value.type ||
+      value.id ||
+      ''
+    ).trim();
+  }
+
+  return String(value || '')
+    .trim();
+}
+
+
+function normalizeUptimeRobotTags_(
+  value
+) {
+
+  if (!value) {
+    return '';
+  }
+
+  if (Array.isArray(value)) {
+    return value
+      .map(tag =>
+        typeof tag === 'object'
+          ? tag.name || tag.label || tag.id || ''
+          : tag
+      )
+      .map(tag =>
+        String(tag || '').trim()
+      )
+      .filter(Boolean)
+      .join(', ');
+  }
+
+  return String(value || '')
+    .trim();
+}
+
+
+function extractUptimeRobotTimestamp_(
+  value
+) {
+
+  if (!value) {
+    return '';
+  }
+
+  if (typeof value === 'number') {
+    return new Date(
+      value > 100000000000
+        ? value
+        : value * 1000
+    ).toISOString();
+  }
+
+  if (typeof value === 'string') {
+    return value.trim();
+  }
+
+  if (Array.isArray(value)) {
+    const candidates =
+      value
+        .map(item =>
+          extractUptimeRobotTimestamp_(
+            item &&
+            (
+              item.timestamp ||
+              item.datetime ||
+              item.dateTime ||
+              item.time
+            )
+          )
+        )
+        .filter(Boolean)
+        .sort();
+
+    return candidates.length
+      ? candidates[candidates.length - 1]
+      : '';
+  }
+
+  if (typeof value === 'object') {
+    return extractUptimeRobotTimestamp_(
+      value.timestamp ||
+      value.datetime ||
+      value.dateTime ||
+      value.time ||
+      value.createdAt ||
+      value.startedAt
+    );
+  }
+
+  return '';
 }
 
 
@@ -499,12 +1400,16 @@ function normalizeUptimeRobotHealth_(
       .replace(/[^A-Z0-9]+/g, '_')
       .replace(/^_+|_+$/g, '');
 
-  if (normalized === 'UP') {
+  if (
+    normalized === 'UP' ||
+    normalized === 'ONLINE'
+  ) {
     return 'Online';
   }
 
   if (
     normalized === 'DOWN' ||
+    normalized === 'OFFLINE' ||
     normalized === 'LOOKS_DOWN'
   ) {
     return 'Down';
@@ -512,6 +1417,10 @@ function normalizeUptimeRobotHealth_(
 
   if (normalized === 'PAUSED') {
     return 'Paused';
+  }
+
+  if (normalized === 'UNKNOWN') {
+    return 'Unknown';
   }
 
   return 'Unknown';
@@ -543,10 +1452,19 @@ function sanitizeUptimeRobotError_(
   error
 ) {
 
-  return (
+  const message =
     error &&
     error.message
-  )
-    ? String(error.message)
-    : 'UptimeRobot request failed.';
+      ? String(error.message)
+      : 'UptimeRobot request failed.';
+
+  if (
+    /api[_\s-]*key|token|secret|credential/i.test(
+      message
+    )
+  ) {
+    return 'UptimeRobot request failed. Review Script Properties and provider access.';
+  }
+
+  return message;
 }

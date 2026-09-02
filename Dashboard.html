@@ -2,6 +2,12 @@
 
 function renderDashboard(data) {
 
+  data =
+    data || {};
+
+  currentPageData =
+    data;
+
   const organizationName =
     appBootstrap &&
     appBootstrap.config &&
@@ -9,6 +15,24 @@ function renderDashboard(data) {
     appBootstrap.config.organization.name
       ? appBootstrap.config.organization.name
       : '';
+
+  const widgets =
+    data.widgets &&
+    data.widgets.length
+      ? data.widgets
+      : buildLegacyDashboardWidgets_(
+          data
+        );
+
+  const kpiWidgets =
+    widgets.filter(widget =>
+      widget.type === 'kpi'
+    );
+
+  const bodyWidgets =
+    widgets.filter(widget =>
+      widget.type !== 'kpi'
+    );
 
   setPageHeader(
     'Dashboard',
@@ -18,7 +42,22 @@ function renderDashboard(data) {
   );
 
   document.getElementById('pageActions').innerHTML = `
+    ${
+      data.canCustomize
+        ? `
+          <button
+            type="button"
+            class="btn btn-sm btn-light border"
+            onclick="openDashboardWidgetSettings()"
+          >
+            <i class="fa-solid fa-sliders me-2"></i>
+            Customize
+          </button>
+        `
+        : ''
+    }
     <button
+      type="button"
       class="btn btn-sm btn-light border"
       onclick="refreshCurrentPage(this)"
     >
@@ -27,210 +66,407 @@ function renderDashboard(data) {
     </button>
   `;
 
-  const metrics =
-    data.metricCards || [];
-
   document.getElementById('pageContent').innerHTML = `
-
-    <div class="row g-3 mb-4">
-
-      ${metrics.map(metric => `
-        <div class="col-xl col-md-4 col-sm-6">
-
-          <div class="metric-card">
-
-            <div class="metric-icon">
-              <i class="fa-solid ${metric.icon}"></i>
-            </div>
-
-            <div>
-              <div class="metric-label">
-                ${escapeHtml(metric.label)}
-              </div>
-
-              <div class="metric-value">
-                ${escapeHtml(metric.value)}
-              </div>
-            </div>
-
-          </div>
-
-        </div>
-      `).join('')}
-
-    </div>
-
-
-    <div class="row g-3 mb-4">
-
-      <div class="col-xl-8">
-
-        <div class="app-card h-100">
-
-          <div class="card-header-clean">
-            <h2 class="card-title-clean">
-              Switch Deployment by Campus
-            </h2>
-          </div>
-
-          <div class="p-3">
-            <canvas
-              id="campusChart"
-              height="105"
-            ></canvas>
-          </div>
-
-        </div>
-
+    <div class="dashboard-layout">
+      <div class="row g-3 mb-4">
+        ${kpiWidgets.map(renderDashboardKpiWidget_).join('')}
       </div>
 
-
-      <div class="col-xl-4">
-
-        <div class="app-card h-100">
-
-          <div class="card-header-clean">
-            <h2 class="card-title-clean">
-              Department Workflow
-            </h2>
-
-            <button
-              class="btn btn-sm btn-light border"
-              onclick="navigateTo('workflow')"
-            >
-              Open
-            </button>
-          </div>
-
-          <div class="p-3">
-
-            <div class="row g-2">
-
-              ${dashboardMiniMetric(
-                'Workflow Groups',
-                data.workflow.groups
-              )}
-
-              ${dashboardMiniMetric(
-                'Support Tiers',
-                data.workflow.tiers
-              )}
-
-              ${dashboardMiniMetric(
-                'Ticket Steps',
-                data.workflow.ticketSteps
-              )}
-
-              ${dashboardMiniMetric(
-                'Workflows',
-                data.workflow.workflows
-              )}
-
-            </div>
-
-          </div>
-
-        </div>
-
+      <div class="row g-3">
+        ${bodyWidgets.map(renderDashboardBodyWidget_).join('')}
       </div>
-
-    </div>
-
-
-    <div class="row g-3">
-
-      <div class="col-lg-4">
-
-        <div class="app-card">
-
-          <div class="card-header-clean">
-            <h2 class="card-title-clean">
-              Switch Health
-            </h2>
-          </div>
-
-          <div class="p-3">
-            ${renderStatusSummary(data.switchStatus)}
-          </div>
-
-        </div>
-
-      </div>
-
-
-      <div class="col-lg-4">
-
-        <div class="app-card">
-
-          <div class="card-header-clean">
-            <h2 class="card-title-clean">
-              Access Point Health
-            </h2>
-          </div>
-
-          <div class="p-3">
-            ${renderStatusSummary(data.apStatus)}
-          </div>
-
-        </div>
-
-      </div>
-
-
-      <div class="col-lg-4">
-
-        <div class="app-card">
-
-          <div class="card-header-clean">
-            <h2 class="card-title-clean">
-              Internet / WAN Status
-            </h2>
-          </div>
-
-          <div class="p-3">
-            ${renderStatusSummary(data.wanStatus)}
-          </div>
-
-        </div>
-
-      </div>
-
     </div>
   `;
 
-  renderCampusChart(data.campusDistribution);
+  renderDashboardCharts_(
+    bodyWidgets
+  );
+}
+
+
+function buildLegacyDashboardWidgets_(
+  data
+) {
+
+  const widgets =
+    (data.metricCards || [])
+      .map((metric, index) => ({
+        id:
+          metric.key || 'legacy_' + index,
+        display:
+          metric.label,
+        type:
+          'kpi',
+        value:
+          metric.value,
+        icon:
+          metric.icon,
+        order:
+          index + 1
+      }));
+
+  widgets.push(
+    {
+      id: 'campus_distribution',
+      display: 'Switch Deployment by Campus',
+      type: 'chart',
+      distribution:
+        data.campusDistribution || {},
+      size: 'large'
+    },
+    {
+      id: 'workflow_summary',
+      display: 'Department Workflow',
+      type: 'kpi_group',
+      value:
+        data.workflow || {},
+      size: 'medium'
+    },
+    {
+      id: 'switch_health',
+      display: 'Switch Health',
+      type: 'status_summary',
+      statuses:
+        data.switchStatus || {},
+      size: 'medium'
+    },
+    {
+      id: 'ap_health',
+      display: 'Access Point Health',
+      type: 'status_summary',
+      statuses:
+        data.apStatus || {},
+      size: 'medium'
+    },
+    {
+      id: 'wan_status',
+      display: 'Internet / WAN Status',
+      type: 'status_summary',
+      statuses:
+        data.wanStatus || {},
+      size: 'medium'
+    }
+  );
+
+  return widgets;
+}
+
+
+function renderDashboardKpiWidget_(
+  widget
+) {
+
+  return `
+    <div class="col-xl col-md-4 col-sm-6">
+      <div class="metric-card dashboard-widget-kpi">
+        <div class="metric-icon">
+          <i class="fa-solid ${escapeAttribute(widget.icon || 'fa-chart-simple')}"></i>
+        </div>
+        <div>
+          <div class="metric-label">
+            ${escapeHtml(widget.display || '')}
+          </div>
+          <div class="metric-value">
+            ${escapeHtml(widget.value)}
+          </div>
+          ${renderDashboardWidgetProvenance_(widget)}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+
+function renderDashboardBodyWidget_(
+  widget
+) {
+
+  const sizeClass =
+    widget.size === 'large'
+      ? 'col-xl-8'
+      : widget.size === 'small'
+        ? 'col-lg-4'
+        : 'col-lg-4';
+
+  return `
+    <div class="${sizeClass}">
+      <div class="app-card h-100 dashboard-widget">
+        <div class="card-header-clean">
+          <h2 class="card-title-clean">
+            ${escapeHtml(widget.display || '')}
+          </h2>
+          ${renderDashboardWidgetAction_(widget)}
+        </div>
+        <div class="p-3">
+          ${renderDashboardWidgetBody_(widget)}
+          ${renderDashboardWidgetProvenance_(widget)}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+
+function renderDashboardWidgetAction_(
+  widget
+) {
+
+  if (widget.id === 'workflow_summary') {
+    return `
+      <button
+        type="button"
+        class="btn btn-sm btn-light border"
+        onclick="navigateTo('workflow')"
+      >
+        Open
+      </button>
+    `;
+  }
+
+  if (
+    widget.requiredIntegration === 'uptimerobot'
+  ) {
+    return `
+      <button
+        type="button"
+        class="btn btn-sm btn-light border"
+        onclick="navigateTo('uptimeRobot')"
+      >
+        Open
+      </button>
+    `;
+  }
+
+  return '';
+}
+
+
+function renderDashboardWidgetBody_(
+  widget
+) {
+
+  if (widget.type === 'chart') {
+    return `
+      <canvas
+        id="${dashboardWidgetElementId_(widget)}"
+        height="105"
+      ></canvas>
+    `;
+  }
+
+  if (widget.type === 'kpi_group') {
+    const value =
+      widget.value || {};
+
+    return `
+      <div class="row g-2">
+        ${dashboardMiniMetric('Workflow Groups', value.groups || 0)}
+        ${dashboardMiniMetric('Support Tiers', value.tiers || 0)}
+        ${dashboardMiniMetric('Ticket Steps', value.ticketSteps || 0)}
+        ${dashboardMiniMetric('Workflows', value.workflows || 0)}
+      </div>
+    `;
+  }
+
+  if (widget.type === 'status_summary') {
+    return renderStatusSummary(
+      widget.statuses || {}
+    );
+  }
+
+  if (widget.type === 'list') {
+    return renderDashboardListWidget_(
+      widget
+    );
+  }
+
+  return '';
+}
+
+
+function renderDashboardListWidget_(
+  widget
+) {
+
+  const items =
+    widget.items || [];
+
+  if (!items.length) {
+    return `
+      <div class="text-muted small">
+        No records to show.
+      </div>
+    `;
+  }
+
+  return `
+    <div class="dashboard-list-widget">
+      ${items.map(item => `
+        <div class="dashboard-list-row">
+          <div>
+            <strong>${escapeHtml(item.name || item.id || '')}</strong>
+            <small>${escapeHtml(item.target || item.type || '')}</small>
+          </div>
+          ${statusPill(item.health || 'Unknown')}
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+
+function renderDashboardWidgetProvenance_(
+  widget
+) {
+
+  const provenance =
+    widget.provenance || {};
+
+  if (
+    !provenance.source &&
+    !provenance.lastUpdated
+  ) {
+    return '';
+  }
+
+  const updated =
+    provenance.lastUpdated
+      ? formatDashboardTimestamp_(
+          provenance.lastUpdated
+        )
+      : '';
+
+  return `
+    <div class="dashboard-widget-provenance">
+      ${escapeHtml(provenance.source || '')}
+      ${updated ? ' - ' + escapeHtml(updated) : ''}
+    </div>
+  `;
+}
+
+
+function renderDashboardCharts_(
+  widgets
+) {
+
+  destroyDashboardCharts_();
+
+  window.dashboardCharts =
+    [];
+
+  (widgets || [])
+    .filter(widget =>
+      widget.type === 'chart'
+    )
+    .forEach(widget => {
+
+      const canvas =
+        document.getElementById(
+          dashboardWidgetElementId_(
+            widget
+          )
+        );
+
+      if (!canvas) {
+        return;
+      }
+
+      const chart =
+        new Chart(canvas, {
+          type: 'bar',
+          data: {
+            labels:
+              Object.keys(widget.distribution || {}),
+            datasets: [{
+              label:
+                'Switches',
+              data:
+                Object.values(widget.distribution || {}),
+              backgroundColor:
+                (
+                  appBootstrap &&
+                  appBootstrap.config &&
+                  appBootstrap.config.branding &&
+                  appBootstrap.config.branding.primaryColor
+                ) ||
+                '#17345f',
+              borderRadius: 5
+            }]
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              legend: {
+                display: false
+              }
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                ticks: {
+                  precision: 0
+                }
+              },
+              x: {
+                grid: {
+                  display: false
+                }
+              }
+            }
+          }
+        });
+
+      window.dashboardCharts.push(
+        chart
+      );
+
+    });
+}
+
+
+function destroyDashboardCharts_() {
+
+  if (window.dashboardChart) {
+    try {
+      window.dashboardChart.destroy();
+    } catch (error) {}
+    window.dashboardChart =
+      null;
+  }
+
+  (window.dashboardCharts || [])
+    .forEach(chart => {
+      try {
+        chart.destroy();
+      } catch (error) {}
+    });
+
+  window.dashboardCharts =
+    [];
+}
+
+
+function dashboardWidgetElementId_(
+  widget
+) {
+
+  return 'dashboardWidget_' +
+    String(widget.id || '')
+      .replace(/[^a-z0-9]+/gi, '_');
 }
 
 
 function dashboardMiniMetric(label, value) {
   return `
     <div class="col-6">
-
-      <div
-        style="
-          background:#f7f8fa;
-          border:1px solid #e5e8ec;
-          border-radius:9px;
-          padding:13px;
-        "
-      >
-
+      <div class="dashboard-mini-metric">
         <div class="metric-label">
           ${escapeHtml(label)}
         </div>
-
-        <div
-          style="
-            font-size:22px;
-            font-weight:800;
-            color:#0d2342;
-          "
-        >
+        <div class="dashboard-mini-value">
           ${escapeHtml(value)}
         </div>
-
       </div>
-
     </div>
   `;
 }
@@ -251,86 +487,381 @@ function renderStatusSummary(statuses) {
 
   return `
     <div class="d-flex flex-wrap gap-2">
-
       ${entries.map(([status, count]) => `
-        <div
-          class="d-flex align-items-center gap-2 border rounded px-3 py-2"
-        >
+        <div class="d-flex align-items-center gap-2 border rounded px-3 py-2">
           ${statusPill(status)}
-
-          <strong>
-            ${escapeHtml(count)}
-          </strong>
+          <strong>${escapeHtml(count)}</strong>
         </div>
       `).join('')}
-
     </div>
   `;
 }
 
 
-function renderCampusChart(distribution) {
+function openDashboardWidgetSettings() {
 
-  const canvas =
-    document.getElementById('campusChart');
-
-  if (!canvas) return;
-
-  if (window.dashboardChart) {
-    window.dashboardChart.destroy();
+  if (
+    !currentPageData ||
+    !currentPageData.availableWidgets
+  ) {
+    return;
   }
 
-  window.dashboardChart =
-    new Chart(canvas, {
+  closeDashboardWidgetSettings_();
 
-      type: 'bar',
+  const configById = {};
 
-      data: {
-        labels:
-          Object.keys(distribution || {}),
-
-        datasets: [{
-          label: 'Switches',
-          data:
-            Object.values(distribution || {}),
-          backgroundColor:
-            (
-              appBootstrap &&
-              appBootstrap.config &&
-              appBootstrap.config.branding &&
-              appBootstrap.config.branding.primaryColor
-            ) ||
-            '#17345f',
-          borderRadius: 5
-        }]
-      },
-
-      options: {
-        responsive: true,
-
-        plugins: {
-          legend: {
-            display: false
-          }
-        },
-
-        scales: {
-          y: {
-            beginAtZero: true,
-            ticks: {
-              precision: 0
-            }
-          },
-
-          x: {
-            grid: {
-              display: false
-            }
-          }
-        }
-      }
-
+  (currentPageData.widgetConfig || [])
+    .forEach(item => {
+      configById[item.id] =
+        item;
     });
+
+  const widgets =
+    currentPageData.availableWidgets
+      .map(widget => {
+
+        const override =
+          configById[widget.id] || {};
+
+        return Object.assign(
+          {},
+          widget,
+          {
+            enabled:
+              override.enabled !== undefined
+                ? !!override.enabled
+                : !!widget.defaultEnabled,
+            order:
+              override.order !== undefined
+                ? override.order
+                : widget.defaultOrder,
+            size:
+              override.size ||
+              widget.defaultSize ||
+              'medium'
+          }
+        );
+
+      })
+      .sort((left, right) =>
+        Number(left.order || left.defaultOrder || 0) -
+        Number(right.order || right.defaultOrder || 0)
+      );
+
+  const wrapper =
+    document.createElement(
+      'div'
+    );
+
+  wrapper.id =
+    'dashboardWidgetModal';
+
+  wrapper.className =
+    'modal fade';
+
+  wrapper.tabIndex =
+    -1;
+
+  wrapper.innerHTML = `
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <div>
+            <div class="modal-eyebrow">DASHBOARD</div>
+            <h5 class="modal-title">Customize Widgets</h5>
+          </div>
+          <button
+            type="button"
+            class="btn-close"
+            data-bs-dismiss="modal"
+          ></button>
+        </div>
+        <div class="modal-body">
+          <div id="dashboardWidgetList" class="dashboard-widget-settings-list">
+            ${widgets.map(renderDashboardWidgetSettingRow_).join('')}
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button
+            type="button"
+            class="btn btn-light"
+            onclick="resetDashboardWidgetSettings(this)"
+          >
+            Reset Defaults
+          </button>
+          <button
+            type="button"
+            class="btn btn-light"
+            data-bs-dismiss="modal"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            class="btn btn-brand"
+            onclick="saveDashboardWidgetSettings(this)"
+          >
+            <i class="fa-solid fa-check me-2"></i>
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(
+    wrapper
+  );
+
+  const modal =
+    new bootstrap.Modal(
+      wrapper
+    );
+
+  wrapper.addEventListener(
+    'hidden.bs.modal',
+    function() {
+      wrapper.remove();
+    }
+  );
+
+  modal.show();
+}
+
+
+function renderDashboardWidgetSettingRow_(
+  widget
+) {
+
+  return `
+    <div
+      class="dashboard-widget-settings-row"
+      data-widget-id="${escapeAttribute(widget.id)}"
+      data-widget-size="${escapeAttribute(widget.size || widget.defaultSize || 'medium')}"
+    >
+      <label>
+        <input
+          type="checkbox"
+          class="form-check-input"
+          ${widget.enabled === false ? '' : 'checked'}
+        >
+        <span>
+          <strong>${escapeHtml(widget.display)}</strong>
+          <small>${escapeHtml(widget.category)} - ${escapeHtml(widget.type)} - ${escapeHtml(widget.dataSource)}</small>
+        </span>
+      </label>
+      <div class="dashboard-widget-settings-actions">
+        <button
+          type="button"
+          class="btn btn-sm btn-light border"
+          onclick="moveDashboardWidgetSetting_(this, -1)"
+          title="Move up"
+        >
+          <i class="fa-solid fa-arrow-up"></i>
+        </button>
+        <button
+          type="button"
+          class="btn btn-sm btn-light border"
+          onclick="moveDashboardWidgetSetting_(this, 1)"
+          title="Move down"
+        >
+          <i class="fa-solid fa-arrow-down"></i>
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+
+function moveDashboardWidgetSetting_(
+  button,
+  direction
+) {
+
+  const row =
+    button.closest(
+      '.dashboard-widget-settings-row'
+    );
+
+  if (!row) {
+    return;
+  }
+
+  if (direction < 0 && row.previousElementSibling) {
+    row.parentNode.insertBefore(
+      row,
+      row.previousElementSibling
+    );
+  }
+
+  if (direction > 0 && row.nextElementSibling) {
+    row.parentNode.insertBefore(
+      row.nextElementSibling,
+      row
+    );
+  }
+}
+
+
+function collectDashboardWidgetSettings_() {
+
+  return Array.from(
+    document.querySelectorAll(
+      '#dashboardWidgetList .dashboard-widget-settings-row'
+    )
+  ).map((row, index) => ({
+    id:
+      row.dataset.widgetId,
+    enabled:
+      !!row.querySelector('input[type="checkbox"]').checked,
+    order:
+      index + 1,
+    size:
+      row.dataset.widgetSize || 'medium'
+  }));
+}
+
+
+function saveDashboardWidgetSettings(
+  button
+) {
+
+  const actionButton =
+    setActionWorking(
+      button,
+      'Saving...'
+    );
+
+  scriptRunPromise_(
+    'saveDashboardWidgetConfiguration',
+    runner =>
+      runner.saveDashboardWidgetConfiguration({
+        widgets:
+          collectDashboardWidgetSettings_()
+      })
+  )
+    .then(function(data) {
+      setActionSuccess(
+        actionButton,
+        'Saved'
+      );
+      closeDashboardWidgetSettings_();
+      currentPageData =
+        data;
+      markClientPageWritten(
+        'dashboard',
+        data
+      );
+      renderDashboard(
+        data
+      );
+      showToast(
+        'Dashboard widgets saved.'
+      );
+    })
+    .catch(function(error) {
+      setActionError(
+        actionButton,
+        'Save Failed'
+      );
+      handleFailure(
+        error,
+        'save dashboard widgets'
+      );
+    });
+}
+
+
+function resetDashboardWidgetSettings(
+  button
+) {
+
+  const actionButton =
+    setActionWorking(
+      button,
+      'Resetting...'
+    );
+
+  scriptRunPromise_(
+    'resetDashboardWidgetConfiguration',
+    runner =>
+      runner.resetDashboardWidgetConfiguration()
+  )
+    .then(function(data) {
+      setActionSuccess(
+        actionButton,
+        'Reset'
+      );
+      closeDashboardWidgetSettings_();
+      currentPageData =
+        data;
+      markClientPageWritten(
+        'dashboard',
+        data
+      );
+      renderDashboard(
+        data
+      );
+      showToast(
+        'Dashboard widgets reset.'
+      );
+    })
+    .catch(function(error) {
+      setActionError(
+        actionButton,
+        'Reset Failed'
+      );
+      handleFailure(
+        error,
+        'reset dashboard widgets'
+      );
+    });
+}
+
+
+function closeDashboardWidgetSettings_() {
+
+  const element =
+    document.getElementById(
+      'dashboardWidgetModal'
+    );
+
+  if (!element) {
+    return;
+  }
+
+  const modal =
+    bootstrap.Modal.getInstance(
+      element
+    );
+
+  if (modal) {
+    modal.hide();
+    return;
+  }
+
+  element.remove();
+}
+
+
+function formatDashboardTimestamp_(
+  value
+) {
+
+  const text =
+    String(value || '')
+      .trim();
+
+  if (!text) {
+    return '';
+  }
+
+  try {
+    return new Date(text).toLocaleString();
+  } catch (error) {
+    return text;
+  }
 }
 
 </script>

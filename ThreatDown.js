@@ -247,7 +247,13 @@ function syncThreatDownToSheet() {
     'Sync succeeded'
   );
 
-  clearAllCache();
+  invalidateAppPage_(
+    'servers'
+  );
+
+  invalidateAppPage_(
+    'dashboard'
+  );
 
   return {
     status: 'success',
