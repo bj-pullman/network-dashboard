@@ -143,6 +143,28 @@ const APP_PAGE_CONFIG = {
     ]
   },
 
+  internetWan: {
+    key: 'internetWan',
+    label: 'Internet / WAN',
+    sheet: 'Internet WAN',
+    type: 'internetWan',
+    icon: 'fa-globe',
+    group: 'Infrastructure',
+
+    defaultColumns: [
+      'Circuit Name',
+      'Site / Location',
+      'Role',
+      'Provider',
+      'Service Type',
+      'Download Bandwidth',
+      'Upload Bandwidth',
+      'Public IPs',
+      'Gateway',
+      'Status'
+    ]
+  },
+
   securityCameras: {
 
     key:
@@ -356,6 +378,19 @@ const APP_MODULE_REGISTRY = {
       'IP Route Tables'
     ],
     permissionKey: 'routes'
+  },
+
+  internetWan: {
+    id: 'internetWan',
+    name: 'Internet / WAN',
+    description: 'Internet and WAN circuit documentation by site.',
+    classification: 'core',
+    enabledByDefault: true,
+    pageKey: 'internetWan',
+    requiredSheets: [
+      'Internet WAN'
+    ],
+    permissionKey: 'internetWan'
   },
 
   securityCameras: {
@@ -1740,6 +1775,7 @@ function getClientTemplateNameForPageType_(
 
   const templates = {
     table: 'TablePage',
+    internetWan: 'InternetWan',
     structured: 'StructuredPage',
     workflow: 'DepartmentWorkflow',
     users: 'UserManagement',
@@ -1831,6 +1867,13 @@ function appGetPageData(pageKey, forceRefresh) {
 
       if (config.type === 'workflow') {
         return getDepartmentWorkflowData_(
+          forceRefresh
+        );
+      }
+
+
+      if (config.type === 'internetWan') {
+        return getInternetWanPageData_(
           forceRefresh
         );
       }
@@ -4276,12 +4319,446 @@ function getAppDashboardData_(
     'getAppDashboardData',
     function() {
 
+  const ss =
+    SpreadsheetApp.getActiveSpreadsheet();
+
+  const sheet =
+    ss.getSheetByName(
+      'Dashboard'
+    );
+
+
+  const result =
+    sheet
+      ? buildDashboardDataFromSheet_(
+          sheet
+        )
+      : getEmptyDashboardData_();
+
+
+  return result;
+
+    }
+  );
+}
+
+
+function buildDashboardDataFromSheet_(
+  sheet
+) {
+
+  const rowCount =
+    Math.max(
+      getDashboardReadRowCount_(),
+      sheet.getLastRow()
+    );
+
+  const columnCount =
+    Math.max(
+      getDashboardSheetHeaders_().length,
+      8
+    );
+
+  const values =
+    sheet
+      .getRange(
+        1,
+        1,
+        rowCount,
+        columnCount
+      )
+      .getDisplayValues();
+
+  const metricMap =
+    readDashboardMetricMap_(
+      values
+    );
+
+  return {
+    metrics:
+      buildDashboardLegacyMetricMap_(
+        metricMap
+      ),
+    metricCards:
+      buildDashboardMetricCards_(
+        metricMap
+      ),
+    switchStatus:
+      readDashboardSummarySection_(
+        values,
+        'switchStatus'
+      ),
+    apStatus:
+      readDashboardSummarySection_(
+        values,
+        'apStatus'
+      ),
+    campusDistribution:
+      readDashboardSummarySection_(
+        values,
+        'campusDistribution'
+      ),
+    wanStatus:
+      readDashboardSummarySection_(
+        values,
+        'wanStatus'
+      ),
+    workflow: {
+      groups:
+        getDashboardMetricNumber_(
+          metricMap,
+          'workflow.groups'
+        ),
+      tiers:
+        getDashboardMetricNumber_(
+          metricMap,
+          'workflow.tiers'
+        ),
+      ticketSteps:
+        getDashboardMetricNumber_(
+          metricMap,
+          'workflow.ticket_steps'
+        ),
+      priorities: 0,
+      workflows:
+        getDashboardMetricNumber_(
+          metricMap,
+          'workflow.workflows'
+        )
+    }
+  };
+}
+
+
+function getEmptyDashboardData_() {
+
+  return {
+    metrics: {},
+    metricCards: [],
+    switchStatus: {},
+    apStatus: {},
+    campusDistribution: {},
+    wanStatus: {},
+    workflow: {
+      groups: 0,
+      tiers: 0,
+      ticketSteps: 0,
+      priorities: 0,
+      workflows: 0
+    }
+  };
+}
+
+
+function readDashboardMetricMap_(
+  values
+) {
+
+  const headers =
+    (values[0] || [])
+      .map(value =>
+        String(value || '').trim()
+      );
+
+  const keyIndex =
+    headers.indexOf('Metric Key');
+
+  const labelIndex =
+    headers.indexOf('Label');
+
+  const valueIndex =
+    headers.indexOf('Value');
+
+  const sectionIndex =
+    headers.indexOf('Section');
+
+  const metrics = {};
+
+  if (
+    keyIndex < 0 ||
+    labelIndex < 0 ||
+    valueIndex < 0 ||
+    sectionIndex < 0
+  ) {
+    return metrics;
+  }
+
+
+  values
+    .slice(1)
+    .forEach(row => {
+
+      const key =
+        String(row[keyIndex] || '').trim();
+
+      const section =
+        String(row[sectionIndex] || '').trim();
+
+      if (
+        !key ||
+        section !== 'metric'
+      ) {
+        return;
+      }
+
+      metrics[key] = {
+        key: key,
+        label:
+          String(row[labelIndex] || '').trim(),
+        value:
+          normalizeDashboardMetricValue_(
+            row[valueIndex]
+          )
+      };
+
+    });
+
+
+  return metrics;
+}
+
+
+function buildDashboardLegacyMetricMap_(
+  metricMap
+) {
+
+  return {
+    switches:
+      getDashboardMetricNumber_(
+        metricMap,
+        'switches.total'
+      ),
+    accessPoints:
+      getDashboardMetricNumber_(
+        metricMap,
+        'access_points.total'
+      ),
+    servers:
+      getDashboardMetricNumber_(
+        metricMap,
+        'servers.total'
+      ),
+    offlineServers:
+      getDashboardMetricNumber_(
+        metricMap,
+        'offline_servers.total'
+      ),
+    securityCameras:
+      getDashboardMetricNumber_(
+        metricMap,
+        'security_cameras.total'
+      ),
+    internetWan:
+      getDashboardMetricNumber_(
+        metricMap,
+        'internet_wan.total'
+      ),
+    backups:
+      getDashboardMetricNumber_(
+        metricMap,
+        'backup_schedule.total'
+      )
+  };
+}
+
+
+function buildDashboardMetricCards_(
+  metricMap
+) {
+
+  const cards = [
+    {
+      key: 'switches.total',
+      label: 'Switches',
+      icon: 'fa-network-wired'
+    },
+    {
+      key: 'access_points.total',
+      label: 'Access Points',
+      icon: 'fa-wifi'
+    },
+    {
+      key: 'servers.total',
+      label: 'Servers',
+      icon: 'fa-server'
+    },
+    {
+      key: 'offline_servers.total',
+      label: 'Offline Servers',
+      icon: 'fa-triangle-exclamation'
+    },
+    {
+      key: 'security_cameras.total',
+      label: 'Security Cameras',
+      icon: 'fa-video'
+    },
+    {
+      key: 'internet_wan.total',
+      label: 'WAN Circuits',
+      icon: 'fa-globe'
+    },
+    {
+      key: 'backup_schedule.total',
+      label: 'Backup Jobs',
+      icon: 'fa-database'
+    }
+  ];
+
+
+  return cards
+    .filter(card =>
+      Object.prototype
+        .hasOwnProperty
+        .call(
+          metricMap,
+          card.key
+        )
+    )
+    .map(card => ({
+      key:
+        card.key,
+      label:
+        metricMap[card.key].label ||
+        card.label,
+      value:
+        getDashboardMetricNumber_(
+          metricMap,
+          card.key
+        ),
+      icon:
+        card.icon
+    }));
+}
+
+
+function readDashboardSummarySection_(
+  values,
+  sectionKey
+) {
+
+  const section =
+    getDashboardSummarySections_()
+      .find(item =>
+        item.key === sectionKey
+      );
+
+  const result = {};
+
+  if (!section) {
+    return result;
+  }
+
+  const startIndex =
+    Number(section.row || 1) + 1;
+
+  const endIndex =
+    Math.min(
+      startIndex +
+        Number(section.maxRows || 20),
+      values.length
+    );
+
+  const labelIndex =
+    Number(section.column || 1) - 1;
+
+  const valueIndex =
+    labelIndex + 1;
+
+
+  for (
+    let rowIndex = startIndex;
+    rowIndex < endIndex;
+    rowIndex++
+  ) {
+
+    const row =
+      values[rowIndex] || [];
+
+    const label =
+      String(row[labelIndex] || '').trim();
+
+    const value =
+      normalizeDashboardMetricValue_(
+        row[valueIndex]
+      );
+
+
+    if (
+      !label ||
+      value === '' ||
+      Number(value) === 0
+    ) {
+      continue;
+    }
+
+    result[label] =
+      value;
+
+  }
+
+
+  return result;
+}
+
+
+function getDashboardMetricNumber_(
+  metricMap,
+  key
+) {
+
+  const value =
+    metricMap[key]
+      ? metricMap[key].value
+      : 0;
+
+  const number =
+    Number(value);
+
+  return Number.isFinite(number)
+    ? number
+    : 0;
+}
+
+
+function normalizeDashboardMetricValue_(
+  value
+) {
+
+  const text =
+    String(value == null ? '' : value).trim();
+
+  if (!text) {
+    return '';
+  }
+
+  const number =
+    Number(
+      text.replace(/,/g, '')
+    );
+
+  return Number.isFinite(number)
+    ? number
+    : text;
+}
+
+
+/*******************************************************
+ * INTERNET / WAN
+ *******************************************************/
+
+function getInternetWanPageData_(
+  forceRefresh
+) {
+
+  return withPerformanceTiming_(
+    'getInternetWanPageData',
+    function() {
+
   const cache =
     CacheService.getScriptCache();
 
-
   const cacheKey =
-    'app_dashboard';
+    'app_page_internetWan';
 
 
   if (!forceRefresh) {
@@ -4290,207 +4767,108 @@ function getAppDashboardData_(
       cache.get(cacheKey);
 
     if (cached) {
-
       try {
         return JSON.parse(cached);
       } catch (error) {}
-
     }
 
   }
 
 
-  const ss =
-    SpreadsheetApp.getActiveSpreadsheet();
+  const config =
+    APP_PAGE_CONFIG.internetWan;
 
-
-  const switchValues =
-    readNetworkDashboardSheetValues_(
-      ss,
-      'Switches',
-      1
-    );
-
-
-  const apValues =
-    readNetworkDashboardSheetValues_(
-      ss,
-      'Access Points',
-      1
-    );
-
-
-  const serverValues =
-    readNetworkDashboardSheetValues_(
-      ss,
-      'Servers',
-      1
-    );
-
-
-  const offlineServerValues =
-    readNetworkDashboardSheetValues_(
-      ss,
-      'Offline Servers',
-      1
-    );
-
-
-  const securityCameraValues =
-    readNetworkDashboardSheetValues_(
-      ss,
-      'Security Cameras',
-      1
-    );
-
-  const backupsEnabled =
-    isModuleEnabled_(
-      'backups'
-    );
-
-
-  const metrics = {
-
-    switches:
-      countAppRowsFromData_(
-        switchValues
-      ),
-
-    accessPoints:
-      countAppRowsFromData_(
-        apValues
-      ),
-
-    servers:
-      countAppRowsFromData_(
-        serverValues
-      ),
-
-    offlineServers:
-      countAppRowsFromData_(
-        offlineServerValues
-      ),
-
-    securityCameras:
-      countAppRowsFromData_(
-        securityCameraValues
-      ),
-
-    backups:
-      0
-
-  };
-
-
-  if (backupsEnabled) {
-
-    const backupValues =
-      readNetworkDashboardSheetValues_(
-        ss,
-        'Backup Schedule',
-        1
+  const sheet =
+    SpreadsheetApp
+      .getActiveSpreadsheet()
+      .getSheetByName(
+        config.sheet
       );
 
-    metrics.backups =
-      countAppRowsFromData_(
-        backupValues
-      );
+  const result =
+    buildEmptyInternetWanPageData_();
 
+
+  if (!sheet) {
+    return result;
   }
 
 
-  const metricCards = [
-    {
-      key: 'switches',
-      label: 'Switches',
-      value: metrics.switches,
-      icon: 'fa-network-wired'
-    },
-    {
-      key: 'accessPoints',
-      label: 'Access Points',
-      value: metrics.accessPoints,
-      icon: 'fa-wifi'
-    },
-    {
-      key: 'servers',
-      label: 'Servers',
-      value: metrics.servers,
-      icon: 'fa-server'
-    },
-    {
-      key: 'offlineServers',
-      label: 'Offline Servers',
-      value: metrics.offlineServers,
-      icon: 'fa-triangle-exclamation'
-    },
-    {
-      key: 'securityCameras',
-      label: 'Security Cameras',
-      value: metrics.securityCameras,
-      icon: 'fa-video'
+  const values =
+    readConfiguredPageValues_(
+      sheet,
+      config
+    );
+
+  if (!values.length) {
+    return result;
+  }
+
+
+  const headers =
+    values[0]
+      .map(value =>
+        String(value || '').trim()
+      );
+
+  const rows = [];
+
+  for (
+    let index = 1;
+    index < values.length;
+    index++
+  ) {
+
+    const sourceRow =
+      values[index] || [];
+
+    if (
+      !rowHasMeaningfulData_(
+        sourceRow,
+        headers
+      )
+    ) {
+      continue;
     }
-  ];
 
+    const row = {
+      _row:
+        index + 1,
+      _sourceSheet:
+        config.sheet
+    };
 
-  if (backupsEnabled) {
-
-    metricCards.push({
-      key: 'backups',
-      label: 'Backup Jobs',
-      value: metrics.backups,
-      icon: 'fa-database'
+    headers.forEach((header, columnIndex) => {
+      if (header) {
+        row[header] =
+          String(sourceRow[columnIndex] || '');
+      }
     });
 
+    applyInternetWanDisplayFields_(
+      row
+    );
+
+    rows.push(
+      row
+    );
+
   }
 
 
-  const workflow =
-    getDepartmentWorkflowSummary_();
+  result.headers =
+    headers;
 
+  result.rows =
+    rows;
 
-  const result = {
+  result.totalCount =
+    rows.length;
 
-    metrics: metrics,
-
-    metricCards: metricCards,
-
-    switchStatus:
-      countColumnValuesFromData_(
-        switchValues,
-        'Status'
-      ),
-
-    apStatus:
-      countColumnValuesFromData_(
-        apValues,
-        'Status'
-      ),
-
-    campusDistribution:
-      countColumnValuesFromData_(
-        switchValues,
-        'Campus'
-      ),
-
-    workflow: {
-      groups:
-        workflow.groups,
-
-      tiers:
-        workflow.tiers,
-
-      ticketSteps:
-        workflow.ticketSteps,
-
-      priorities:
-        workflow.priorities,
-
-      workflows:
-        workflow.workflows
-    }
-
-  };
+  result.summary =
+    buildInternetWanSummary_(
+      rows
+    );
 
 
   cacheJson_(
@@ -4507,121 +4885,854 @@ function getAppDashboardData_(
 }
 
 
-function getDepartmentWorkflowSummary_() {
+function buildEmptyInternetWanPageData_() {
+
+  const config =
+    APP_PAGE_CONFIG.internetWan;
+
+  const schema =
+    getNetworkDashboardSchema_()[
+      config.sheet
+    ];
+
+  return {
+    pageKey: 'internetWan',
+    type: 'internetWan',
+    label:
+      config.label,
+    sheetName:
+      config.sheet,
+    headers:
+      schema.headers || [],
+    rows: [],
+    totalCount: 0,
+    defaultColumns:
+      config.defaultColumns || [],
+    permission:
+      getPagePermission_(
+        'internetWan'
+      ),
+    summary:
+      buildInternetWanSummary_([])
+  };
+}
+
+
+function applyInternetWanDisplayFields_(
+  row
+) {
+
+  const ips =
+    splitInternetWanPublicIps_(
+      row['Public IPs']
+    );
+
+  row._publicIpList =
+    ips;
+
+  row._publicIpSummary =
+    summarizeInternetWanPublicIps_(
+      ips
+    );
+
+  row._bandwidth =
+    formatInternetWanBandwidth_(
+      row['Download Bandwidth'],
+      row['Upload Bandwidth']
+    );
+}
+
+
+function buildInternetWanSummary_(
+  rows
+) {
+
+  const sites = {};
 
   const summary = {
-    groups: 0,
-    tiers: 0,
-    ticketSteps: 0,
-    priorities: 0,
-    workflows: 0
+    total:
+      rows.length,
+    primary: 0,
+    secondary: 0,
+    backup: 0,
+    active: 0,
+    standby: 0,
+    down: 0,
+    disabled: 0,
+    sites: 0
   };
 
 
-  const schema =
-    getNetworkDashboardSchema_();
+  rows.forEach(row => {
 
-  const definition =
-    schema['Department Workflow'];
+    const role =
+      normalizeSimpleKey_(
+        row['Role']
+      );
+
+    const status =
+      normalizeSimpleKey_(
+        row['Status']
+      );
+
+    const site =
+      String(
+        row['Site / Location'] || ''
+      ).trim();
+
+    if (site) {
+      sites[site] =
+        true;
+    }
+
+    if (summary[role] !== undefined) {
+      summary[role]++;
+    }
+
+    if (summary[status] !== undefined) {
+      summary[status]++;
+    }
+
+  });
+
+  summary.sites =
+    Object.keys(sites).length;
+
+  return summary;
+}
+
+
+function normalizeSimpleKey_(
+  value
+) {
+
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+
+function summarizeInternetWanPublicIps_(
+  ips
+) {
+
+  if (!ips.length) {
+    return '';
+  }
+
+  if (ips.length === 1) {
+    return ips[0];
+  }
+
+  return ips[0] +
+    ' +' +
+    (ips.length - 1) +
+    ' more';
+}
+
+
+function formatInternetWanBandwidth_(
+  download,
+  upload
+) {
+
+  const down =
+    formatInternetWanBandwidthValue_(
+      download
+    );
+
+  const up =
+    formatInternetWanBandwidthValue_(
+      upload
+    );
+
+  if (
+    !down &&
+    !up
+  ) {
+    return '';
+  }
+
+  return (
+    down || '0 Mbps'
+  ) +
+    ' / ' +
+    (
+      up || '0 Mbps'
+    );
+}
+
+
+function formatInternetWanBandwidthValue_(
+  value
+) {
+
+  const number =
+    Number(
+      String(value || '')
+        .replace(/,/g, '')
+    );
+
+  if (
+    !Number.isFinite(number) ||
+    number <= 0
+  ) {
+    return '';
+  }
+
+  if (
+    number >= 1000 &&
+    number % 1000 === 0
+  ) {
+    return (
+      number / 1000
+    ) +
+      ' Gbps';
+  }
+
+  return number +
+    ' Mbps';
+}
+
+
+function appSaveInternetWanCircuit(
+  record
+) {
+
+  requirePagePermission_(
+    'internetWan',
+    'edit'
+  );
 
   const sheet =
     SpreadsheetApp
       .getActiveSpreadsheet()
       .getSheetByName(
-        'Department Workflow'
+        'Internet WAN'
       );
 
-
-  if (
-    !sheet ||
-    !definition ||
-    !definition.headerRanges
-  ) {
-    return summary;
+  if (!sheet) {
+    throw new Error(
+      'Internet WAN sheet was not found. Run setupNetworkDashboard().'
+    );
   }
 
 
-  const values =
-    readAppSheetDisplayValues_(
-      sheet,
-      getNetworkDashboardReadColumnCount_(
-        'Department Workflow',
-        sheet.getLastColumn(),
-        false
-      ),
-      1
+  const headers =
+    getInternetWanSheetHeaders_(
+      sheet
     );
 
+  const indexes =
+    mapHeaders_(
+      headers
+    );
 
-  definition.headerRanges
-    .forEach(section => {
+  const normalized =
+    normalizeInternetWanRecord_(
+      record || {}
+    );
 
-      const nextHeaderRow =
-        definition.headerRanges
-          .map(item =>
-            Number(item.row || 0)
-          )
-          .filter(row =>
-            row > Number(section.row || 0)
-          )
-          .sort((left, right) =>
-            left - right
-          )[0] || 0;
+  let rowNumber =
+    Number(
+      record && record._row
+    );
 
-      const startIndex =
-        Number(section.row || 1);
+  const editing =
+    Number.isInteger(rowNumber) &&
+    rowNumber >= 2 &&
+    rowNumber <= sheet.getLastRow();
 
-      const endIndex =
-        nextHeaderRow
-          ? Math.min(
-              nextHeaderRow - 1,
-              values.length
-            )
-          : values.length;
 
-      let count =
-        0;
+  if (editing) {
 
-      for (
-        let rowIndex = startIndex;
-        rowIndex < endIndex;
-        rowIndex++
-      ) {
+    const current =
+      sheet
+        .getRange(
+          rowNumber,
+          1,
+          1,
+          headers.length
+        )
+        .getDisplayValues()[0];
 
-        const sourceRow =
-          values[rowIndex] || [];
+    normalized['Circuit ID'] =
+      String(
+        current[indexes['Circuit ID']] ||
+        normalized['Circuit ID'] ||
+        ''
+      ).trim() ||
+      generateInternetWanCircuitId_(
+        sheet,
+        headers
+      );
 
-        const startColumn =
-          Math.max(
-            0,
-            Number(section.column || 1) - 1
-          );
+  } else {
 
-        const row =
-          sourceRow.slice(
-            startColumn,
-            startColumn +
-              section.headers.length
-          );
+    rowNumber =
+      sheet.getLastRow() + 1;
 
-        if (
-          rowHasMeaningfulData_(
-            row,
-            section.headers
-          )
-        ) {
-          count++;
-        }
+    normalized['Circuit ID'] =
+      generateInternetWanCircuitId_(
+        sheet,
+        headers
+      );
 
+  }
+
+
+  const output =
+    headers.map(header =>
+      Object.prototype
+        .hasOwnProperty
+        .call(
+          normalized,
+          header
+        )
+        ? normalized[header]
+        : ''
+    );
+
+  sheet
+    .getRange(
+      rowNumber,
+      1,
+      1,
+      output.length
+    )
+    .setValues([
+      output
+    ]);
+
+  invalidateAppPage_(
+    'internetWan'
+  );
+
+  return getInternetWanPageData_(
+    true
+  );
+}
+
+
+function appDeleteInternetWanCircuit(
+  rowNumber
+) {
+
+  requirePagePermission_(
+    'internetWan',
+    'edit'
+  );
+
+  const sheet =
+    SpreadsheetApp
+      .getActiveSpreadsheet()
+      .getSheetByName(
+        'Internet WAN'
+      );
+
+  rowNumber =
+    Number(rowNumber);
+
+  if (
+    !sheet ||
+    !Number.isInteger(rowNumber) ||
+    rowNumber < 2 ||
+    rowNumber > sheet.getLastRow()
+  ) {
+    throw new Error(
+      'Invalid Internet WAN row.'
+    );
+  }
+
+  sheet.deleteRow(
+    rowNumber
+  );
+
+  invalidateAppPage_(
+    'internetWan'
+  );
+
+  return getInternetWanPageData_(
+    true
+  );
+}
+
+
+function getInternetWanSheetHeaders_(
+  sheet
+) {
+
+  return sheet
+    .getRange(
+      1,
+      1,
+      1,
+      sheet.getLastColumn()
+    )
+    .getDisplayValues()[0]
+    .map(value =>
+      String(value || '').trim()
+    )
+    .filter(Boolean);
+}
+
+
+function mapHeaders_(
+  headers
+) {
+
+  const map = {};
+
+  (headers || [])
+    .forEach((header, index) => {
+
+      const name =
+        String(header || '').trim();
+
+      if (name) {
+        map[name] =
+          index;
       }
-
-      summary[section.key] =
-        count;
 
     });
 
+  return map;
+}
 
-  return summary;
+
+function normalizeInternetWanRecord_(
+  record
+) {
+
+  const normalized = {
+    'Circuit ID':
+      String(record['Circuit ID'] || '').trim(),
+    'Circuit Name':
+      requiredInternetWanText_(
+        record['Circuit Name'],
+        'Circuit Name'
+      ),
+    'Site / Location':
+      requiredInternetWanText_(
+        record['Site / Location'],
+        'Site / Location'
+      ),
+    'Role':
+      normalizeInternetWanChoice_(
+        record['Role'],
+        'Role'
+      ),
+    'Provider':
+      requiredInternetWanText_(
+        record['Provider'],
+        'Provider'
+      ),
+    'Service Type':
+      normalizeInternetWanChoice_(
+        record['Service Type'],
+        'Service Type'
+      ),
+    'Download Bandwidth':
+      normalizeInternetWanBandwidth_(
+        record['Download Bandwidth'],
+        'Download Bandwidth'
+      ),
+    'Upload Bandwidth':
+      normalizeInternetWanBandwidth_(
+        record['Upload Bandwidth'],
+        'Upload Bandwidth'
+      ),
+    'Public Network / CIDR':
+      normalizeInternetWanCidr_(
+        record['Public Network / CIDR']
+      ),
+    'Gateway':
+      normalizeInternetWanGateway_(
+        record['Gateway']
+      ),
+    'Public IPs':
+      normalizeInternetWanPublicIps_(
+        record.publicIps !== undefined
+          ? record.publicIps
+          : record['Public IPs']
+      ),
+    'Circuit / Account ID':
+      String(
+        record['Circuit / Account ID'] || ''
+      ).trim(),
+    'Status':
+      normalizeInternetWanChoice_(
+        record['Status'],
+        'Status'
+      ),
+    'Notes':
+      String(
+        record['Notes'] || ''
+      ).trim()
+  };
+
+  return normalized;
+}
+
+
+function requiredInternetWanText_(
+  value,
+  label
+) {
+
+  const text =
+    String(value || '').trim();
+
+  if (!text) {
+    throw new Error(
+      label +
+      ' is required.'
+    );
+  }
+
+  return text;
+}
+
+
+function normalizeInternetWanChoice_(
+  value,
+  label
+) {
+
+  const text =
+    String(value || '').trim();
+
+  if (!text) {
+    throw new Error(
+      label +
+      ' is required.'
+    );
+  }
+
+  return text;
+}
+
+
+function normalizeInternetWanBandwidth_(
+  value,
+  label
+) {
+
+  const text =
+    String(value || '').trim();
+
+  if (!text) {
+    throw new Error(
+      label +
+      ' is required.'
+    );
+  }
+
+  const number =
+    Number(
+      text.replace(/,/g, '')
+    );
+
+  if (
+    !Number.isFinite(number) ||
+    number <= 0
+  ) {
+    throw new Error(
+      label +
+      ' must be a positive numeric Mbps value.'
+    );
+  }
+
+  return number;
+}
+
+
+function normalizeInternetWanCidr_(
+  value
+) {
+
+  const text =
+    String(value || '').trim();
+
+  if (!text) {
+    return '';
+  }
+
+  if (
+    !isValidCidrBlock_(
+      text
+    )
+  ) {
+    throw new Error(
+      'Public Network / CIDR must be a valid IPv4 or IPv6 CIDR block.'
+    );
+  }
+
+  return text;
+}
+
+
+function normalizeInternetWanGateway_(
+  value
+) {
+
+  const text =
+    String(value || '').trim();
+
+  if (!text) {
+    return '';
+  }
+
+  if (
+    !isValidIpAddress_(
+      text
+    )
+  ) {
+    throw new Error(
+      'Gateway must be a valid IPv4 or IPv6 address.'
+    );
+  }
+
+  return text;
+}
+
+
+function normalizeInternetWanPublicIps_(
+  value
+) {
+
+  const ips =
+    splitInternetWanPublicIps_(
+      value
+    );
+
+  ips.forEach(ip => {
+
+    if (
+      !isValidIpAddress_(
+        ip
+      )
+    ) {
+      throw new Error(
+        'Public IP must be a valid IPv4 or IPv6 address: ' +
+        ip
+      );
+    }
+
+  });
+
+  return ips.join(', ');
+}
+
+
+function splitInternetWanPublicIps_(
+  value
+) {
+
+  const raw =
+    Array.isArray(value)
+      ? value
+      : String(value || '').split(',');
+
+  const ips = [];
+
+  raw.forEach(item => {
+
+    const ip =
+      String(item || '').trim();
+
+    if (
+      ip &&
+      !ips.includes(ip)
+    ) {
+      ips.push(ip);
+    }
+
+  });
+
+  return ips;
+}
+
+
+function isValidCidrBlock_(
+  value
+) {
+
+  const parts =
+    String(value || '').split('/');
+
+  if (parts.length !== 2) {
+    return false;
+  }
+
+  const ip =
+    parts[0].trim();
+
+  const prefix =
+    Number(parts[1]);
+
+  if (
+    !Number.isInteger(prefix) ||
+    !isValidIpAddress_(ip)
+  ) {
+    return false;
+  }
+
+  return ip.includes(':')
+    ? prefix >= 0 && prefix <= 128
+    : prefix >= 0 && prefix <= 32;
+}
+
+
+function isValidIpAddress_(
+  value
+) {
+
+  const text =
+    String(value || '').trim();
+
+  return isValidIpv4Address_(
+    text
+  ) ||
+    isValidIpv6Address_(
+      text
+    );
+}
+
+
+function isValidIpv4Address_(
+  value
+) {
+
+  const parts =
+    String(value || '').split('.');
+
+  if (parts.length !== 4) {
+    return false;
+  }
+
+  return parts.every(part => {
+
+    if (!/^\d+$/.test(part)) {
+      return false;
+    }
+
+    const number =
+      Number(part);
+
+    return number >= 0 &&
+      number <= 255 &&
+      String(number) === part;
+
+  });
+}
+
+
+function isValidIpv6Address_(
+  value
+) {
+
+  const text =
+    String(value || '').trim();
+
+  if (
+    !text ||
+    !/^[0-9a-fA-F:]+$/.test(text)
+  ) {
+    return false;
+  }
+
+  if (
+    (text.match(/::/g) || []).length > 1
+  ) {
+    return false;
+  }
+
+  const compressed =
+    text.includes('::');
+
+  const parts =
+    text.split('::');
+
+  const segments =
+    parts
+      .join(':')
+      .split(':')
+      .filter(Boolean);
+
+  if (
+    !segments.every(segment =>
+      /^[0-9a-fA-F]{1,4}$/.test(segment)
+    )
+  ) {
+    return false;
+  }
+
+  return compressed
+    ? segments.length < 8
+    : segments.length === 8;
+}
+
+
+function generateInternetWanCircuitId_(
+  sheet,
+  headers
+) {
+
+  const indexes =
+    mapHeaders_(
+      headers
+    );
+
+  const circuitIdIndex =
+    indexes['Circuit ID'];
+
+  if (circuitIdIndex === undefined) {
+    throw new Error(
+      'Internet WAN is missing Circuit ID header.'
+    );
+  }
+
+  let max =
+    0;
+
+  if (sheet.getLastRow() >= 2) {
+
+    sheet
+      .getRange(
+        2,
+        circuitIdIndex + 1,
+        sheet.getLastRow() - 1,
+        1
+      )
+      .getDisplayValues()
+      .forEach(row => {
+
+        const match =
+          String(row[0] || '')
+            .trim()
+            .match(/^WAN-(\d+)$/i);
+
+        if (match) {
+          max =
+            Math.max(
+              max,
+              Number(match[1])
+            );
+        }
+
+      });
+
+  }
+
+  return 'WAN-' +
+    String(max + 1)
+      .padStart(
+        4,
+        '0'
+      );
 }
 
 

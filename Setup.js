@@ -4,20 +4,16 @@ function getNetworkDashboardSchema_() {
     'Dashboard': {
       type: 'system',
       category: 'Core',
-      headers: [
-        'Section',
-        'Metric',
-        'Value',
-        'Updated At',
-        'Notes'
-      ],
+      headers:
+        getDashboardSheetHeaders_(),
       requiredHeaders: [
-        'Section',
-        'Metric',
+        'Metric Key',
+        'Label',
         'Value'
       ],
       frozenRows: 1,
-      tabColor: '#6b7280'
+      tabColor: '#6b7280',
+      dashboardFormulaLayer: true
     },
 
     'Switches': {
@@ -164,6 +160,45 @@ function getNetworkDashboardSchema_() {
       ],
       frozenRows: 1,
       tabColor: '#2563eb'
+    },
+
+    'Internet WAN': {
+      type: 'operational',
+      category: 'Infrastructure',
+      headers: [
+        'Circuit ID',
+        'Circuit Name',
+        'Site / Location',
+        'Role',
+        'Provider',
+        'Service Type',
+        'Download Bandwidth',
+        'Upload Bandwidth',
+        'Public Network / CIDR',
+        'Gateway',
+        'Public IPs',
+        'Circuit / Account ID',
+        'Status',
+        'Notes'
+      ],
+      requiredHeaders: [
+        'Circuit ID',
+        'Circuit Name',
+        'Site / Location',
+        'Role',
+        'Provider',
+        'Service Type',
+        'Download Bandwidth',
+        'Upload Bandwidth',
+        'Public Network / CIDR',
+        'Gateway',
+        'Public IPs',
+        'Circuit / Account ID',
+        'Status',
+        'Notes'
+      ],
+      frozenRows: 1,
+      tabColor: '#0891b2'
     },
 
     'Security Cameras': {
@@ -553,6 +588,560 @@ function getNetworkDashboardSheetNames_() {
 }
 
 
+function getDashboardSheetHeaders_() {
+
+  return [
+    'Metric Key',
+    'Label',
+    'Value',
+    'Section',
+    'Sort Order',
+    'Notes'
+  ];
+}
+
+
+function getDashboardFormulaMaxRow_() {
+
+  return 10000;
+}
+
+
+function getDashboardReadRowCount_() {
+
+  return 120;
+}
+
+
+function getDashboardSummarySections_() {
+
+  return [
+    {
+      key: 'switchStatus',
+      title: 'Switch Status',
+      row: 30,
+      column: 1,
+      sheetName: 'Switches',
+      header: 'Status',
+      maxRows: 18
+    },
+    {
+      key: 'apStatus',
+      title: 'Access Point Status',
+      row: 30,
+      column: 4,
+      sheetName: 'Access Points',
+      header: 'Status',
+      maxRows: 18
+    },
+    {
+      key: 'campusDistribution',
+      title: 'Switches by Campus',
+      row: 30,
+      column: 7,
+      sheetName: 'Switches',
+      header: 'Campus',
+      maxRows: 34
+    },
+    {
+      key: 'wanStatus',
+      title: 'Internet WAN Status',
+      row: 72,
+      column: 1,
+      sheetName: 'Internet WAN',
+      header: 'Status',
+      maxRows: 18
+    }
+  ];
+}
+
+
+function getDashboardMetricDefinitions_() {
+
+  const definitions = [
+    {
+      key: 'switches.total',
+      label: 'Switches',
+      sort: 10,
+      formula:
+        dashboardCountFormula_(
+          'Switches',
+          'Device Label'
+        ),
+      notes: 'Total switch records.'
+    },
+    {
+      key: 'switches.online',
+      label: 'Online Switches',
+      sort: 11,
+      formula:
+        dashboardCountIfFormula_(
+          'Switches',
+          'Status',
+          'Online'
+        ),
+      notes: 'Switch records with Status = Online.'
+    },
+    {
+      key: 'switches.offline',
+      label: 'Offline Switches',
+      sort: 12,
+      formula:
+        dashboardCountIfFormula_(
+          'Switches',
+          'Status',
+          'Offline'
+        ),
+      notes: 'Switch records with Status = Offline.'
+    },
+    {
+      key: 'access_points.total',
+      label: 'Access Points',
+      sort: 20,
+      formula:
+        dashboardCountFormula_(
+          'Access Points',
+          'Device Label'
+        ),
+      notes: 'Total access point records.'
+    },
+    {
+      key: 'access_points.online',
+      label: 'Online Access Points',
+      sort: 21,
+      formula:
+        dashboardCountIfFormula_(
+          'Access Points',
+          'Status',
+          'Online'
+        ),
+      notes: 'Access point records with Status = Online.'
+    },
+    {
+      key: 'access_points.offline',
+      label: 'Offline Access Points',
+      sort: 22,
+      formula:
+        dashboardCountIfFormula_(
+          'Access Points',
+          'Status',
+          'Offline'
+        ),
+      notes: 'Access point records with Status = Offline.'
+    },
+    {
+      key: 'servers.total',
+      label: 'Servers',
+      sort: 30,
+      formula:
+        dashboardCountFormula_(
+          'Servers',
+          'Server Name'
+        ),
+      notes: 'Active server records.'
+    },
+    {
+      key: 'servers.online',
+      label: 'Online Servers',
+      sort: 31,
+      formula:
+        dashboardCountIfFormula_(
+          'Servers',
+          'Status',
+          'Online'
+        ),
+      notes: 'Server records with Status = Online.'
+    },
+    {
+      key: 'servers.offline',
+      label: 'Offline Server Records',
+      sort: 32,
+      formula:
+        dashboardCountIfFormula_(
+          'Servers',
+          'Status',
+          'Offline'
+        ),
+      notes: 'Server records with Status = Offline.'
+    },
+    {
+      key: 'offline_servers.total',
+      label: 'Offline Servers',
+      sort: 33,
+      formula:
+        dashboardCountFormula_(
+          'Offline Servers',
+          'Server Name'
+        ),
+      notes: 'Offline server backing records.'
+    },
+    {
+      key: 'security_cameras.total',
+      label: 'Security Cameras',
+      sort: 40,
+      formula:
+        dashboardCountFormula_(
+          'Security Cameras',
+          'Location'
+        ),
+      notes: 'Camera system records.'
+    },
+    {
+      key: 'internet_wan.total',
+      label: 'WAN Circuits',
+      sort: 50,
+      formula:
+        dashboardCountFormula_(
+          'Internet WAN',
+          'Circuit ID'
+        ),
+      notes: 'Total Internet/WAN circuit records.'
+    },
+    {
+      key: 'internet_wan.primary',
+      label: 'Primary Circuits',
+      sort: 51,
+      formula:
+        dashboardCountIfFormula_(
+          'Internet WAN',
+          'Role',
+          'Primary'
+        ),
+      notes: 'WAN circuits with Role = Primary.'
+    },
+    {
+      key: 'internet_wan.backup',
+      label: 'Backup Circuits',
+      sort: 52,
+      formula:
+        dashboardCountIfFormula_(
+          'Internet WAN',
+          'Role',
+          'Backup'
+        ),
+      notes: 'WAN circuits with Role = Backup.'
+    },
+    {
+      key: 'internet_wan.down',
+      label: 'Down Circuits',
+      sort: 53,
+      formula:
+        dashboardCountIfFormula_(
+          'Internet WAN',
+          'Status',
+          'Down'
+        ),
+      notes: 'WAN circuits with Status = Down.'
+    },
+    {
+      key: 'internet_wan.active',
+      label: 'Active Circuits',
+      sort: 54,
+      formula:
+        dashboardCountIfFormula_(
+          'Internet WAN',
+          'Status',
+          'Active'
+        ),
+      notes: 'WAN circuits with Status = Active.'
+    },
+    {
+      key: 'internet_wan.standby',
+      label: 'Standby Circuits',
+      sort: 55,
+      formula:
+        dashboardCountIfFormula_(
+          'Internet WAN',
+          'Status',
+          'Standby'
+        ),
+      notes: 'WAN circuits with Status = Standby.'
+    },
+    {
+      key: 'internet_wan.sites',
+      label: 'WAN Sites',
+      sort: 56,
+      formula:
+        dashboardUniqueCountFormula_(
+          'Internet WAN',
+          'Site / Location'
+        ),
+      notes: 'Unique sites with WAN circuit records.'
+    },
+    {
+      key: 'workflow.groups',
+      label: 'Workflow Groups',
+      sort: 70,
+      formula:
+        dashboardWorkflowCountFormula_(
+          'groups'
+        ),
+      notes: 'Configured support groups.'
+    },
+    {
+      key: 'workflow.tiers',
+      label: 'Support Tiers',
+      sort: 71,
+      formula:
+        dashboardWorkflowCountFormula_(
+          'tiers'
+        ),
+      notes: 'Configured support tiers.'
+    },
+    {
+      key: 'workflow.ticket_steps',
+      label: 'Ticket Steps',
+      sort: 72,
+      formula:
+        dashboardWorkflowCountFormula_(
+          'ticketSteps'
+        ),
+      notes: 'Configured ticket workflow steps.'
+    },
+    {
+      key: 'workflow.workflows',
+      label: 'Workflows',
+      sort: 73,
+      formula:
+        dashboardWorkflowCountFormula_(
+          'workflows'
+        ),
+      notes: 'Configured routing workflows.'
+    },
+    {
+      key: 'backup_schedule.total',
+      label: 'Backup Jobs',
+      sort: 80,
+      moduleId: 'backups',
+      formula:
+        dashboardCountFormula_(
+          'Backup Schedule',
+          'Server Name'
+        ),
+      notes: 'Enabled Backup Schedule records.'
+    }
+  ];
+
+  return definitions
+    .filter(definition =>
+      !definition.moduleId ||
+      isModuleEnabled_(
+        definition.moduleId
+      )
+    );
+}
+
+
+function dashboardCountFormula_(
+  sheetName,
+  header
+) {
+
+  return '=COUNTA(' +
+    dashboardColumnRange_(
+      sheetName,
+      header
+    ) +
+    ')';
+}
+
+
+function dashboardCountIfFormula_(
+  sheetName,
+  header,
+  criterion
+) {
+
+  return '=COUNTIF(' +
+    dashboardColumnRange_(
+      sheetName,
+      header
+    ) +
+    ',"' +
+    String(criterion || '').replace(/"/g, '""') +
+    '")';
+}
+
+
+function dashboardUniqueCountFormula_(
+  sheetName,
+  header
+) {
+
+  const range =
+    dashboardColumnRange_(
+      sheetName,
+      header
+    );
+
+  return '=IFERROR(ROWS(UNIQUE(FILTER(' +
+    range +
+    ',' +
+    range +
+    '<>""))),0)';
+}
+
+
+function dashboardWorkflowCountFormula_(
+  sectionKey
+) {
+
+  const definition =
+    getNetworkDashboardSchema_()[
+      'Department Workflow'
+    ];
+
+  const section =
+    (definition.headerRanges || [])
+      .find(item =>
+        item.key === sectionKey
+      );
+
+  if (!section) {
+    return '=0';
+  }
+
+  const nextHeaderRow =
+    (definition.headerRanges || [])
+      .map(item =>
+        Number(item.row || 0)
+      )
+      .filter(row =>
+        row > Number(section.row || 0)
+      )
+      .sort((left, right) =>
+        left - right
+      )[0] || getDashboardFormulaMaxRow_();
+
+  const column =
+    getColumnLetter_(
+      Number(section.column || 1)
+    );
+
+  return '=COUNTA(' +
+    quoteSheetName_(
+      'Department Workflow'
+    ) +
+    '!' +
+    column +
+    (Number(section.row || 1) + 1) +
+    ':' +
+    column +
+    (nextHeaderRow - 1) +
+    ')';
+}
+
+
+function dashboardColumnRange_(
+  sheetName,
+  header
+) {
+
+  const column =
+    getSchemaHeaderColumn_(
+      sheetName,
+      header
+    );
+
+  const letter =
+    getColumnLetter_(
+      column
+    );
+
+  return quoteSheetName_(
+    sheetName
+  ) +
+    '!' +
+    letter +
+    '2:' +
+    letter +
+    getDashboardFormulaMaxRow_();
+}
+
+
+function dashboardQueryCountFormula_(
+  section
+) {
+
+  const range =
+    dashboardColumnRange_(
+      section.sheetName,
+      section.header
+    );
+
+  return '=IFERROR(QUERY(' +
+    range +
+    ',"select Col1, count(Col1) where Col1 is not null group by Col1 label count(Col1) \'\'",0),"")';
+}
+
+
+function getSchemaHeaderColumn_(
+  sheetName,
+  header
+) {
+
+  const definition =
+    getNetworkDashboardSchema_()[sheetName];
+
+  const index =
+    definition &&
+    definition.headers
+      ? definition.headers.indexOf(header)
+      : -1;
+
+  if (index < 0) {
+    throw new Error(
+      'Dashboard formula cannot find header ' +
+      header +
+      ' on ' +
+      sheetName +
+      '.'
+    );
+  }
+
+  return index + 1;
+}
+
+
+function quoteSheetName_(
+  sheetName
+) {
+
+  return "'" +
+    String(sheetName || '')
+      .replace(/'/g, "''") +
+    "'";
+}
+
+
+function getColumnLetter_(
+  column
+) {
+
+  let value =
+    Number(column || 0);
+
+  let letter =
+    '';
+
+  while (value > 0) {
+
+    const remainder =
+      (value - 1) % 26;
+
+    letter =
+      String.fromCharCode(65 + remainder) +
+      letter;
+
+    value =
+      Math.floor((value - 1) / 26);
+
+  }
+
+  return letter;
+}
+
+
 function setupNetworkDashboard(options) {
 
   options =
@@ -579,6 +1168,11 @@ function setupNetworkDashboard(options) {
         result
       );
     });
+
+  ensureDashboardFormulaLayer_(
+    ss,
+    result
+  );
 
 
   AppConfig.seedMissing_();
@@ -671,6 +1265,11 @@ function ensureEnabledOptionalModuleSheets_() {
         });
 
     });
+
+  ensureDashboardFormulaLayer_(
+    ss,
+    result
+  );
 
 
   return result;
@@ -779,6 +1378,11 @@ function createSetupResult_() {
     },
     settings: {
       seeded: true
+    },
+    dashboard: {
+      formulaLayerConfigured: false,
+      metrics: 0,
+      summarySections: 0
     },
     migrations: [],
     integrations: {
@@ -917,6 +1521,153 @@ function setupSchemaSheet_(
     definition,
     result
   );
+}
+
+
+function ensureDashboardFormulaLayer_(
+  ss,
+  result
+) {
+
+  const sheet =
+    ss.getSheetByName(
+      'Dashboard'
+    );
+
+  if (!sheet) {
+    return;
+  }
+
+  const headers =
+    getDashboardSheetHeaders_();
+
+  const readRows =
+    getDashboardReadRowCount_();
+
+  const clearRows =
+    Math.max(
+      sheet.getLastRow(),
+      readRows
+    );
+
+  const clearColumns =
+    Math.max(
+      sheet.getLastColumn(),
+      8
+    );
+
+
+  sheet
+    .getRange(
+      1,
+      1,
+      1,
+      headers.length
+    )
+    .setValues([
+      headers
+    ]);
+
+
+  if (clearRows > 1) {
+
+    sheet
+      .getRange(
+        2,
+        1,
+        clearRows - 1,
+        clearColumns
+      )
+      .clearContent();
+
+  }
+
+
+  const metricRows =
+    getDashboardMetricDefinitions_()
+      .sort((left, right) =>
+        Number(left.sort || 0) -
+          Number(right.sort || 0)
+      )
+      .map(metric => [
+        metric.key,
+        metric.label,
+        metric.formula,
+        'metric',
+        metric.sort,
+        metric.notes || ''
+      ]);
+
+
+  if (metricRows.length) {
+
+    sheet
+      .getRange(
+        2,
+        1,
+        metricRows.length,
+        headers.length
+      )
+      .setValues(
+        metricRows
+      );
+
+  }
+
+
+  getDashboardSummarySections_()
+    .forEach(section => {
+
+      sheet
+        .getRange(
+          section.row,
+          section.column,
+          1,
+          2
+        )
+        .setValues([[
+          section.title,
+          ''
+        ]]);
+
+      sheet
+        .getRange(
+          section.row + 1,
+          section.column,
+          1,
+          2
+        )
+        .setValues([[
+          'Label',
+          'Value'
+        ]]);
+
+      sheet
+        .getRange(
+          section.row + 2,
+          section.column
+        )
+        .setFormula(
+          dashboardQueryCountFormula_(
+            section
+          )
+        );
+
+    });
+
+
+  if (result) {
+
+    result.dashboard = {
+      formulaLayerConfigured: true,
+      metrics:
+        metricRows.length,
+      summarySections:
+        getDashboardSummarySections_()
+          .length
+    };
+
+  }
 }
 
 
@@ -2031,10 +2782,225 @@ function validateSchemaSheet_(
     result
   );
 
+  if (definition.dashboardFormulaLayer) {
+    validateDashboardFormulaLayer_(
+      sheet,
+      result
+    );
+  }
+
+  if (sheetName === 'Internet WAN') {
+    validateInternetWanRows_(
+      sheet,
+      definition,
+      result
+    );
+  }
+
 
   result.sheets.push(
     sheetResult
   );
+}
+
+
+function validateDashboardFormulaLayer_(
+  sheet,
+  result
+) {
+
+  const rows =
+    getDashboardReadRowCount_();
+
+  const width =
+    Math.max(
+      getDashboardSheetHeaders_().length,
+      8
+    );
+
+  const values =
+    sheet
+      .getRange(
+        1,
+        1,
+        rows,
+        width
+      )
+      .getDisplayValues();
+
+  const formulas =
+    sheet
+      .getRange(
+        1,
+        1,
+        rows,
+        width
+      )
+      .getFormulas();
+
+  const keyRows = {};
+
+  values.forEach((row, index) => {
+
+    const key =
+      String(row[0] || '').trim();
+
+    const section =
+      String(row[3] || '').trim();
+
+    if (
+      key &&
+      section === 'metric'
+    ) {
+      keyRows[key] =
+        index;
+    }
+
+  });
+
+
+  getDashboardMetricDefinitions_()
+    .forEach(metric => {
+
+      if (
+        !Object.prototype
+          .hasOwnProperty
+          .call(
+            keyRows,
+            metric.key
+          )
+      ) {
+        result.errors.push(
+          'Missing Dashboard metric row: ' +
+          metric.key
+        );
+        return;
+      }
+
+      if (
+        !formulas[
+          keyRows[metric.key]
+        ][2]
+      ) {
+        result.errors.push(
+          'Missing Dashboard formula for metric: ' +
+          metric.key
+        );
+      }
+
+    });
+
+
+  getDashboardSummarySections_()
+    .forEach(section => {
+
+      const formula =
+        formulas[
+          section.row + 1
+        ] &&
+        formulas[
+          section.row + 1
+        ][section.column - 1];
+
+      if (!formula) {
+        result.errors.push(
+          'Missing Dashboard summary formula: ' +
+          section.title
+        );
+      }
+
+    });
+}
+
+
+function validateInternetWanRows_(
+  sheet,
+  definition,
+  result
+) {
+
+  const headers =
+    definition.headers || [];
+
+  if (sheet.getLastRow() < 2) {
+    return;
+  }
+
+  const values =
+    sheet
+      .getRange(
+        2,
+        1,
+        sheet.getLastRow() - 1,
+        headers.length
+      )
+      .getDisplayValues();
+
+  const seenCircuitIds = {};
+
+  values.forEach((row, index) => {
+
+    if (
+      !rowHasMeaningfulData_(
+        row,
+        headers
+      )
+    ) {
+      return;
+    }
+
+    const rowNumber =
+      index + 2;
+
+    const record = {};
+
+    headers.forEach((header, columnIndex) => {
+      record[header] =
+        row[columnIndex];
+    });
+
+    const circuitId =
+      String(
+        record['Circuit ID'] || ''
+      ).trim();
+
+    if (!circuitId) {
+      result.errors.push(
+        'Internet WAN row ' +
+        rowNumber +
+        ': Circuit ID is required.'
+      );
+    } else if (seenCircuitIds[circuitId]) {
+      result.errors.push(
+        'Internet WAN row ' +
+        rowNumber +
+        ': Duplicate Circuit ID ' +
+        circuitId +
+        '.'
+      );
+    } else {
+      seenCircuitIds[circuitId] =
+        true;
+    }
+
+    try {
+      normalizeInternetWanRecord_(
+        record
+      );
+    } catch (error) {
+      result.errors.push(
+        'Internet WAN row ' +
+        rowNumber +
+        ': ' +
+        (
+          error && error.message
+            ? error.message
+            : String(error)
+        )
+      );
+    }
+
+  });
 }
 
 
@@ -2439,6 +3405,15 @@ function formatSetupSummary_(result) {
     'Protections',
     result.protections.protected.length +
       ' managed header ranges protected',
+    '',
+    'Dashboard',
+    result.dashboard &&
+      result.dashboard.formulaLayerConfigured
+      ? result.dashboard.metrics +
+          ' metric formulas configured\n' +
+          result.dashboard.summarySections +
+          ' summary sections configured'
+      : 'Formula layer not configured',
     '',
     'Migrations',
     result.migrations &&

@@ -15,6 +15,8 @@ Network Dashboard is separated into four layers:
 
 The web app uses one lightweight shell. Dashboard rendering is included for first paint; heavier page renderers are lazy-loaded by page type the first time a user opens those pages.
 
+Dashboard metrics and summary tables are formula-driven in the `Dashboard` sheet. The Dashboard web page reads only that sheet, while setup owns the formulas that reference operational sheets.
+
 The core application should not require source edits for a new organization.
 
 ## Requirements
@@ -42,7 +44,7 @@ Do not run `clasp push` to a production script until you have reviewed the chang
 
 `setupNetworkDashboard()` is the official installer. It is idempotent and safe to run again.
 
-Setup creates missing sheets for enabled modules, creates canonical headers, freezes header rows, applies standard header formatting, protects managed header ranges, seeds `App Settings`, seeds `App Integrations`, seeds the first admin user when possible, records application/schema version metadata and reports integration Script Property status.
+Setup creates missing sheets for enabled modules, creates canonical headers, configures the Dashboard formula layer, freezes header rows, applies standard header formatting, protects managed header ranges, seeds `App Settings`, seeds `App Integrations`, seeds the first admin user when possible, records application/schema version metadata and reports integration Script Property status.
 
 Setup does not store secrets in Sheets, erase operational data, duplicate settings, duplicate integration definitions or duplicate managed header protections.
 
@@ -50,11 +52,11 @@ Setup does not store secrets in Sheets, erase operational data, duplicate settin
 
 Run `validateNetworkDashboard()` from Apps Script or use Network Dashboard -> Validate Installation in the spreadsheet menu.
 
-Validation checks enabled-module sheets, headers, header order, frozen rows, managed header protections, settings rows, integration definitions, enabled integration property completeness, application version, schema version and break-glass configuration. Disabled optional module sheets and obsolete legacy sheets are reported as unmanaged warnings without making the installation unhealthy. It returns structured results suitable for future UI display and never includes secret values.
+Validation checks enabled-module sheets, headers, header order, Dashboard formula rows, Dashboard summary formulas, Internet/WAN row shape, frozen rows, managed header protections, settings rows, integration definitions, enabled integration property completeness, application version, schema version and break-glass configuration. Disabled optional module sheets and obsolete legacy sheets are reported as unmanaged warnings without making the installation unhealthy. It returns structured results suitable for future UI display and never includes secret values.
 
 ## Modules
 
-Core modules are always enabled: Dashboard, Switches, Access Points, Servers, IP Route Tables and Security Cameras. System administration pages remain enabled for Department Workflow, User Management and Settings.
+Core modules are always enabled: Dashboard, Switches, Access Points, Servers, IP Route Tables, Internet / WAN and Security Cameras. System administration pages remain enabled for Department Workflow, User Management and Settings.
 
 Optional modules are disabled by default and can be enabled in Settings: Bus Cameras, Intercom Bell System and Backup Schedule. Enabling a module provisions its canonical sheet and protections. Disabling a module hides navigation, blocks server-side page access, removes dashboard calculations where applicable and preserves existing sheet data.
 
@@ -70,10 +72,11 @@ Operational data rows remain editable. Google Sheets owners can intentionally re
 
 `Dashboard`
 
-- `Section`
-- `Metric`
+- `Metric Key`
+- `Label`
 - `Value`
-- `Updated At`
+- `Section`
+- `Sort Order`
 - `Notes`
 
 `Switches`
@@ -146,6 +149,23 @@ Operational data rows remain editable. Google Sheets owners can intentionally re
 - `SubType`
 - `Metric`
 - `Dist`
+- `Notes`
+
+`Internet WAN`
+
+- `Circuit ID`
+- `Circuit Name`
+- `Site / Location`
+- `Role`
+- `Provider`
+- `Service Type`
+- `Download Bandwidth`
+- `Upload Bandwidth`
+- `Public Network / CIDR`
+- `Gateway`
+- `Public IPs`
+- `Circuit / Account ID`
+- `Status`
 - `Notes`
 
 `Security Cameras`
@@ -226,6 +246,14 @@ Operational data rows remain editable. Google Sheets owners can intentionally re
 - `Config JSON`
 - `Notes`
 
+## Dashboard Formula Layer
+
+The `Dashboard` sheet is the aggregation boundary for dashboard metrics. `setupNetworkDashboard()` writes metric rows and compact two-column summary formulas into that sheet, then the Dashboard web page reads the displayed values from `Dashboard` only.
+
+Metric rows use `Section = metric` and keys such as `switches.total`, `access_points.total`, `internet_wan.total` and `workflow.groups`. Summary sections currently include switch status, access point status, switch campus distribution and Internet/WAN status.
+
+When an optional module is enabled or disabled, setup refreshes the Dashboard formula layer so optional metrics such as Backup Schedule appear only when that module is active.
+
 ## App Settings Keys
 
 - `app.name`
@@ -251,6 +279,14 @@ Operational data rows remain editable. Google Sheets owners can intentionally re
 Branding is configured through Settings. Supported fields are logo URL, primary color, secondary color, accent color, application name, organization name and organization short name.
 
 The default visual design is the Network Dashboard theme. Organization identity belongs in `App Settings`, not source code.
+
+## Internet / WAN
+
+Internet / WAN is a core module for documenting site circuits and public Internet configuration. It uses the `Internet WAN` sheet and the `Internet / WAN` web page.
+
+The page supports viewing, filtering, adding, editing and deleting circuits subject to RBAC. Server-side save validation requires circuit name, site, role, provider, service type, status, positive bandwidth values, valid CIDR notation for public networks, valid gateway IPs and valid individual public IP entries.
+
+Do not store circuit portal passwords, ISP credentials or shared secrets in Internet/WAN rows. Public IP ranges, public gateways, provider names, non-secret circuit/account references and operational notes are acceptable.
 
 ## User Management and RBAC
 
@@ -370,6 +406,12 @@ clasp push
 ```
 
 Do not commit secrets. Do not push to production from this template-development repository unless that is explicitly intended.
+
+## Local DevSeed
+
+`DevSeed.js` is a local-only development helper for filling a test spreadsheet with fictional rows. It is intentionally listed in `.gitignore`, but it remains a normal Apps Script source file locally so it can be included in local `clasp` QA when that is intentional.
+
+Use `seedNetworkDashboardTestData()` to seed fictional data, `clearNetworkDashboardTestData()` to remove seed-owned rows, and `resetNetworkDashboardDevEnvironment("RESET")` to reset a local development spreadsheet. DevSeed includes fictional Internet/WAN circuits using documentation-safe public IP ranges and never seeds real credentials.
 
 ## Troubleshooting
 

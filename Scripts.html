@@ -70,6 +70,7 @@ const structuredTables =
 const PAGE_RENDERER_FUNCTIONS = {
   dashboard: 'renderDashboard',
   table: 'renderTablePage',
+  internetWan: 'renderInternetWanPage',
   structured: 'renderStructuredPage',
   workflow: 'renderWorkflowPage',
   users: 'renderUsersPage',
@@ -80,6 +81,10 @@ const PAGE_RENDERER_FUNCTIONS = {
 const loadedPageRendererTypes = {
   dashboard: true
 };
+
+
+const SCRIPT_RUN_TIMEOUT_MS =
+  60000;
 
 
 /*******************************************************
@@ -109,25 +114,45 @@ window.addEventListener(
 
     if (window.INITIAL_APP_BOOTSTRAP) {
 
-      initializeApplication(
-        window.INITIAL_APP_BOOTSTRAP
-      );
+      try {
+
+        initializeApplication(
+          window.INITIAL_APP_BOOTSTRAP
+        );
+
+      } catch (error) {
+
+        showBootstrapError(
+          error
+        );
+
+        handleFailure(
+          error,
+          'initial bootstrap'
+        );
+
+      }
 
       return;
     }
 
 
-    google.script.run
-
-      .withSuccessHandler(
+    getBootstrapPromise_()
+      .then(
         initializeApplication
       )
+      .catch(function(error) {
 
-      .withFailureHandler(
-        handleFailure
-      )
+        showBootstrapError(
+          error
+        );
 
-      .getAppBootstrap();
+        handleFailure(
+          error,
+          'bootstrap'
+        );
+
+      });
 
   }
 );
@@ -614,6 +639,20 @@ function invalidateClientPage(
 }
 
 
+function closeRowActionMenu() {
+
+  const menu =
+    document.getElementById(
+      'rowActionMenu'
+    );
+
+
+  if (menu) {
+    menu.remove();
+  }
+}
+
+
 /*******************************************************
  * PAGE LOADING
  *******************************************************/
@@ -639,7 +678,10 @@ function loadPage(
 
 
   const cached =
-    forceRefresh
+    forceRefresh ||
+    !shouldClientCachePage_(
+      pageKey
+    )
       ? null
       : getClientCache(
           pageKey
@@ -671,7 +713,21 @@ function loadPage(
         );
 
       })
-      .catch(handleFailure);
+      .catch(error => {
+
+        if (currentPageKey === pageKey) {
+          showPageError(
+            pageKey,
+            error
+          );
+        }
+
+        handleFailure(
+          error,
+          'page load: ' + pageKey
+        );
+
+      });
 
     return;
 
@@ -701,10 +757,16 @@ function loadPage(
       const data =
         results[1];
 
-      setClientCache(
-        pageKey,
-        data
-      );
+      if (
+        shouldClientCachePage_(
+          pageKey
+        )
+      ) {
+        setClientCache(
+          pageKey,
+          data
+        );
+      }
 
 
       currentPageData =
@@ -717,7 +779,39 @@ function loadPage(
       );
 
     })
-    .catch(handleFailure);
+    .catch(error => {
+
+      if (currentPageKey === pageKey) {
+        showPageError(
+          pageKey,
+          error
+        );
+      }
+
+      handleFailure(
+        error,
+        'page load: ' + pageKey
+      );
+
+    });
+}
+
+
+function shouldClientCachePage_(
+  pageKey
+) {
+
+  return pageKey !== 'dashboard';
+}
+
+
+function getBootstrapPromise_() {
+
+  return scriptRunPromise_(
+    'getAppBootstrap',
+    runner =>
+      runner.getAppBootstrap()
+  );
 }
 
 
@@ -726,17 +820,14 @@ function getPageDataPromise_(
   forceRefresh
 ) {
 
-  return new Promise((resolve, reject) => {
-
-    google.script.run
-      .withSuccessHandler(resolve)
-      .withFailureHandler(reject)
-      .appGetPageData(
+  return scriptRunPromise_(
+    'appGetPageData:' + pageKey,
+    runner =>
+      runner.appGetPageData(
         pageKey,
         !!forceRefresh
-      );
-
-  });
+      )
+  );
 }
 
 
@@ -764,10 +855,14 @@ function ensurePageRendererPromise_(
   }
 
 
-  return new Promise((resolve, reject) => {
-
-    google.script.run
-      .withSuccessHandler(function(html) {
+  return scriptRunPromise_(
+    'appGetPageClientTemplate:' + pageKey,
+    runner =>
+      runner.appGetPageClientTemplate(
+        pageKey
+      )
+  )
+    .then(function(html) {
 
         try {
 
@@ -787,19 +882,97 @@ function ensurePageRendererPromise_(
           loadedPageRendererTypes[page.type] =
             true;
 
-          resolve();
+          return true;
 
         } catch (error) {
 
-          reject(error);
+          throw error;
 
         }
 
-      })
-      .withFailureHandler(reject)
-      .appGetPageClientTemplate(
-        pageKey
+    });
+}
+
+
+function scriptRunPromise_(
+  label,
+  invoke,
+  timeoutMs
+) {
+
+  return new Promise((resolve, reject) => {
+
+    let settled =
+      false;
+
+    const timer =
+      setTimeout(
+        function() {
+
+          if (settled) {
+            return;
+          }
+
+          settled =
+            true;
+
+          reject(
+            new Error(
+              label +
+              ' timed out.'
+            )
+          );
+
+        },
+        timeoutMs ||
+          SCRIPT_RUN_TIMEOUT_MS
       );
+
+
+    const finish =
+      callback =>
+        value => {
+
+          if (settled) {
+            return;
+          }
+
+          settled =
+            true;
+
+          clearTimeout(
+            timer
+          );
+
+          callback(
+            value
+          );
+
+        };
+
+
+    try {
+
+      const runner =
+        google.script.run
+          .withSuccessHandler(
+            finish(resolve)
+          )
+          .withFailureHandler(
+            finish(reject)
+          );
+
+      invoke(
+        runner
+      );
+
+    } catch (error) {
+
+      finish(reject)(
+        error
+      );
+
+    }
 
   });
 }
@@ -904,6 +1077,118 @@ function showPageLoading() {
 }
 
 
+function showBootstrapError(
+  error
+) {
+
+  setPageHeader(
+    'Unable to Start',
+    'Network Dashboard could not initialize.'
+  );
+
+  showPageErrorPanel_(
+    'Unable to load Network Dashboard',
+    error,
+    'location.reload()'
+  );
+}
+
+
+function showPageError(
+  pageKey,
+  error
+) {
+
+  const page =
+    appBootstrap &&
+    appBootstrap.pages
+      ? appBootstrap.pages.find(item =>
+          item.key === pageKey
+        )
+      : null;
+
+  const label =
+    page && page.label
+      ? page.label
+      : 'this page';
+
+  showPageErrorPanel_(
+    'Unable to load ' + label,
+    error,
+    "loadPage('" +
+      escapeAttribute(pageKey) +
+      "', true)"
+  );
+}
+
+
+function showPageErrorPanel_(
+  title,
+  error,
+  retryAction
+) {
+
+  const content =
+    document.getElementById(
+      'pageContent'
+    );
+
+  if (!content) {
+    return;
+  }
+
+  content.innerHTML = `
+    <div class="app-card page-error-card">
+      <div class="page-error-icon">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+      </div>
+      <div class="page-error-body">
+        <h2>${escapeHtml(title)}</h2>
+        <p>
+          Network Dashboard could not retrieve the requested information.
+        </p>
+        <div class="page-error-detail">
+          ${escapeHtml(getSafeErrorMessage_(error))}
+        </div>
+        <button
+          class="btn btn-sm btn-brand"
+          onclick="${retryAction}"
+        >
+          <i class="fa-solid fa-rotate me-2"></i>
+          Retry
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+
+function getSafeErrorMessage_(
+  error
+) {
+
+  const message =
+    error &&
+    error.message
+      ? error.message
+      : String(
+          error ||
+          'Unknown error'
+        );
+
+  if (
+    !message ||
+    /password|token|secret|credential/i.test(
+      message
+    )
+  ) {
+    return 'Request failed. See browser console for diagnostics.';
+  }
+
+  return message;
+}
+
+
 /*******************************************************
  * RENDER ROUTER
  *******************************************************/
@@ -946,6 +1231,19 @@ function renderPage(
   ) {
 
     renderWorkflowPage(
+      data
+    );
+
+    return;
+
+  }
+
+
+  if (
+    page.type === 'internetWan'
+  ) {
+
+    renderInternetWanPage(
       data
     );
 
@@ -1606,26 +1904,21 @@ function statusPill(
  *******************************************************/
 
 function handleFailure(
-  error
+  error,
+  context
 ) {
 
   console.error(
+    'Network Dashboard request failed:',
+    context || 'unknown operation',
     error
   );
 
 
-  const message =
-    error &&
-    error.message
-      ? error.message
-      : String(
-          error ||
-          'Unknown error'
-        );
-
-
   showToast(
-    message,
+    getSafeErrorMessage_(
+      error
+    ),
     true
   );
 }

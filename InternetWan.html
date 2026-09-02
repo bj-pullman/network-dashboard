@@ -1,0 +1,909 @@
+<script>
+
+function renderInternetWanPage(data) {
+
+  currentPageData =
+    data;
+
+  const canEdit =
+    data.permission === 'edit';
+
+  setPageHeader(
+    'Internet / WAN',
+    `${data.totalCount || 0} WAN circuits`
+  );
+
+  document.getElementById(
+    'pageActions'
+  ).innerHTML = `
+    ${
+      canEdit
+        ? `
+          <button
+            class="btn btn-sm btn-brand"
+            onclick="openInternetWanAddCircuit()"
+          >
+            <i class="fa-solid fa-plus me-2"></i>
+            Add Circuit
+          </button>
+        `
+        : ''
+    }
+
+    <button
+      class="btn btn-sm btn-light border"
+      onclick="refreshCurrentPage()"
+    >
+      <i class="fa-solid fa-rotate me-2"></i>
+      Refresh
+    </button>
+  `;
+
+
+  document.getElementById(
+    'pageContent'
+  ).innerHTML = `
+    <div class="internet-wan-layout">
+      <div class="internet-wan-summary">
+        ${internetWanSummaryCard('WAN Circuits', data.summary.total, 'fa-globe')}
+        ${internetWanSummaryCard('Primary', data.summary.primary, 'fa-arrow-up-wide-short')}
+        ${internetWanSummaryCard('Backup', data.summary.backup, 'fa-shuffle')}
+        ${internetWanSummaryCard('Sites', data.summary.sites, 'fa-location-dot')}
+        ${internetWanSummaryCard('Down', data.summary.down, 'fa-triangle-exclamation')}
+      </div>
+
+      <div class="table-toolbar">
+        <div class="table-toolbar-left">
+          <div class="input-group input-group-sm table-search">
+            <span class="input-group-text bg-white">
+              <i class="fa-solid fa-magnifying-glass"></i>
+            </span>
+            <input
+              id="internetWanSearch"
+              type="search"
+              class="form-control"
+              placeholder="Search circuits..."
+              oninput="applyInternetWanFilters()"
+            >
+          </div>
+
+          <select
+            id="internetWanRoleFilter"
+            class="form-select form-select-sm internet-wan-filter"
+            onchange="applyInternetWanFilters()"
+          >
+            <option value="">All roles</option>
+            <option value="Primary">Primary</option>
+            <option value="Secondary">Secondary</option>
+            <option value="Backup">Backup</option>
+          </select>
+
+          <select
+            id="internetWanStatusFilter"
+            class="form-select form-select-sm internet-wan-filter"
+            onchange="applyInternetWanFilters()"
+          >
+            <option value="">All statuses</option>
+            <option value="Active">Active</option>
+            <option value="Standby">Standby</option>
+            <option value="Down">Down</option>
+            <option value="Disabled">Disabled</option>
+          </select>
+
+          <button
+            class="btn btn-sm btn-light border"
+            onclick="clearInternetWanFilters()"
+          >
+            <i class="fa-solid fa-filter-circle-xmark me-2"></i>
+            Clear
+          </button>
+        </div>
+
+        <div class="table-toolbar-right">
+          <span
+            id="internetWanRecordCount"
+            class="record-count"
+          >
+            ${data.totalCount || 0} records
+          </span>
+        </div>
+      </div>
+
+      <div class="app-card table-card">
+        <div id="internetWanTable"></div>
+      </div>
+    </div>
+  `;
+
+  buildInternetWanTable(
+    data
+  );
+}
+
+
+function internetWanSummaryCard(
+  label,
+  value,
+  icon
+) {
+
+  return `
+    <div class="metric-card internet-wan-metric">
+      <div class="metric-icon">
+        <i class="fa-solid ${icon}"></i>
+      </div>
+      <div>
+        <div class="metric-label">${escapeHtml(label)}</div>
+        <div class="metric-value">${escapeHtml(value || 0)}</div>
+      </div>
+    </div>
+  `;
+}
+
+
+function buildInternetWanTable(data) {
+
+  if (tableInstance) {
+    tableInstance.destroy();
+    tableInstance = null;
+  }
+
+  const canEdit =
+    data.permission === 'edit';
+
+  tableInstance =
+    new Tabulator(
+      '#internetWanTable',
+      {
+        data:
+          data.rows || [],
+        layout:
+          'fitColumns',
+        reactiveData:
+          false,
+        pagination:
+          'local',
+        paginationSize:
+          15,
+        placeholder:
+          'No WAN circuits found.',
+        columns: [
+          {
+            title: 'Circuit',
+            field: 'Circuit Name',
+            minWidth: 180,
+            widthGrow: 1.5,
+            formatter: function(cell) {
+              const row =
+                cell.getRow().getData();
+              return `
+                <div class="internet-wan-circuit-cell">
+                  <strong>${escapeHtml(row['Circuit Name'])}</strong>
+                  <small>${escapeHtml(row['Circuit ID'])}</small>
+                </div>
+              `;
+            }
+          },
+          {
+            title: 'Site',
+            field: 'Site / Location',
+            minWidth: 140
+          },
+          {
+            title: 'Role',
+            field: 'Role',
+            minWidth: 105
+          },
+          {
+            title: 'Provider',
+            field: 'Provider',
+            minWidth: 130
+          },
+          {
+            title: 'Service',
+            field: 'Service Type',
+            minWidth: 110
+          },
+          {
+            title: 'Bandwidth',
+            field: '_bandwidth',
+            minWidth: 130
+          },
+          {
+            title: 'Public IPs',
+            field: '_publicIpSummary',
+            minWidth: 150,
+            tooltip: function(event, cell) {
+              return (
+                cell
+                  .getRow()
+                  .getData()
+                  ['Public IPs'] || ''
+              );
+            }
+          },
+          {
+            title: 'Gateway',
+            field: 'Gateway',
+            minWidth: 130
+          },
+          {
+            title: 'Status',
+            field: 'Status',
+            minWidth: 115,
+            formatter: function(cell) {
+              return statusPill(
+                cell.getValue()
+              );
+            }
+          },
+          {
+            title: 'Actions',
+            field: '_actions',
+            width: 132,
+            minWidth: 132,
+            hozAlign: 'right',
+            headerSort: false,
+            formatter: function() {
+              return `
+                <div class="internet-wan-actions">
+                  <button
+                    class="btn btn-sm btn-light border"
+                    data-wan-action="view"
+                    title="View circuit"
+                  >
+                    <i class="fa-solid fa-eye"></i>
+                  </button>
+                  ${
+                    canEdit
+                      ? `
+                        <button
+                          class="btn btn-sm btn-light border"
+                          data-wan-action="edit"
+                          title="Edit circuit"
+                        >
+                          <i class="fa-solid fa-pen"></i>
+                        </button>
+                        <button
+                          class="btn btn-sm btn-light border text-danger"
+                          data-wan-action="delete"
+                          title="Delete circuit"
+                        >
+                          <i class="fa-solid fa-trash"></i>
+                        </button>
+                      `
+                      : ''
+                  }
+                </div>
+              `;
+            },
+            cellClick: function(event, cell) {
+              const action =
+                event.target.closest(
+                  '[data-wan-action]'
+                );
+
+              if (!action) {
+                return;
+              }
+
+              const row =
+                cell.getRow().getData();
+
+              if (action.dataset.wanAction === 'view') {
+                openInternetWanViewCircuit(row);
+              } else if (action.dataset.wanAction === 'edit') {
+                openInternetWanEditCircuit(row);
+              } else if (action.dataset.wanAction === 'delete') {
+                confirmDeleteInternetWanCircuit(row);
+              }
+            }
+          }
+        ]
+      }
+    );
+
+  tableInstance.on(
+    'dataFiltered',
+    function(filters, rows) {
+      const count =
+        document.getElementById(
+          'internetWanRecordCount'
+        );
+      if (count) {
+        count.textContent =
+          `${rows.length} records`;
+      }
+    }
+  );
+}
+
+
+function applyInternetWanFilters() {
+
+  if (!tableInstance) {
+    return;
+  }
+
+  const search =
+    String(
+      document.getElementById(
+        'internetWanSearch'
+      ).value || ''
+    ).toLowerCase();
+
+  const role =
+    document.getElementById(
+      'internetWanRoleFilter'
+    ).value;
+
+  const status =
+    document.getElementById(
+      'internetWanStatusFilter'
+    ).value;
+
+  tableInstance.setFilter(function(row) {
+
+    if (
+      role &&
+      row['Role'] !== role
+    ) {
+      return false;
+    }
+
+    if (
+      status &&
+      row['Status'] !== status
+    ) {
+      return false;
+    }
+
+    if (!search) {
+      return true;
+    }
+
+    return [
+      row['Circuit ID'],
+      row['Circuit Name'],
+      row['Site / Location'],
+      row['Provider'],
+      row['Service Type'],
+      row['Gateway'],
+      row['Public IPs'],
+      row['Notes']
+    ]
+      .join(' ')
+      .toLowerCase()
+      .includes(search);
+
+  });
+}
+
+
+function clearInternetWanFilters() {
+
+  ['internetWanSearch', 'internetWanRoleFilter', 'internetWanStatusFilter']
+    .forEach(id => {
+      const element =
+        document.getElementById(id);
+      if (element) {
+        element.value = '';
+      }
+    });
+
+  if (tableInstance) {
+    tableInstance.clearFilter();
+  }
+}
+
+
+function openInternetWanAddCircuit() {
+
+  openInternetWanForm_(
+    null
+  );
+}
+
+
+function openInternetWanEditCircuit(row) {
+
+  openInternetWanForm_(
+    row
+  );
+}
+
+
+function openInternetWanForm_(
+  row
+) {
+
+  editingRow =
+    row || null;
+
+  document.getElementById(
+    'recordModalTitle'
+  ).textContent =
+    row
+      ? 'Edit WAN Circuit'
+      : 'Add WAN Circuit';
+
+  const saveButton =
+    document.getElementById(
+      'saveRecordButton'
+    );
+
+  saveButton.style.display =
+    '';
+
+  saveButton.onclick =
+    saveInternetWanCircuitFromModal;
+
+  document.getElementById(
+    'recordModalBody'
+  ).innerHTML = `
+    <div class="internet-wan-form">
+      <div class="internet-wan-form-section">
+        <h3>Circuit</h3>
+        <div class="internet-wan-form-grid">
+          ${internetWanTextField_('Circuit ID', row ? row['Circuit ID'] : 'Assigned on save', true)}
+          ${internetWanTextField_('Circuit Name', row && row['Circuit Name'])}
+          ${internetWanTextField_('Site / Location', row && row['Site / Location'])}
+          ${internetWanSelectField_('Role', row && row['Role'], ['Primary', 'Secondary', 'Backup'])}
+          ${internetWanTextField_('Provider', row && row['Provider'])}
+          ${internetWanSelectField_('Service Type', row && row['Service Type'], ['Fiber', 'DIA', 'Cable', 'Fixed Wireless', 'DSL', 'Cellular', 'Other'])}
+          ${internetWanSelectField_('Status', row && row['Status'], ['Active', 'Standby', 'Down', 'Disabled'])}
+        </div>
+      </div>
+
+      <div class="internet-wan-form-section">
+        <h3>Bandwidth</h3>
+        <div class="internet-wan-form-grid two-column">
+          ${internetWanNumberField_('Download Bandwidth', row && row['Download Bandwidth'])}
+          ${internetWanNumberField_('Upload Bandwidth', row && row['Upload Bandwidth'])}
+        </div>
+      </div>
+
+      <div class="internet-wan-form-section">
+        <h3>Public Internet Configuration</h3>
+        <div class="internet-wan-form-grid two-column">
+          ${internetWanTextField_('Public Network / CIDR', row && row['Public Network / CIDR'])}
+          ${internetWanTextField_('Gateway', row && row['Gateway'])}
+        </div>
+
+        <div class="internet-wan-ip-editor">
+          <label>Public IP Addresses</label>
+          <div id="internetWanIpFields"></div>
+          <button
+            type="button"
+            class="btn btn-sm btn-light border"
+            onclick="addInternetWanIpField()"
+          >
+            <i class="fa-solid fa-plus me-2"></i>
+            Add More IPs
+          </button>
+        </div>
+      </div>
+
+      <div class="internet-wan-form-section">
+        <h3>Provider Reference</h3>
+        ${internetWanTextField_('Circuit / Account ID', row && row['Circuit / Account ID'])}
+      </div>
+
+      <div class="internet-wan-form-section">
+        <h3>Notes</h3>
+        ${internetWanTextareaField_('Notes', row && row['Notes'])}
+        <div class="internet-wan-helper">
+          Do not store passwords or credentials in Notes.
+        </div>
+      </div>
+    </div>
+  `;
+
+  renderInternetWanIpFields_(
+    row && row._publicIpList
+      ? row._publicIpList
+      : []
+  );
+
+  recordModal.show();
+}
+
+
+function internetWanTextField_(
+  label,
+  value,
+  readonly
+) {
+
+  return `
+    <label class="internet-wan-field">
+      <span>${escapeHtml(label)}</span>
+      <input
+        class="form-control"
+        data-wan-field="${escapeAttribute(label)}"
+        value="${escapeAttribute(value || '')}"
+        ${readonly ? 'readonly' : ''}
+      >
+    </label>
+  `;
+}
+
+
+function internetWanNumberField_(
+  label,
+  value
+) {
+
+  return `
+    <label class="internet-wan-field">
+      <span>${escapeHtml(label)} <small>Mbps</small></span>
+      <input
+        type="number"
+        min="1"
+        step="1"
+        class="form-control"
+        data-wan-field="${escapeAttribute(label)}"
+        value="${escapeAttribute(value || '')}"
+      >
+    </label>
+  `;
+}
+
+
+function internetWanSelectField_(
+  label,
+  value,
+  options
+) {
+
+  const selected =
+    value || options[0];
+
+  const listId =
+    'internetWan' +
+    label.replace(/[^a-z0-9]/gi, '') +
+    'Options';
+
+  return `
+    <label class="internet-wan-field">
+      <span>${escapeHtml(label)}</span>
+      <input
+        class="form-control"
+        list="${escapeAttribute(listId)}"
+        data-wan-field="${escapeAttribute(label)}"
+        value="${escapeAttribute(selected)}"
+      >
+      <datalist id="${escapeAttribute(listId)}">
+        ${options.map(option => `
+          <option
+            value="${escapeAttribute(option)}"
+          ></option>
+        `).join('')}
+      </datalist>
+    </label>
+  `;
+}
+
+
+function internetWanTextareaField_(
+  label,
+  value
+) {
+
+  return `
+    <label class="internet-wan-field internet-wan-field-full">
+      <span>${escapeHtml(label)}</span>
+      <textarea
+        class="form-control"
+        rows="4"
+        data-wan-field="${escapeAttribute(label)}"
+      >${escapeHtml(value || '')}</textarea>
+    </label>
+  `;
+}
+
+
+function renderInternetWanIpFields_(
+  ips
+) {
+
+  const container =
+    document.getElementById(
+      'internetWanIpFields'
+    );
+
+  if (!container) {
+    return;
+  }
+
+  const values =
+    ips.length
+      ? ips
+      : [''];
+
+  container.innerHTML =
+    values
+      .map((value, index) =>
+        internetWanIpField_(
+          value,
+          index
+        )
+      )
+      .join('');
+}
+
+
+function internetWanIpField_(
+  value,
+  index
+) {
+
+  return `
+    <div class="internet-wan-ip-row">
+      <input
+        class="form-control"
+        data-wan-public-ip
+        placeholder="Public IP"
+        value="${escapeAttribute(value || '')}"
+      >
+      ${
+        index > 0
+          ? `
+            <button
+              type="button"
+              class="btn btn-sm btn-light border"
+              onclick="removeInternetWanIpField(this)"
+              title="Remove public IP"
+            >
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          `
+          : ''
+      }
+    </div>
+  `;
+}
+
+
+function addInternetWanIpField() {
+
+  const container =
+    document.getElementById(
+      'internetWanIpFields'
+    );
+
+  if (!container) {
+    return;
+  }
+
+  const wrapper =
+    document.createElement(
+      'div'
+    );
+
+  wrapper.innerHTML =
+    internetWanIpField_(
+      '',
+      container.querySelectorAll(
+        '[data-wan-public-ip]'
+      ).length
+    );
+
+  container.appendChild(
+    wrapper.firstElementChild
+  );
+}
+
+
+function removeInternetWanIpField(button) {
+
+  const row =
+    button.closest(
+      '.internet-wan-ip-row'
+    );
+
+  if (row) {
+    row.remove();
+  }
+}
+
+
+function saveInternetWanCircuitFromModal() {
+
+  const record = {};
+
+  document
+    .querySelectorAll(
+      '#recordModalBody [data-wan-field]'
+    )
+    .forEach(input => {
+      record[input.dataset.wanField] =
+        input.value;
+    });
+
+  record.publicIps =
+    Array.from(
+      document.querySelectorAll(
+        '#recordModalBody [data-wan-public-ip]'
+      )
+    )
+      .map(input =>
+        input.value
+      );
+
+  if (editingRow) {
+    record._row =
+      editingRow._row;
+  }
+
+  const saveButton =
+    document.getElementById(
+      'saveRecordButton'
+    );
+
+  saveButton.disabled =
+    true;
+
+  scriptRunPromise_(
+    'appSaveInternetWanCircuit',
+    runner =>
+      runner.appSaveInternetWanCircuit(
+        record
+      )
+  )
+    .then(data => {
+
+      recordModal.hide();
+
+      saveButton.disabled =
+        false;
+
+      currentPageData =
+        data;
+
+      setClientCache(
+        'internetWan',
+        data
+      );
+
+      renderInternetWanPage(
+        data
+      );
+
+      showToast(
+        'WAN circuit saved.'
+      );
+
+    })
+    .catch(error => {
+
+      saveButton.disabled =
+        false;
+
+      handleFailure(
+        error,
+        'save Internet WAN circuit'
+      );
+
+    });
+}
+
+
+function openInternetWanViewCircuit(row) {
+
+  editingRow =
+    null;
+
+  document.getElementById(
+    'recordModalTitle'
+  ).textContent =
+    row['Circuit Name'] ||
+    'WAN Circuit';
+
+  document.getElementById(
+    'saveRecordButton'
+  ).style.display =
+    'none';
+
+  document.getElementById(
+    'recordModalBody'
+  ).innerHTML = `
+    <div class="internet-wan-detail">
+      ${internetWanDetailItem_('Circuit ID', row['Circuit ID'])}
+      ${internetWanDetailItem_('Circuit Name', row['Circuit Name'])}
+      ${internetWanDetailItem_('Site / Location', row['Site / Location'])}
+      ${internetWanDetailItem_('Role', row['Role'])}
+      ${internetWanDetailItem_('Provider', row['Provider'])}
+      ${internetWanDetailItem_('Service Type', row['Service Type'])}
+      ${internetWanDetailItem_('Bandwidth', row._bandwidth)}
+      ${internetWanDetailItem_('Public Network / CIDR', row['Public Network / CIDR'])}
+      ${internetWanDetailItem_('Gateway', row['Gateway'])}
+      ${internetWanDetailItem_('Public IP Addresses', internetWanPublicIpLines_(row))}
+      ${internetWanDetailItem_('Circuit / Account ID', row['Circuit / Account ID'])}
+      ${internetWanDetailItem_('Status', row['Status'])}
+      ${internetWanDetailItem_('Notes', row['Notes'])}
+    </div>
+  `;
+
+  recordModal.show();
+}
+
+
+function internetWanDetailItem_(
+  label,
+  value
+) {
+
+  const text =
+    String(value || '').trim();
+
+  return `
+    <div class="internet-wan-detail-item">
+      <span>${escapeHtml(label)}</span>
+      <div>${escapeHtml(text || 'Not specified').replace(/\n/g, '<br>')}</div>
+    </div>
+  `;
+}
+
+
+function internetWanPublicIpLines_(
+  row
+) {
+
+  const ips =
+    row._publicIpList ||
+    [];
+
+  return ips.length
+    ? ips.join('\n')
+    : '';
+}
+
+
+function confirmDeleteInternetWanCircuit(
+  row
+) {
+
+  if (
+    !confirm(
+      'Delete this WAN circuit permanently?'
+    )
+  ) {
+    return;
+  }
+
+  scriptRunPromise_(
+    'appDeleteInternetWanCircuit',
+    runner =>
+      runner.appDeleteInternetWanCircuit(
+        row._row
+      )
+  )
+    .then(data => {
+
+      currentPageData =
+        data;
+
+      setClientCache(
+        'internetWan',
+        data
+      );
+
+      renderInternetWanPage(
+        data
+      );
+
+      showToast(
+        'WAN circuit deleted.'
+      );
+
+    })
+    .catch(error => {
+      handleFailure(
+        error,
+        'delete Internet WAN circuit'
+      );
+    });
+}
+
+</script>

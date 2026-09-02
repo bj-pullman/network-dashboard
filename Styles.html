@@ -4026,6 +4026,203 @@ textarea {
   white-space: pre-wrap;
 }
 
+.page-error-card {
+  max-width: 760px;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin: 22px;
+  padding: 20px;
+}
+
+.page-error-icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 8px;
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-size: 18px;
+}
+
+.page-error-body h2 {
+  margin: 0;
+  color: var(--navy-900);
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.page-error-body p {
+  margin: 6px 0 10px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.page-error-detail {
+  margin-bottom: 14px;
+  color: #526172;
+  font-size: 0.8rem;
+}
+
+/*******************************************************
+ * INTERNET WAN
+ *******************************************************/
+
+.internet-wan-layout {
+  display: grid;
+  gap: 18px;
+}
+
+.internet-wan-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 14px;
+}
+
+.internet-wan-metric {
+  min-height: 92px;
+}
+
+.internet-wan-filter {
+  width: 150px;
+}
+
+.internet-wan-circuit-cell {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.internet-wan-circuit-cell strong {
+  overflow: hidden;
+  color: var(--navy-900);
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.internet-wan-circuit-cell small {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.internet-wan-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.internet-wan-actions .btn {
+  width: 30px;
+  height: 30px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+}
+
+.internet-wan-form {
+  display: grid;
+  gap: 20px;
+}
+
+.internet-wan-form-section {
+  display: grid;
+  gap: 12px;
+}
+
+.internet-wan-form-section h3 {
+  margin: 0;
+  color: var(--navy-900);
+  font-size: 0.88rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.internet-wan-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+}
+
+.internet-wan-form-grid.two-column {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.internet-wan-field {
+  display: grid;
+  gap: 6px;
+}
+
+.internet-wan-field > span,
+.internet-wan-ip-editor > label {
+  color: #485565;
+  font-size: 10px;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.internet-wan-field small {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.internet-wan-field-full {
+  grid-column: 1 / -1;
+}
+
+.internet-wan-ip-editor {
+  display: grid;
+  gap: 9px;
+}
+
+.internet-wan-ip-row {
+  display: grid;
+  grid-template-columns: 1fr 34px;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.internet-wan-ip-row:first-child {
+  grid-template-columns: 1fr;
+}
+
+.internet-wan-helper {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.internet-wan-detail {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.internet-wan-detail-item {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fafbfc;
+}
+
+.internet-wan-detail-item span {
+  color: #526172;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.internet-wan-detail-item div {
+  color: var(--text);
+  font-size: 0.88rem;
+  white-space: normal;
+}
+
 @media (max-width: 720px) {
   .integration-card-main {
     flex-direction: column;
@@ -4033,6 +4230,15 @@ textarea {
 
   .module-card {
     grid-template-columns: 1fr;
+  }
+
+  .page-error-card {
+    margin: 14px;
+    flex-direction: column;
+  }
+
+  .internet-wan-filter {
+    width: 100%;
   }
 
   .settings-color-row {
