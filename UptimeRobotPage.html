@@ -366,6 +366,16 @@ function buildUptimeRobotTable_(
     data,
     columns
   );
+
+  bindColumnMenuRefresh_(
+    'uptimeRobotColumnMenu',
+    function() {
+      buildUptimeRobotColumnMenu_(
+        data,
+        columns
+      );
+    }
+  );
 }
 
 
@@ -379,8 +389,21 @@ function getUptimeRobotColumns_(
     );
 
   const preferences =
-    getColumnVisibilityPreferences_(
-      'uptimeRobot'
+    reconcileColumnVisibilityPreferences_(
+      'uptimeRobot',
+      [
+        'Monitor Name',
+        'Monitor Type',
+        'Target',
+        'Health',
+        'Provider Status',
+        'Last Checked',
+        'Created At',
+        'Last Incident ID',
+        'Current State Duration',
+        'Tags',
+        'Last Sync'
+      ]
     );
 
   const requiredColumns = {
@@ -506,6 +529,84 @@ function buildUptimeRobotColumnMenu_(
     'Monitor Name': true
   };
 
+  const controls =
+    document.createElement(
+      'div'
+    );
+
+  controls.className =
+    'column-menu-controls';
+
+  const selectAll =
+    document.createElement(
+      'button'
+    );
+
+  selectAll.type =
+    'button';
+  selectAll.className =
+    'btn btn-sm btn-light border';
+  selectAll.textContent =
+    'Select All';
+
+  const clearAll =
+    document.createElement(
+      'button'
+    );
+
+  clearAll.type =
+    'button';
+  clearAll.className =
+    'btn btn-sm btn-light border';
+  clearAll.textContent =
+    'Clear All';
+
+  controls.appendChild(
+    selectAll
+  );
+
+  controls.appendChild(
+    clearAll
+  );
+
+  menu.appendChild(
+    controls
+  );
+
+  selectAll.addEventListener(
+    'click',
+    function(event) {
+      event.stopPropagation();
+      setAllUptimeRobotColumnsVisible_(
+        columns,
+        true,
+        defaults,
+        requiredColumns
+      );
+      buildUptimeRobotColumnMenu_(
+        data,
+        columns
+      );
+    }
+  );
+
+  clearAll.addEventListener(
+    'click',
+    function(event) {
+      event.stopPropagation();
+      setAllUptimeRobotColumnsVisible_(
+        columns,
+        false,
+        defaults,
+        requiredColumns
+      );
+      buildUptimeRobotColumnMenu_(
+        data,
+        columns
+      );
+    }
+  );
+
   columns.forEach(columnDefinition => {
 
     const field =
@@ -569,6 +670,16 @@ function buildUptimeRobotColumnMenu_(
           this.checked,
           defaults
         );
+
+        requestAnimationFrame(
+          function() {
+            if (tableInstance) {
+              tableInstance.redraw(
+                true
+              );
+            }
+          }
+        );
       }
     );
 
@@ -595,6 +706,83 @@ function buildUptimeRobotColumnMenu_(
     );
 
   });
+}
+
+
+function setAllUptimeRobotColumnsVisible_(
+  columns,
+  visible,
+  defaults,
+  requiredColumns
+) {
+
+  const preferences = {
+    hidden: [],
+    visible: []
+  };
+
+  columns.forEach(columnDefinition => {
+
+    const field =
+      columnDefinition.field;
+
+    const column =
+      tableInstance.getColumn(
+        field
+      );
+
+    const shouldShow =
+      visible ||
+      requiredColumns[field];
+
+    if (column) {
+      if (shouldShow) {
+        tableInstance.showColumn(
+          field
+        );
+      } else {
+        tableInstance.hideColumn(
+          field
+        );
+      }
+    }
+
+    if (requiredColumns[field]) {
+      return;
+    }
+
+    const defaultVisible =
+      defaults.size === 0 ||
+      defaults.has(field);
+
+    if (shouldShow) {
+      if (!defaultVisible) {
+        preferences.visible.push(
+          field
+        );
+      }
+    } else {
+      preferences.hidden.push(
+        field
+      );
+    }
+
+  });
+
+  setColumnVisibilityPreferences_(
+    'uptimeRobot',
+    preferences
+  );
+
+  requestAnimationFrame(
+    function() {
+      if (tableInstance) {
+        tableInstance.redraw(
+          true
+        );
+      }
+    }
+  );
 }
 
 
@@ -728,37 +916,40 @@ function syncUptimeRobotNow(
       'Syncing...'
     );
 
-  scriptRunPromise_(
-    'runIntegrationSync:uptimerobot',
-    runner =>
-      runner.runIntegrationSync(
-        'uptimerobot'
-      )
-  )
-    .then(function(result) {
+  runUptimeRobotHealthRefresh_({
+    reason: 'uptimerobot-page',
+    silent: true
+  })
+    .then(function(monitoring) {
+      if (
+        monitoring &&
+        monitoring.status === 'error'
+      ) {
+        setActionError(
+          actionButton,
+          'Sync Failed'
+        );
+
+        handleFailure(
+          {
+            message:
+              monitoring.message ||
+              'UptimeRobot sync failed.'
+          },
+          'sync UptimeRobot'
+        );
+
+        return;
+      }
+
       setActionSuccess(
         actionButton,
         'Synced'
       );
 
-      invalidateClientPage(
-        'uptimeRobot'
-      );
-      invalidateClientPage(
-        'internetWan'
-      );
-      invalidateClientPage(
-        'dashboard'
-      );
-
       showToast(
-        result.message ||
+        monitoring && monitoring.message ||
         'UptimeRobot sync complete.'
-      );
-
-      loadPage(
-        'uptimeRobot',
-        true
       );
     })
     .catch(function(error) {

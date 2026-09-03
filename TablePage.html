@@ -137,6 +137,7 @@ function renderTablePage(
         <div class="dropdown">
 
           <button
+            type="button"
             class="btn btn-sm btn-light border dropdown-toggle"
             data-bs-toggle="dropdown"
           >
@@ -150,18 +151,14 @@ function renderTablePage(
 
           <div
             id="columnMenu"
-            class="dropdown-menu p-2 shadow"
-            style="
-              min-width:250px;
-              max-height:400px;
-              overflow:auto;
-            "
+            class="dropdown-menu table-column-menu p-2 shadow"
           ></div>
 
         </div>
 
 
         <button
+          type="button"
           class="btn btn-sm btn-light border"
           onclick="clearTableFilters()"
         >
@@ -437,8 +434,9 @@ function buildTabulator(data) {
     );
 
   const columnPreferences =
-    getColumnVisibilityPreferences_(
-      data.pageKey
+    reconcileColumnVisibilityPreferences_(
+      data.pageKey,
+      data.headers || []
     );
 
   const requiredColumns =
@@ -816,14 +814,23 @@ function buildTabulator(data) {
           true
         );
 
+        buildColumnMenu(
+          data
+        );
+
       }
 
     }
   );
 
 
-  buildColumnMenu(
-    data
+  bindColumnMenuRefresh_(
+    'columnMenu',
+    function() {
+      buildColumnMenu(
+        data
+      );
+    }
   );
 }
 
@@ -838,7 +845,10 @@ function buildColumnMenu(
     );
 
 
-  if (!menu) {
+  if (
+    !menu ||
+    !tableInstance
+  ) {
     return;
   }
 
@@ -985,7 +995,9 @@ function buildColumnMenu(
 
       checkbox.addEventListener(
         'change',
-        function() {
+        function(event) {
+
+          event.stopPropagation();
 
           if (this.checked) {
 
@@ -1006,6 +1018,14 @@ function buildColumnMenu(
             header,
             this.checked,
             defaults
+          );
+
+          requestAnimationFrame(
+            function() {
+              tableInstance.redraw(
+                true
+              );
+            }
           );
 
         }
@@ -1104,6 +1124,16 @@ function setAllTableColumnsVisible_(
     data.pageKey,
     preferences
   );
+
+  requestAnimationFrame(
+    function() {
+      if (tableInstance) {
+        tableInstance.redraw(
+          true
+        );
+      }
+    }
+  );
 }
 
 
@@ -1149,6 +1179,96 @@ function getColumnVisibilityPreferences_(
       visible: []
     };
   }
+}
+
+
+function reconcileColumnVisibilityPreferences_(
+  pageKey,
+  availableFields
+) {
+
+  const available =
+    new Set(
+      availableFields || []
+    );
+
+  const current =
+    getColumnVisibilityPreferences_(
+      pageKey
+    );
+
+  const hidden =
+    (current.hidden || [])
+      .filter(field =>
+        available.has(field)
+      );
+
+  const visible =
+    (current.visible || [])
+      .filter(field =>
+        available.has(field)
+      );
+
+  if (
+    hidden.length !==
+      (current.hidden || []).length ||
+    visible.length !==
+      (current.visible || []).length
+  ) {
+    setColumnVisibilityPreferences_(
+      pageKey,
+      {
+        hidden: hidden,
+        visible: visible
+      }
+    );
+  }
+
+  return {
+    hidden: hidden,
+    visible: visible
+  };
+}
+
+
+function bindColumnMenuRefresh_(
+  menuId,
+  callback
+) {
+
+  const menu =
+    document.getElementById(
+      menuId
+    );
+
+  if (
+    !menu ||
+    typeof callback !== 'function'
+  ) {
+    return;
+  }
+
+  const dropdown =
+    menu.closest(
+      '.dropdown'
+    );
+
+  if (
+    !dropdown ||
+    dropdown.dataset.columnMenuRefreshBound
+  ) {
+    return;
+  }
+
+  dropdown.dataset.columnMenuRefreshBound =
+    'true';
+
+  dropdown.addEventListener(
+    'show.bs.dropdown',
+    function() {
+      callback();
+    }
+  );
 }
 
 

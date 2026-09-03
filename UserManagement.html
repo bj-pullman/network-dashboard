@@ -279,6 +279,10 @@ function openUserEditor(user) {
   document.getElementById('recordModalBody')
     .innerHTML = `
 
+      <div class="form-required-note">
+        <span class="required-marker">*</span> Required
+      </div>
+
       <div class="row g-3">
 
         <div class="col-md-6">
@@ -299,7 +303,7 @@ function openUserEditor(user) {
         <div class="col-md-6">
 
           <label class="form-label">
-            GOOGLE WORKSPACE EMAIL
+            GOOGLE WORKSPACE EMAIL <span class="required-marker">*</span>
           </label>
 
           <input
@@ -308,6 +312,8 @@ function openUserEditor(user) {
             class="form-control"
             value="${escapeAttribute(user.email || '')}"
             ${user.email ? 'readonly' : ''}
+            required
+            aria-required="true"
           >
 
         </div>

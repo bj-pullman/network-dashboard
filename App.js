@@ -156,11 +156,8 @@ const APP_PAGE_CONFIG = {
       'Site / Location',
       'Role',
       'Provider',
-      'Service Type',
-      'APSCN Device Name',
-      '_bandwidth',
+      'Bandwidth',
       '_publicIpSummary',
-      'Gateway',
       '_monitorHealth',
       'Status'
     ]
@@ -1829,10 +1826,90 @@ function buildAppBootstrap_(
         includeCore: true
       }),
 
+    startupTasks:
+      getStartupTaskState_(
+        access
+      ),
+
     config:
       clientConfig
 
   };
+}
+
+
+function getStartupTaskState_(
+  access
+) {
+
+  return {
+    uptimeRobotHealthRefresh:
+      getUptimeRobotStartupRefreshState_(
+        access
+      )
+  };
+}
+
+
+function getUptimeRobotStartupRefreshState_(
+  access
+) {
+
+  const state = {
+    enabled: false,
+    reason: '',
+    affectedPages: [
+      'uptimeRobot',
+      'internetWan',
+      'dashboard'
+    ]
+  };
+
+  if (
+    !access ||
+    !access.admin
+  ) {
+    state.reason =
+      'admin_required';
+    return state;
+  }
+
+  if (
+    typeof getIntegrationStatusById_ !==
+    'function'
+  ) {
+    state.reason =
+      'integration_unavailable';
+    return state;
+  }
+
+  try {
+    const status =
+      getIntegrationStatusById_(
+        'uptimerobot'
+      );
+
+    state.enabled =
+      !!(
+        status.enabled &&
+        status.configurationComplete
+      );
+
+    state.reason =
+      state.enabled
+        ? 'enabled'
+        : (
+            !status.enabled
+              ? 'disabled'
+              : 'not_configured'
+          );
+
+  } catch (error) {
+    state.reason =
+      'status_unavailable';
+  }
+
+  return state;
 }
 
 
@@ -5891,12 +5968,6 @@ function applyInternetWanDisplayFields_(
       ips
     );
 
-  row._bandwidth =
-    formatInternetWanBandwidth_(
-      row['Download Bandwidth'],
-      row['Upload Bandwidth']
-    );
-
   applyInternetWanMonitoringFields_(
     row,
     monitoring
@@ -6173,70 +6244,6 @@ function summarizeInternetWanPublicIps_(
 }
 
 
-function formatInternetWanBandwidth_(
-  download,
-  upload
-) {
-
-  const down =
-    formatInternetWanBandwidthValue_(
-      download
-    );
-
-  const up =
-    formatInternetWanBandwidthValue_(
-      upload
-    );
-
-  if (
-    !down &&
-    !up
-  ) {
-    return '';
-  }
-
-  return (
-    down || '0 Mbps'
-  ) +
-    ' / ' +
-    (
-      up || '0 Mbps'
-    );
-}
-
-
-function formatInternetWanBandwidthValue_(
-  value
-) {
-
-  const number =
-    Number(
-      String(value || '')
-        .replace(/,/g, '')
-    );
-
-  if (
-    !Number.isFinite(number) ||
-    number <= 0
-  ) {
-    return '';
-  }
-
-  if (
-    number >= 1000 &&
-    number % 1000 === 0
-  ) {
-    return (
-      number / 1000
-    ) +
-      ' Gbps';
-  }
-
-  return number +
-    ' Mbps';
-}
-
-
 function appSaveInternetWanCircuit(
   record
 ) {
@@ -6482,15 +6489,10 @@ function normalizeInternetWanRecord_(
       String(
         record['APSCN Device Name'] || ''
       ).trim(),
-    'Download Bandwidth':
+    'Bandwidth':
       normalizeInternetWanBandwidth_(
-        record['Download Bandwidth'],
-        'Download Bandwidth'
-      ),
-    'Upload Bandwidth':
-      normalizeInternetWanBandwidth_(
-        record['Upload Bandwidth'],
-        'Upload Bandwidth'
+        record.Bandwidth,
+        'Bandwidth'
       ),
     'Public Network / CIDR':
       normalizeInternetWanCidr_(
@@ -6605,22 +6607,16 @@ function normalizeInternetWanBandwidth_(
     );
   }
 
-  const number =
-    Number(
-      text.replace(/,/g, '')
-    );
-
   if (
-    !Number.isFinite(number) ||
-    number <= 0
+    text.length > 80
   ) {
     throw new Error(
       label +
-      ' must be a positive numeric Mbps value.'
+      ' must be 80 characters or fewer.'
     );
   }
 
-  return number;
+  return text;
 }
 
 
@@ -7329,6 +7325,12 @@ function appUpdateRecord(
   }
 
 
+  validateRequiredRecordFields_(
+    pageKey,
+    record || {}
+  );
+
+
   let targetSheetName =
     config.sheet;
 
@@ -7564,6 +7566,12 @@ function appAddRecord(
   }
 
 
+  validateRequiredRecordFields_(
+    pageKey,
+    record || {}
+  );
+
+
   const sheet =
     SpreadsheetApp
       .getActiveSpreadsheet()
@@ -7628,6 +7636,92 @@ function appAddRecord(
   return {
     status: 'success'
   };
+}
+
+
+function validateRequiredRecordFields_(
+  pageKey,
+  record
+) {
+
+  const requiredFields =
+    getRequiredRecordFieldsForPage_(
+      pageKey,
+      record && record._section
+    );
+
+  requiredFields.forEach(field => {
+
+    if (
+      !String(
+        record &&
+        record[field] || ''
+      ).trim()
+    ) {
+      throw new Error(
+        field +
+        ' is required.'
+      );
+    }
+
+  });
+}
+
+
+function getRequiredRecordFieldsForPage_(
+  pageKey,
+  sectionKey
+) {
+
+  const standard = {
+    switches: [
+      'Device Label'
+    ],
+    accessPoints: [
+      'Device Label'
+    ],
+    servers: [
+      'Server Name'
+    ],
+    routes: [
+      'Destination'
+    ],
+    securityCameras: [
+      'Location'
+    ],
+    backups: [
+      'Server Name'
+    ]
+  };
+
+  if (standard[pageKey]) {
+    return standard[pageKey];
+  }
+
+  if (pageKey === 'workflow') {
+    const workflow = {
+      groups: [
+        'Group'
+      ],
+      tiers: [
+        'Tier'
+      ],
+      ticketSteps: [
+        'Ticket Step'
+      ],
+      priorities: [
+        'Priority Level'
+      ],
+      workflows: [
+        'Category',
+        'Workflow'
+      ]
+    };
+
+    return workflow[sectionKey] || [];
+  }
+
+  return [];
 }
 
 

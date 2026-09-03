@@ -173,8 +173,7 @@ function getNetworkDashboardSchema_() {
         'Provider',
         'Service Type',
         'APSCN Device Name',
-        'Download Bandwidth',
-        'Upload Bandwidth',
+        'Bandwidth',
         'Public Network / CIDR',
         'Gateway',
         'Public IPs',
@@ -191,8 +190,7 @@ function getNetworkDashboardSchema_() {
         'Provider',
         'Service Type',
         'APSCN Device Name',
-        'Download Bandwidth',
-        'Upload Bandwidth',
+        'Bandwidth',
         'Public Network / CIDR',
         'Gateway',
         'Public IPs',
@@ -201,6 +199,7 @@ function getNetworkDashboardSchema_() {
         'Status',
         'Notes'
       ],
+      migration: 'internetWanBandwidth',
       frozenRows: 1,
       tabColor: '#0891b2'
     },
@@ -1868,6 +1867,19 @@ function runSchemaMigrationIfNeeded_(
 ) {
 
   if (
+    definition.migration ===
+    'internetWanBandwidth'
+  ) {
+    migrateInternetWanBandwidthIfNeeded_(
+      sheet,
+      sheetName,
+      definition,
+      result
+    );
+    return;
+  }
+
+  if (
     definition.migration !==
     'unifySecurityCameras'
   ) {
@@ -1881,6 +1893,244 @@ function runSchemaMigrationIfNeeded_(
     definition,
     result
   );
+}
+
+
+function migrateInternetWanBandwidthIfNeeded_(
+  sheet,
+  sheetName,
+  definition,
+  result
+) {
+
+  const lastColumn =
+    Math.max(
+      sheet.getLastColumn(),
+      1
+    );
+
+  const lastRow =
+    Math.max(
+      sheet.getLastRow(),
+      1
+    );
+
+  const headers =
+    sheet
+      .getRange(
+        1,
+        1,
+        1,
+        lastColumn
+      )
+      .getDisplayValues()[0]
+      .map(value =>
+        String(value || '').trim()
+      );
+
+  const downloadIndex =
+    headers.indexOf(
+      'Download Bandwidth'
+    );
+
+  const uploadIndex =
+    headers.indexOf(
+      'Upload Bandwidth'
+    );
+
+  const bandwidthIndex =
+    headers.indexOf(
+      'Bandwidth'
+    );
+
+  if (
+    downloadIndex < 0 &&
+    uploadIndex < 0
+  ) {
+    return;
+  }
+
+  const canonicalHeaders =
+    definition.headers || [];
+
+  const extraHeaders =
+    headers.filter(header =>
+      header &&
+      !canonicalHeaders.includes(header) &&
+      header !== 'Download Bandwidth' &&
+      header !== 'Upload Bandwidth'
+    );
+
+  const nextHeaders =
+    canonicalHeaders.concat(
+      extraHeaders
+    );
+
+  const values =
+    sheet
+      .getRange(
+        1,
+        1,
+        lastRow,
+        lastColumn
+      )
+      .getDisplayValues();
+
+  const nextValues =
+    [nextHeaders];
+
+  values
+    .slice(1)
+    .forEach(row => {
+
+      const rowObject = {};
+
+      headers.forEach((header, index) => {
+        if (header) {
+          rowObject[header] =
+            row[index];
+        }
+      });
+
+      if (
+        !String(rowObject.Bandwidth || '').trim()
+      ) {
+        rowObject.Bandwidth =
+          mergeInternetWanLegacyBandwidth_(
+            downloadIndex >= 0
+              ? row[downloadIndex]
+              : '',
+            uploadIndex >= 0
+              ? row[uploadIndex]
+              : ''
+          );
+      }
+
+      nextValues.push(
+        nextHeaders.map(header =>
+          rowObject[header] !== undefined
+            ? rowObject[header]
+            : ''
+        )
+      );
+
+    });
+
+  sheet.clearContents();
+
+  sheet
+    .getRange(
+      1,
+      1,
+      nextValues.length,
+      nextHeaders.length
+    )
+    .setValues(
+      nextValues
+    );
+
+  if (
+    result &&
+    result.migrations
+  ) {
+    result.migrations.push({
+      sheet: sheetName,
+      message:
+        'Migrated Download/Upload Bandwidth columns to canonical Bandwidth.'
+    });
+  }
+}
+
+
+function mergeInternetWanLegacyBandwidth_(
+  download,
+  upload
+) {
+
+  const down =
+    formatInternetWanLegacyBandwidthValue_(
+      download
+    );
+
+  const up =
+    formatInternetWanLegacyBandwidthValue_(
+      upload
+    );
+
+  if (
+    !down &&
+    !up
+  ) {
+    return '';
+  }
+
+  if (!down) {
+    return up;
+  }
+
+  if (!up) {
+    return down;
+  }
+
+  if (
+    normalizeInternetWanLegacyBandwidthKey_(down) ===
+    normalizeInternetWanLegacyBandwidthKey_(up)
+  ) {
+    return down;
+  }
+
+  return down +
+    ' / ' +
+    up;
+}
+
+
+function formatInternetWanLegacyBandwidthValue_(
+  value
+) {
+
+  const text =
+    String(value || '').trim();
+
+  if (!text) {
+    return '';
+  }
+
+  const numeric =
+    Number(
+      text.replace(/,/g, '')
+    );
+
+  if (
+    Number.isFinite(numeric) &&
+    numeric > 0
+  ) {
+    if (
+      numeric >= 1000 &&
+      numeric % 1000 === 0
+    ) {
+      return (
+        numeric / 1000
+      ) +
+        ' Gbps';
+    }
+
+    return numeric +
+      ' Mbps';
+  }
+
+  return text;
+}
+
+
+function normalizeInternetWanLegacyBandwidthKey_(
+  value
+) {
+
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
 }
 
 

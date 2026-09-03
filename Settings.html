@@ -1353,6 +1353,92 @@ function syncSettingsIntegration(
       'Syncing...'
     );
 
+  if (
+    id === 'uptimerobot' &&
+    typeof runUptimeRobotHealthRefresh_ === 'function'
+  ) {
+    runUptimeRobotHealthRefresh_({
+      reason: 'settings-sync',
+      silent: true
+    })
+      .then(function(monitoring) {
+
+        const failed =
+          monitoring &&
+          monitoring.status === 'error';
+
+        if (failed) {
+          setActionError(
+            actionButton,
+            'Sync Failed'
+          );
+        } else {
+          setActionSuccess(
+            actionButton,
+            'Synced'
+          );
+        }
+
+        invalidateIntegrationClientCaches_(
+          id,
+          {
+            invalidatePages: [
+              'uptimeRobot',
+              'internetWan',
+              'dashboard'
+            ]
+          }
+        );
+
+        if (failed) {
+          handleFailure(
+            {
+              message:
+                monitoring.message ||
+                'UptimeRobot sync failed.'
+            },
+            'sync integration: ' + id
+          );
+        } else {
+          showToast(
+            monitoring && monitoring.message
+              ? monitoring.message
+              : 'Integration sync complete.'
+          );
+        }
+
+        return scriptRunPromise_(
+          'appGetPageData:settings',
+          runner =>
+            runner.appGetPageData(
+              'settings',
+              true
+            )
+        );
+      })
+      .then(function(settingsData) {
+        updateSettingsIntegrationFromResult_(
+          {
+            settings:
+              settingsData
+          },
+          'integration-sync'
+        );
+      })
+      .catch(function(error) {
+        setActionError(
+          actionButton,
+          'Sync Failed'
+        );
+        handleFailure(
+          error,
+          'sync integration: ' + id
+        );
+      });
+
+    return;
+  }
+
   scriptRunPromise_(
     'runIntegrationSync:' + id,
     runner =>

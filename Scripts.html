@@ -127,6 +127,14 @@ let prefetchActiveCount =
   0;
 
 
+let uptimeRobotStartupRefreshStarted =
+  false;
+
+
+let uptimeRobotHealthRefreshInFlight =
+  null;
+
+
 const structuredTables =
   {};
 
@@ -1003,6 +1011,9 @@ function clearClientPageCache_() {
 
   prefetchActiveCount =
     0;
+
+  uptimeRobotStartupRefreshStarted =
+    false;
 }
 
 
@@ -1713,6 +1724,8 @@ function loadPage(
 
         scheduleOperationalPrefetch_();
 
+        scheduleUptimeRobotStartupRefresh_();
+
         if (
           isClientCacheStale_(
             cacheEntry
@@ -1818,6 +1831,8 @@ function loadPage(
       );
 
       scheduleOperationalPrefetch_();
+
+      scheduleUptimeRobotStartupRefresh_();
 
       if (actionButton) {
         setActionSuccess(
@@ -1958,6 +1973,179 @@ function scheduleOperationalPrefetch_() {
     startOperationalPrefetch_,
     250
   );
+}
+
+
+function scheduleUptimeRobotStartupRefresh_() {
+
+  if (
+    uptimeRobotStartupRefreshStarted ||
+    !appBootstrap ||
+    !appBootstrap.startupTasks
+  ) {
+    return;
+  }
+
+  const task =
+    appBootstrap.startupTasks
+      .uptimeRobotHealthRefresh;
+
+  if (
+    !task ||
+    !task.enabled
+  ) {
+    return;
+  }
+
+  uptimeRobotStartupRefreshStarted =
+    true;
+
+  setTimeout(
+    function() {
+      runUptimeRobotHealthRefresh_({
+        reason: 'startup',
+        silent: true
+      })
+        .catch(function(error) {
+          console.warn(
+            '[UptimeRobot] startup health refresh failed',
+            error
+          );
+        });
+    },
+    600
+  );
+}
+
+
+function runUptimeRobotHealthRefresh_(
+  options
+) {
+
+  options =
+    options || {};
+
+  if (uptimeRobotHealthRefreshInFlight) {
+    console.log(
+      '[UptimeRobot] reusing in-flight health refresh'
+    );
+    return uptimeRobotHealthRefreshInFlight;
+  }
+
+  const requestStart =
+    nowClient_();
+
+  uptimeRobotHealthRefreshInFlight =
+    scriptRunPromise_(
+      'appRefreshInternetWanHealth:' +
+        (options.reason || 'manual'),
+      runner =>
+        runner.appRefreshInternetWanHealth()
+    )
+      .then(function(monitoring) {
+
+        logClientPerformance_(
+          'uptimeRobot',
+          'health-refresh reason=' +
+            (options.reason || 'manual') +
+            ' roundTrip=' +
+            Math.round(
+              nowClient_() - requestStart
+            ) +
+            'ms'
+        );
+
+        applyUptimeRobotHealthRefreshResult_(
+          monitoring,
+          options
+        );
+
+        return monitoring;
+
+      })
+      .catch(function(error) {
+
+        if (!options.silent) {
+          handleFailure(
+            error,
+            'sync WAN health'
+          );
+        }
+
+        throw error;
+
+      })
+      .finally(function() {
+        uptimeRobotHealthRefreshInFlight =
+          null;
+      });
+
+  return uptimeRobotHealthRefreshInFlight;
+}
+
+
+function applyUptimeRobotHealthRefreshResult_(
+  monitoring,
+  options
+) {
+
+  options =
+    options || {};
+
+  if (
+    currentPageKey === 'internetWan' &&
+    currentPageData &&
+    typeof applyInternetWanHealthToData_ === 'function' &&
+    typeof renderInternetWanPage === 'function'
+  ) {
+    applyInternetWanHealthToData_(
+      currentPageData,
+      monitoring
+    );
+
+    markClientPageWritten(
+      'internetWan',
+      currentPageData
+    );
+
+    renderInternetWanPage(
+      currentPageData
+    );
+  } else {
+    invalidateClientPage(
+      'internetWan'
+    );
+  }
+
+  if (currentPageKey === 'uptimeRobot') {
+    loadPage(
+      'uptimeRobot',
+      true,
+      {
+        reason:
+          options.reason || 'uptimerobot-health-refresh'
+      }
+    );
+  } else {
+    invalidateClientPage(
+      'uptimeRobot'
+    );
+  }
+
+  if (currentPageKey === 'dashboard') {
+    loadPage(
+      'dashboard',
+      true,
+      {
+        reason:
+          options.reason || 'uptimerobot-health-refresh'
+      }
+    );
+  } else {
+    invalidateClientPage(
+      'dashboard'
+    );
+  }
 }
 
 
@@ -3053,6 +3241,33 @@ function openRecordModal(
   body.innerHTML =
     '';
 
+  const requiredFields =
+    typeof getRequiredVisibleColumns_ === 'function'
+      ? getRequiredVisibleColumns_(
+          currentPageData || {}
+        )
+      : {};
+
+  if (
+    Object.keys(requiredFields)
+      .length
+  ) {
+    const note =
+      document.createElement(
+        'div'
+      );
+
+    note.className =
+      'form-required-note';
+
+    note.innerHTML =
+      '<span class="required-marker">*</span> Required';
+
+    body.appendChild(
+      note
+    );
+  }
+
 
   const row =
     document.createElement(
@@ -3087,8 +3302,15 @@ function openRecordModal(
         'form-label';
 
 
-      label.textContent =
-        header.toUpperCase();
+      label.innerHTML =
+        escapeHtml(
+          header.toUpperCase()
+        ) +
+        (
+          requiredFields[header]
+            ? ' <span class="required-marker">*</span>'
+            : ''
+        );
 
 
       const options =
@@ -3120,6 +3342,16 @@ function openRecordModal(
       input.id =
         'recordField_' +
         index;
+
+
+      if (requiredFields[header]) {
+        input.required =
+          true;
+        input.setAttribute(
+          'aria-required',
+          'true'
+        );
+      }
 
 
       if (options.length) {

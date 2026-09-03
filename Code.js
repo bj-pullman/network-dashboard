@@ -96,9 +96,11 @@ function doGet() {
 
 function onOpen() {
 
-  SpreadsheetApp
-    .getUi()
-    .createMenu('Network Dashboard')
+  const ui =
+    SpreadsheetApp.getUi();
+
+  const menu =
+    ui.createMenu('Network Dashboard')
     .addItem(
       'Setup / Initialize',
       'setupNetworkDashboard'
@@ -110,13 +112,150 @@ function onOpen() {
     .addItem(
       'Open Dashboard',
       'openNetworkDashboardFromMenu'
-    )
+    );
+
+  if (
+    isNetworkDashboardDevSeedAvailable_()
+  ) {
+    menu
+      .addSeparator()
+      .addItem(
+        'Seed Test Data',
+        'seedNetworkDashboardTestDataFromMenu'
+      )
+      .addItem(
+        'Reset Development Environment',
+        'resetNetworkDashboardDevEnvironmentFromMenu'
+      );
+  }
+
+  menu
     .addSeparator()
     .addItem(
       'About',
       'showNetworkDashboardAbout'
     )
     .addToUi();
+}
+
+
+function isNetworkDashboardDevSeedAvailable_() {
+
+  return typeof seedNetworkDashboardTestData === 'function' &&
+    typeof runNetworkDashboardDevReset === 'function';
+}
+
+
+function seedNetworkDashboardTestDataFromMenu() {
+
+  const ui =
+    SpreadsheetApp.getUi();
+
+  if (
+    !isNetworkDashboardDevSeedAvailable_()
+  ) {
+    ui.alert(
+      'DevSeed is not available in this Apps Script project.'
+    );
+    return;
+  }
+
+  try {
+    const result =
+      seedNetworkDashboardTestData();
+
+    SpreadsheetApp
+      .getActive()
+      .toast(
+        'Test data seeded successfully.',
+        'Network Dashboard',
+        8
+      );
+
+    return result;
+
+  } catch (error) {
+    SpreadsheetApp
+      .getActive()
+      .toast(
+        'Test data seed failed. Check execution logs.',
+        'Network Dashboard',
+        8
+      );
+    throw error;
+  }
+}
+
+
+function resetDevelopmentEnvironmentFromMenuMessage_() {
+
+  return [
+    'This will reset the Network Dashboard development environment.',
+    '',
+    'Only DevSeed-managed sheets, test data and manifest records will be reset.',
+    'Non-DevSeed-owned data and Script Properties are preserved by the existing reset safeguards.'
+  ].join('\n');
+}
+
+
+function resetNetworkDashboardDevEnvironmentFromMenu() {
+
+  const ui =
+    SpreadsheetApp.getUi();
+
+  if (
+    !isNetworkDashboardDevSeedAvailable_()
+  ) {
+    ui.alert(
+      'DevSeed is not available in this Apps Script project.'
+    );
+    return;
+  }
+
+  const response =
+    ui.alert(
+      'Reset Development Environment?',
+      resetDevelopmentEnvironmentFromMenuMessage_(),
+      ui.ButtonSet.OK_CANCEL
+    );
+
+  if (
+    response !== ui.Button.OK
+  ) {
+    SpreadsheetApp
+      .getActive()
+      .toast(
+        'Development reset canceled.',
+        'Network Dashboard',
+        5
+      );
+    return;
+  }
+
+  try {
+    const result =
+      runNetworkDashboardDevReset();
+
+    SpreadsheetApp
+      .getActive()
+      .toast(
+        'Development environment reset successfully.',
+        'Network Dashboard',
+        8
+      );
+
+    return result;
+
+  } catch (error) {
+    SpreadsheetApp
+      .getActive()
+      .toast(
+        'Development reset failed. Check execution logs.',
+        'Network Dashboard',
+        8
+      );
+    throw error;
+  }
 }
 
 

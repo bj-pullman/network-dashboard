@@ -354,6 +354,11 @@ function buildStructuredTableSection(
     );
 
 
+  columnMenu.id =
+    'structuredColumnMenu_' +
+    section.key;
+
+
   columnMenu.className =
     'dropdown-menu p-2 shadow table-column-menu';
 
@@ -435,13 +440,28 @@ function buildStructuredTableSection(
   requestAnimationFrame(
     function() {
 
-      createStructuredTabulator(
+      const table =
+        createStructuredTabulator(
         tableHost,
         section,
-        permission,
-        input,
-        count,
+        permission
+      );
+
+      buildStructuredColumnMenu(
+        table,
+        section,
         columnMenu
+      );
+
+      bindColumnMenuRefresh_(
+        columnMenu.id,
+        function() {
+          buildStructuredColumnMenu(
+            table,
+            section,
+            columnMenu
+          );
+        }
       );
 
     }
@@ -890,6 +910,84 @@ function buildStructuredColumnMenu(
 
   }
 
+  const controls =
+    document.createElement(
+      'div'
+    );
+
+  controls.className =
+    'column-menu-controls';
+
+  const selectAll =
+    document.createElement(
+      'button'
+    );
+
+  selectAll.type =
+    'button';
+  selectAll.className =
+    'btn btn-sm btn-light border';
+  selectAll.textContent =
+    'Select All';
+
+  const clearAll =
+    document.createElement(
+      'button'
+    );
+
+  clearAll.type =
+    'button';
+  clearAll.className =
+    'btn btn-sm btn-light border';
+  clearAll.textContent =
+    'Clear All';
+
+  controls.appendChild(
+    selectAll
+  );
+
+  controls.appendChild(
+    clearAll
+  );
+
+  menu.appendChild(
+    controls
+  );
+
+  selectAll.addEventListener(
+    'click',
+    function(event) {
+      event.stopPropagation();
+      setAllStructuredColumnsVisible_(
+        table,
+        availableColumns,
+        true
+      );
+      buildStructuredColumnMenu(
+        table,
+        section,
+        menu
+      );
+    }
+  );
+
+  clearAll.addEventListener(
+    'click',
+    function(event) {
+      event.stopPropagation();
+      setAllStructuredColumnsVisible_(
+        table,
+        availableColumns,
+        false
+      );
+      buildStructuredColumnMenu(
+        table,
+        section,
+        menu
+      );
+    }
+  );
+
 
   availableColumns.forEach(
     columnInfo => {
@@ -1038,6 +1136,42 @@ function buildStructuredColumnMenu(
 
   }
 
+}
+
+
+function setAllStructuredColumnsVisible_(
+  table,
+  columns,
+  visible
+) {
+
+  (columns || [])
+    .forEach(columnInfo => {
+
+      const column =
+        table.getColumn(
+          columnInfo.field
+        );
+
+      if (!column) {
+        return;
+      }
+
+      if (visible) {
+        column.show();
+      } else {
+        column.hide();
+      }
+
+    });
+
+  requestAnimationFrame(
+    function() {
+      table.redraw(
+        true
+      );
+    }
+  );
 }
 
 
@@ -2038,6 +2172,50 @@ function openStructuredRowMenu(
  * STRUCTURED EDIT
  *******************************************************/
 
+function getStructuredRequiredFields_(
+  section
+) {
+
+  const requiredBySection = {
+    groups: [
+      'Group'
+    ],
+    tiers: [
+      'Tier'
+    ],
+    ticketSteps: [
+      'Ticket Step'
+    ],
+    priorities: [
+      'Priority Level'
+    ],
+    workflows: [
+      'Category',
+      'Workflow'
+    ]
+  };
+
+  const required = {};
+
+  (
+    requiredBySection[
+      section && section.key
+    ] || []
+  )
+    .filter(header =>
+      section &&
+      Array.isArray(section.headers) &&
+      section.headers.includes(header)
+    )
+    .forEach(header => {
+      required[header] =
+        true;
+    });
+
+  return required;
+}
+
+
 function openStructuredEditRecord(
   rowData,
   section
@@ -2066,6 +2244,31 @@ function openStructuredEditRecord(
 
   body.innerHTML =
     '';
+
+  const requiredFields =
+    getStructuredRequiredFields_(
+      section
+    );
+
+  if (
+    Object.keys(requiredFields)
+      .length
+  ) {
+    const note =
+      document.createElement(
+        'div'
+      );
+
+    note.className =
+      'form-required-note';
+
+    note.innerHTML =
+      '<span class="required-marker">*</span> Required';
+
+    body.appendChild(
+      note
+    );
+  }
 
 
   const row =
@@ -2101,8 +2304,15 @@ function openStructuredEditRecord(
         'form-label';
 
 
-      label.textContent =
-        header.toUpperCase();
+      label.innerHTML =
+        escapeHtml(
+          header.toUpperCase()
+        ) +
+        (
+          requiredFields[header]
+            ? ' <span class="required-marker">*</span>'
+            : ''
+        );
 
 
       const options =
@@ -2134,6 +2344,16 @@ function openStructuredEditRecord(
       input.id =
         'recordField_' +
         index;
+
+
+      if (requiredFields[header]) {
+        input.required =
+          true;
+        input.setAttribute(
+          'aria-required',
+          'true'
+        );
+      }
 
 
       if (options.length) {

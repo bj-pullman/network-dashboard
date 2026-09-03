@@ -387,6 +387,16 @@ function buildInternetWanTable(data) {
     data,
     columns
   );
+
+  bindColumnMenuRefresh_(
+    'internetWanColumnMenu',
+    function() {
+      buildInternetWanColumnMenu_(
+        data,
+        columns
+      );
+    }
+  );
 }
 
 
@@ -401,8 +411,25 @@ function getInternetWanColumns_(
     );
 
   const preferences =
-    getColumnVisibilityPreferences_(
-      'internetWan'
+    reconcileColumnVisibilityPreferences_(
+      'internetWan',
+      [
+        'Circuit Name',
+        'Site / Location',
+        'Role',
+        'Provider',
+        'Service Type',
+        'APSCN Device Name',
+        'Bandwidth',
+        '_publicIpSummary',
+        'Gateway',
+        'Public Network / CIDR',
+        'UptimeRobot Monitor ID',
+        '_monitorHealth',
+        'Status',
+        'Circuit / Account ID',
+        'Notes'
+      ]
     );
 
   const requiredColumns =
@@ -466,18 +493,8 @@ function getInternetWanColumns_(
     }),
     applyVisible({
       title: 'Bandwidth',
-      field: '_bandwidth',
+      field: 'Bandwidth',
       minWidth: 130
-    }),
-    applyVisible({
-      title: 'Download Mbps',
-      field: 'Download Bandwidth',
-      minWidth: 125
-    }),
-    applyVisible({
-      title: 'Upload Mbps',
-      field: 'Upload Bandwidth',
-      minWidth: 115
     }),
     applyVisible({
       title: 'Public IPs',
@@ -556,12 +573,19 @@ function getInternetWanColumns_(
       field: '_actions',
       width: 132,
       minWidth: 132,
+      maxWidth: 132,
+      widthGrow: 0,
+      widthShrink: 0,
+      resizable: false,
+      movable: false,
       hozAlign: 'right',
+      headerHozAlign: 'right',
       headerSort: false,
       formatter: function() {
         return `
           <div class="internet-wan-actions">
             <button
+              type="button"
               class="btn btn-sm btn-light border"
               data-wan-action="view"
               title="View circuit"
@@ -572,6 +596,7 @@ function getInternetWanColumns_(
               canEdit
                 ? `
                   <button
+                    type="button"
                     class="btn btn-sm btn-light border"
                     data-wan-action="edit"
                     title="Edit circuit"
@@ -579,6 +604,7 @@ function getInternetWanColumns_(
                     <i class="fa-solid fa-pen"></i>
                   </button>
                   <button
+                    type="button"
                     class="btn btn-sm btn-light border text-danger"
                     data-wan-action="delete"
                     title="Delete circuit"
@@ -803,6 +829,16 @@ function buildInternetWanColumnMenu_(
           this.checked,
           defaults
         );
+
+        requestAnimationFrame(
+          function() {
+            if (tableInstance) {
+              tableInstance.redraw(
+                true
+              );
+            }
+          }
+        );
       }
     );
 
@@ -896,6 +932,16 @@ function setAllInternetWanColumnsVisible_(
     'internetWan',
     preferences
   );
+
+  requestAnimationFrame(
+    function() {
+      if (tableInstance) {
+        tableInstance.redraw(
+          true
+        );
+      }
+    }
+  );
 }
 
 
@@ -961,6 +1007,7 @@ function applyInternetWanFilters() {
       row['Provider'],
       row['Service Type'],
       row['APSCN Device Name'],
+      row.Bandwidth,
       row['Gateway'],
       row['Public IPs'],
       row['UptimeRobot Monitor ID'],
@@ -1007,11 +1054,10 @@ function refreshInternetWanHealth(
       'Syncing...'
     );
 
-  scriptRunPromise_(
-    'appRefreshInternetWanHealth',
-    runner =>
-      runner.appRefreshInternetWanHealth()
-  )
+  runUptimeRobotHealthRefresh_({
+    reason: 'manual',
+    silent: true
+  })
     .then(monitoring => {
 
       if (
@@ -1022,20 +1068,6 @@ function refreshInternetWanHealth(
         setActionError(
           actionButton,
           'Sync Failed'
-        );
-
-        applyInternetWanHealthToData_(
-          currentPageData,
-          monitoring
-        );
-
-        markClientPageWritten(
-          'internetWan',
-          currentPageData
-        );
-
-        renderInternetWanPage(
-          currentPageData
         );
 
         handleFailure(
@@ -1053,20 +1085,6 @@ function refreshInternetWanHealth(
       setActionSuccess(
         actionButton,
         'Synced'
-      );
-
-      applyInternetWanHealthToData_(
-        currentPageData,
-        monitoring
-      );
-
-      markClientPageWritten(
-        'internetWan',
-        currentPageData
-      );
-
-      renderInternetWanPage(
-        currentPageData
       );
 
       showToast(
@@ -1311,25 +1329,28 @@ function openInternetWanForm_(
     'recordModalBody'
   ).innerHTML = `
     <div class="internet-wan-form">
+      <div class="form-required-note">
+        <span class="required-marker">*</span> Required
+      </div>
+
       <div class="internet-wan-form-section">
         <h3>Circuit</h3>
         <div class="internet-wan-form-grid">
           ${internetWanTextField_('Circuit ID', row ? row['Circuit ID'] : 'Assigned on save', true)}
-          ${internetWanTextField_('Circuit Name', row && row['Circuit Name'])}
-          ${internetWanTextField_('Site / Location', row && row['Site / Location'])}
-          ${internetWanSelectField_('Role', row && row['Role'], ['Primary', 'Secondary', 'Backup'])}
-          ${internetWanTextField_('Provider', row && row['Provider'])}
-          ${internetWanSelectField_('Service Type', row && row['Service Type'], ['Fiber', 'DIA', 'Cable', 'Fixed Wireless', 'DSL', 'Cellular', 'Other'])}
+          ${internetWanTextField_('Circuit Name', row && row['Circuit Name'], false, true)}
+          ${internetWanTextField_('Site / Location', row && row['Site / Location'], false, true)}
+          ${internetWanSelectField_('Role', row && row['Role'], ['Primary', 'Secondary', 'Backup'], true)}
+          ${internetWanTextField_('Provider', row && row['Provider'], false, true)}
+          ${internetWanSelectField_('Service Type', row && row['Service Type'], ['Fiber', 'DIA', 'Cable', 'Fixed Wireless', 'DSL', 'Cellular', 'Other'], true)}
           ${internetWanTextField_('APSCN Device Name', row && row['APSCN Device Name'])}
-          ${internetWanSelectField_('Status', row && row['Status'], ['Active', 'Standby', 'Maintenance', 'Disabled'])}
+          ${internetWanSelectField_('Status', row && row['Status'], ['Active', 'Standby', 'Maintenance', 'Disabled'], true)}
         </div>
       </div>
 
       <div class="internet-wan-form-section">
         <h3>Bandwidth</h3>
-        <div class="internet-wan-form-grid two-column">
-          ${internetWanNumberField_('Download Bandwidth', row && row['Download Bandwidth'])}
-          ${internetWanNumberField_('Upload Bandwidth', row && row['Upload Bandwidth'])}
+        <div class="internet-wan-form-grid">
+          ${internetWanTextField_('Bandwidth', row && row.Bandwidth, false, true)}
         </div>
       </div>
 
@@ -1385,38 +1406,19 @@ function openInternetWanForm_(
 function internetWanTextField_(
   label,
   value,
-  readonly
+  readonly,
+  required
 ) {
 
   return `
     <label class="internet-wan-field">
-      <span>${escapeHtml(label)}</span>
+      <span>${internetWanFieldLabel_(label, required)}</span>
       <input
         class="form-control"
         data-wan-field="${escapeAttribute(label)}"
         value="${escapeAttribute(value || '')}"
         ${readonly ? 'readonly' : ''}
-      >
-    </label>
-  `;
-}
-
-
-function internetWanNumberField_(
-  label,
-  value
-) {
-
-  return `
-    <label class="internet-wan-field">
-      <span>${escapeHtml(label)} <small>Mbps</small></span>
-      <input
-        type="number"
-        min="1"
-        step="1"
-        class="form-control"
-        data-wan-field="${escapeAttribute(label)}"
-        value="${escapeAttribute(value || '')}"
+        ${required ? 'required aria-required="true"' : ''}
       >
     </label>
   `;
@@ -1426,7 +1428,8 @@ function internetWanNumberField_(
 function internetWanSelectField_(
   label,
   value,
-  options
+  options,
+  required
 ) {
 
   options =
@@ -1451,10 +1454,11 @@ function internetWanSelectField_(
 
   return `
     <label class="internet-wan-field">
-      <span>${escapeHtml(label)}</span>
+      <span>${internetWanFieldLabel_(label, required)}</span>
       <select
         class="form-select"
         data-wan-field="${escapeAttribute(label)}"
+        ${required ? 'required aria-required="true"' : ''}
       >
         ${optionList.map(option => `
           <option
@@ -1467,6 +1471,20 @@ function internetWanSelectField_(
       </select>
     </label>
   `;
+}
+
+
+function internetWanFieldLabel_(
+  label,
+  required
+) {
+
+  return escapeHtml(label) +
+    (
+      required
+        ? ' <span class="required-marker">*</span>'
+        : ''
+    );
 }
 
 
@@ -1790,7 +1808,7 @@ function openInternetWanViewCircuit(row) {
       ${internetWanDetailItem_('Provider', row['Provider'])}
       ${internetWanDetailItem_('Service Type', row['Service Type'])}
       ${internetWanDetailItem_('APSCN Device Name', row['APSCN Device Name'])}
-      ${internetWanDetailItem_('Bandwidth', row._bandwidth)}
+      ${internetWanDetailItem_('Bandwidth', row.Bandwidth)}
       ${internetWanDetailItem_('Public Network / CIDR', row['Public Network / CIDR'])}
       ${internetWanDetailItem_('Gateway', row['Gateway'])}
       ${internetWanDetailItem_('Public IP Addresses', internetWanPublicIpLines_(row))}

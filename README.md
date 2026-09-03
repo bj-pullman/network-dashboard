@@ -160,8 +160,7 @@ Operational data rows remain editable. Google Sheets owners can intentionally re
 - `Provider`
 - `Service Type`
 - `APSCN Device Name`
-- `Download Bandwidth`
-- `Upload Bandwidth`
+- `Bandwidth`
 - `Public Network / CIDR`
 - `Gateway`
 - `Public IPs`
@@ -311,7 +310,9 @@ The default visual design is the Network Dashboard theme. Organization identity 
 
 Internet / WAN is a core module for documenting site circuits and public Internet configuration. It uses the `Internet WAN` sheet and the `Internet / WAN` web page.
 
-The page supports viewing, filtering, adding, editing and deleting circuits subject to RBAC. Server-side save validation requires circuit name, site, role, provider, service type, status, positive bandwidth values, valid CIDR notation for public networks, valid gateway IPs and valid individual public IP entries.
+The page supports viewing, filtering, adding, editing and deleting circuits subject to RBAC. Server-side save validation requires circuit name, site, role, provider, service type, bandwidth and status, plus valid CIDR notation for public networks, valid gateway IPs and valid individual public IP entries when those optional fields are present.
+
+Legacy sheets with `Download Bandwidth` and `Upload Bandwidth` are migrated by setup into one `Bandwidth` column. Matching symmetric values become a single value such as `1 Gbps`; materially asymmetric values are preserved as `1 Gbps / 100 Mbps`.
 
 WAN `Status` is administrative/configured state and must be one of `Active`, `Standby`, `Maintenance` or `Disabled`. Runtime health is separate and, when UptimeRobot is enabled, appears as `Online`, `Down`, `Paused`, `Unknown` or `Not Monitored`. Health refreshes do not write to the `Status` column.
 
