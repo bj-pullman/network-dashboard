@@ -92,8 +92,19 @@ function renderSettingsPage(data) {
           </div>
         </div>
 
-        <div class="settings-grid">
-          ${settingsTextField('branding.logo_url', 'Logo URL', values)}
+        <div class="settings-grid settings-branding-grid">
+          ${settingsUrlField(
+            'branding.logo_url',
+            'Logo URL',
+            values,
+            'Public image URL or Google Drive thumbnail URL.'
+          )}
+          ${settingsUrlField(
+            'branding.favicon_url',
+            'Favicon URL',
+            values,
+            'Public http or https image URL for the browser tab icon.'
+          )}
           ${settingsColorField(
             'branding.primary_color',
             'Primary Color',
@@ -164,6 +175,23 @@ function renderSettingsPage(data) {
           </aside>
 
           <main class="settings-preview-main">
+            <div class="settings-preview-browserbar">
+              <span class="settings-preview-favicon">
+                <img
+                  id="settingsPreviewFavicon"
+                  alt=""
+                  hidden
+                >
+                <i
+                  id="settingsPreviewFaviconFallback"
+                  class="fa-solid fa-network-wired"
+                ></i>
+              </span>
+              <span id="settingsPreviewBrowserTitle">
+                ${escapeHtml(values['app.name'] || 'Network Dashboard')}
+              </span>
+            </div>
+
             <header class="settings-preview-header">
               <div
                 id="settingsPreviewEyebrow"
@@ -378,6 +406,27 @@ function settingsTextField(key, label, values) {
 }
 
 
+function settingsUrlField(key, label, values, description) {
+
+  return `
+    <label class="settings-field settings-url-field">
+      <span>${escapeHtml(label)}</span>
+      <input
+        class="form-control"
+        type="url"
+        data-setting-key="${escapeAttribute(key)}"
+        value="${escapeAttribute(values[key] || '')}"
+      >
+      ${
+        description
+          ? `<small class="settings-field-description">${escapeHtml(description)}</small>`
+          : ''
+      }
+    </label>
+  `;
+}
+
+
 function settingsColorField(key, label, values, description) {
 
   const definition =
@@ -517,8 +566,26 @@ function renderIntegrationCard(integration) {
     integration.configurationComplete &&
     integration.enabled;
 
+  const isArubaCentral =
+    integration.id === 'aruba_central';
+
+  const integrationCardClass =
+    isArubaCentral
+      ? 'integration-card integration-card-aruba'
+      : 'integration-card';
+
+  const secondaryActionClass =
+    isArubaCentral
+      ? 'btn btn-sm btn-aruba-outline'
+      : 'btn btn-sm btn-light border';
+
+  const syncActionClass =
+    isArubaCentral
+      ? 'btn btn-sm btn-aruba'
+      : 'btn btn-sm btn-brand';
+
   return `
-    <article class="integration-card">
+    <article class="${integrationCardClass}">
 
       <div class="integration-card-main">
         <div>
@@ -540,7 +607,7 @@ function renderIntegrationCard(integration) {
               ? `
                 <div class="integration-capability-list">
                   ${integration.capabilities.map(capability => `
-                    <span>${escapeHtml(capability)}</span>
+                    <span class="${isArubaCentral ? 'integration-chip-aruba' : ''}">${escapeHtml(capability)}</span>
                   `).join('')}
                 </div>
               `
@@ -585,7 +652,7 @@ function renderIntegrationCard(integration) {
             ? `
               <button
                 type="button"
-                class="btn btn-sm btn-light border"
+                class="${secondaryActionClass}"
                 onclick="testSettingsIntegration('${escapeAttribute(integration.id)}', this, event)"
                 ${canRun ? '' : 'disabled'}
               >
@@ -601,7 +668,7 @@ function renderIntegrationCard(integration) {
             ? `
               <button
                 type="button"
-                class="btn btn-sm btn-brand"
+                class="${syncActionClass}"
                 onclick="syncSettingsIntegration('${escapeAttribute(integration.id)}', this, event)"
                 ${canSync ? '' : 'disabled'}
               >
@@ -619,7 +686,7 @@ function renderIntegrationCard(integration) {
             ? `
               <button
                 type="button"
-                class="btn btn-sm btn-light border"
+                class="${secondaryActionClass}"
                 onclick="navigateTo('${escapeAttribute(integration.pageKey)}')"
               >
                 <i class="fa-solid fa-arrow-up-right-from-square me-2"></i>
@@ -1046,6 +1113,77 @@ function updateSettingsBrandPreview_() {
       logo.hidden =
         true;
       fallback.hidden =
+        false;
+    }
+
+  }
+
+  const browserTitle =
+    document.getElementById(
+      'settingsPreviewBrowserTitle'
+    );
+
+  if (browserTitle) {
+    browserTitle.textContent =
+      values['app.name'] ||
+      'Network Dashboard';
+  }
+
+  const favicon =
+    document.getElementById(
+      'settingsPreviewFavicon'
+    );
+
+  const faviconFallback =
+    document.getElementById(
+      'settingsPreviewFaviconFallback'
+    );
+
+  const faviconUrl =
+    String(
+      values['branding.favicon_url'] || ''
+    ).trim();
+
+  if (
+    favicon &&
+    faviconFallback
+  ) {
+
+    if (/^https?:\/\//i.test(faviconUrl)) {
+      favicon.onerror =
+        function() {
+          favicon.hidden =
+            true;
+          faviconFallback.hidden =
+            false;
+        };
+
+      favicon.onload =
+        function() {
+          favicon.hidden =
+            false;
+          faviconFallback.hidden =
+            true;
+        };
+
+      favicon.src =
+        faviconUrl;
+      favicon.hidden =
+        false;
+      faviconFallback.hidden =
+        true;
+    } else {
+      favicon.onerror =
+        null;
+      favicon.onload =
+        null;
+
+      favicon.removeAttribute(
+        'src'
+      );
+      favicon.hidden =
+        true;
+      faviconFallback.hidden =
         false;
     }
 

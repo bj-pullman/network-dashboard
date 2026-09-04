@@ -668,6 +668,29 @@ function renderWorkflowPage(data) {
         </select>
 
 
+        <div class="dropdown">
+
+          <button
+            type="button"
+            class="btn btn-sm btn-light border dropdown-toggle"
+            data-bs-toggle="dropdown"
+          >
+
+            <i class="fa-solid fa-table-columns me-2"></i>
+
+            Columns
+
+          </button>
+
+
+          <div
+            id="workflowColumnMenu"
+            class="dropdown-menu table-column-menu p-2 shadow"
+          ></div>
+
+        </div>
+
+
         <button
           class="btn btn-sm btn-light border"
           onclick="clearWorkflowMatrixFilters()"
@@ -909,6 +932,10 @@ function buildWorkflowMatrixTable(
   }
 
 
+  const columns =
+    getWorkflowMatrixColumns_();
+
+
   window.workflowMatrixInstance =
     new Tabulator(
       tableElement,
@@ -918,7 +945,10 @@ function buildWorkflowMatrixTable(
           data.workflows || [],
 
         layout:
-          'fitColumns',
+          getNativeTableLayout_(),
+
+        responsiveLayout:
+          false,
 
         pagination:
           true,
@@ -938,75 +968,27 @@ function buildWorkflowMatrixTable(
           ],
 
         movableColumns:
-          false,
+          true,
 
         placeholder:
           'No workflows found.',
 
-        columns: [
+        columns:
+          columns,
 
-          {
-            title: 'Category',
-            field: 'category',
-            minWidth: 160,
-            widthGrow: 1.1
-          },
-
-          {
-            title: 'Workflow / System',
-            field: 'workflow',
-            minWidth: 220,
-            widthGrow: 1.5
-          },
-
-          {
-            title: 'Tier',
-            field: 'tier',
-            width: 105,
-            minWidth: 105,
-
-            formatter:
-              function(cell) {
-
-                return workflowTierPill(
-                  cell.getValue()
-                );
-
-              }
-          },
-
-          {
-            title: 'Primary Owner',
-            field: 'primaryOwner',
-            minWidth: 165,
-            widthGrow: 1.1
-          },
-
-          {
-            title: 'Backup',
-            field: 'backup',
-            minWidth: 145,
-            widthGrow: 1
-          },
-
-          {
-            title: 'Support',
-            field: 'support',
-            minWidth: 145,
-            widthGrow: 1
-          },
-
-          {
-            title: 'Notes',
-            field: 'notes',
-            minWidth: 230,
-            widthGrow: 1.6
-          }
-
-        ]
+        columnDefaults: {
+          vertAlign:
+            'middle'
+        }
 
       }
     );
+
+
+  bindTableColumnPreferenceEvents_(
+    window.workflowMatrixInstance,
+    'workflow'
+  );
 
 
   window.workflowMatrixInstance.on(
@@ -1029,6 +1011,414 @@ function buildWorkflowMatrixTable(
     }
   );
 
+  buildWorkflowColumnMenu_(
+    columns
+  );
+
+  bindColumnMenuRefresh_(
+    'workflowColumnMenu',
+    function() {
+      buildWorkflowColumnMenu_(
+        columns
+      );
+    }
+  );
+
+}
+
+
+function getWorkflowMatrixPreferenceFields_() {
+
+  return [
+    'category',
+    'workflow',
+    'tier',
+    'primaryOwner',
+    'backup',
+    'support',
+    'notes'
+  ];
+}
+
+
+function getWorkflowMatrixDefaultColumns_() {
+
+  return [
+    'category',
+    'workflow',
+    'tier',
+    'primaryOwner',
+    'backup'
+  ];
+}
+
+
+function getWorkflowMatrixRequiredColumns_() {
+
+  return {
+    workflow: true
+  };
+}
+
+
+function getWorkflowMatrixColumns_() {
+
+  const defaults =
+    new Set(
+      getWorkflowMatrixDefaultColumns_()
+    );
+
+  const preferences =
+    reconcileColumnVisibilityPreferences_(
+      'workflow',
+      getWorkflowMatrixPreferenceFields_()
+    );
+
+  const requiredColumns =
+    getWorkflowMatrixRequiredColumns_();
+
+  const applyVisible =
+    column => {
+      column.visible =
+        isTableColumnVisibleByPreference_(
+          column.field,
+          defaults,
+          preferences,
+          requiredColumns
+        );
+
+      applyColumnWidthPreference_(
+        column,
+        preferences
+      );
+
+      return column;
+    };
+
+  const columns = [
+    applyVisible({
+      title: 'Category',
+      field: 'category',
+      minWidth: 150
+    }),
+    applyVisible({
+      title: 'Workflow / System',
+      field: 'workflow',
+      minWidth: 220
+    }),
+    applyVisible({
+      title: 'Tier',
+      field: 'tier',
+      width: 105,
+      minWidth: 105,
+      formatter:
+        function(cell) {
+          return workflowTierPill(
+            cell.getValue()
+          );
+        }
+    }),
+    applyVisible({
+      title: 'Primary Owner',
+      field: 'primaryOwner',
+      minWidth: 165
+    }),
+    applyVisible({
+      title: 'Backup',
+      field: 'backup',
+      minWidth: 145
+    }),
+    applyVisible({
+      title: 'Support',
+      field: 'support',
+      minWidth: 145
+    }),
+    applyVisible({
+      title: 'Notes',
+      field: 'notes',
+      minWidth: 230
+    })
+  ];
+
+  return applyColumnOrderPreference_(
+    columns,
+    preferences
+  );
+}
+
+
+function buildWorkflowColumnMenu_(
+  columns
+) {
+
+  const menu =
+    document.getElementById(
+      'workflowColumnMenu'
+    );
+
+  const table =
+    window.workflowMatrixInstance;
+
+  if (
+    !menu ||
+    !table
+  ) {
+    return;
+  }
+
+  menu.innerHTML =
+    '';
+
+  const controls =
+    document.createElement(
+      'div'
+    );
+
+  controls.className =
+    'column-menu-controls';
+
+  const selectAll =
+    document.createElement(
+      'button'
+    );
+
+  selectAll.type =
+    'button';
+  selectAll.className =
+    'btn btn-sm btn-light border';
+  selectAll.textContent =
+    'Select All';
+
+  const clearAll =
+    document.createElement(
+      'button'
+    );
+
+  clearAll.type =
+    'button';
+  clearAll.className =
+    'btn btn-sm btn-light border';
+  clearAll.textContent =
+    'Clear All';
+
+  controls.appendChild(
+    selectAll
+  );
+
+  controls.appendChild(
+    clearAll
+  );
+
+  menu.appendChild(
+    controls
+  );
+
+  const defaults =
+    new Set(
+      getWorkflowMatrixDefaultColumns_()
+    );
+
+  const requiredColumns =
+    getWorkflowMatrixRequiredColumns_();
+
+  selectAll.addEventListener(
+    'click',
+    function(event) {
+      event.stopPropagation();
+      setAllWorkflowColumnsVisible_(
+        columns,
+        true,
+        defaults,
+        requiredColumns
+      );
+      buildWorkflowColumnMenu_(
+        columns
+      );
+    }
+  );
+
+  clearAll.addEventListener(
+    'click',
+    function(event) {
+      event.stopPropagation();
+      setAllWorkflowColumnsVisible_(
+        columns,
+        false,
+        defaults,
+        requiredColumns
+      );
+      buildWorkflowColumnMenu_(
+        columns
+      );
+    }
+  );
+
+  columns.forEach(columnDefinition => {
+
+    const field =
+      columnDefinition.field;
+
+    if (!field) {
+      return;
+    }
+
+    const column =
+      table.getColumn(
+        field
+      );
+
+    const wrapper =
+      document.createElement(
+        'label'
+      );
+
+    wrapper.className =
+      'dropdown-item d-flex align-items-center gap-2';
+
+    wrapper.addEventListener(
+      'click',
+      function(event) {
+        event.stopPropagation();
+      }
+    );
+
+    const checkbox =
+      document.createElement(
+        'input'
+      );
+
+    checkbox.type =
+      'checkbox';
+    checkbox.className =
+      'form-check-input m-0';
+    checkbox.checked =
+      !!(
+        column &&
+        column.isVisible()
+      );
+    checkbox.disabled =
+      !!requiredColumns[field];
+
+    checkbox.addEventListener(
+      'change',
+      function(event) {
+        event.stopPropagation();
+
+        if (this.checked) {
+          table.showColumn(
+            field
+          );
+        } else {
+          table.hideColumn(
+            field
+          );
+        }
+
+        persistColumnVisibilityPreference_(
+          'workflow',
+          field,
+          this.checked,
+          defaults
+        );
+      }
+    );
+
+    const text =
+      document.createElement(
+        'span'
+      );
+
+    text.textContent =
+      requiredColumns[field]
+        ? columnDefinition.title + ' (required)'
+        : columnDefinition.title;
+
+    wrapper.appendChild(
+      checkbox
+    );
+
+    wrapper.appendChild(
+      text
+    );
+
+    menu.appendChild(
+      wrapper
+    );
+  });
+}
+
+
+function setAllWorkflowColumnsVisible_(
+  columns,
+  visible,
+  defaults,
+  requiredColumns
+) {
+
+  const table =
+    window.workflowMatrixInstance;
+
+  if (!table) {
+    return;
+  }
+
+  const preferences = {
+    hidden: [],
+    visible: []
+  };
+
+  columns.forEach(columnDefinition => {
+
+    const field =
+      columnDefinition.field;
+
+    if (!field) {
+      return;
+    }
+
+    const column =
+      table.getColumn(
+        field
+      );
+
+    const shouldShow =
+      visible ||
+      requiredColumns[field];
+
+    if (column) {
+      if (shouldShow) {
+        table.showColumn(
+          field
+        );
+      } else {
+        table.hideColumn(
+          field
+        );
+      }
+    }
+
+    if (requiredColumns[field]) {
+      return;
+    }
+
+    if (visible) {
+      if (!defaults.has(field)) {
+        preferences.visible.push(
+          field
+        );
+      }
+    } else {
+      preferences.hidden.push(
+        field
+      );
+    }
+
+  });
+
+  setColumnVisibilityPreferences_(
+    'workflow',
+    preferences
+  );
 }
 
 function applyWorkflowMatrixSearch() {

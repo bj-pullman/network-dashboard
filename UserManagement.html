@@ -37,6 +37,14 @@ function renderUsersPage(data) {
   const domainPolicy =
     data.domainPolicy || {};
 
+  const userColumns =
+    getUserTableColumns_();
+
+  const visibleUserColumns =
+    userColumns.filter(column =>
+      column.visible
+    );
+
 
   document.getElementById('pageContent').innerHTML = `
 
@@ -96,9 +104,28 @@ function renderUsersPage(data) {
           Authorized Users
         </h2>
 
-        <span class="record-count">
-          ${data.users.length} configured
-        </span>
+        <div class="user-table-controls">
+
+          <span class="record-count">
+            ${data.users.length} configured
+          </span>
+
+          <div class="dropdown">
+            <button
+              type="button"
+              class="btn btn-sm btn-light border dropdown-toggle"
+              data-bs-toggle="dropdown"
+            >
+              <i class="fa-solid fa-table-columns me-2"></i>
+              Columns
+            </button>
+            <div
+              id="userColumnMenu"
+              class="dropdown-menu table-column-menu p-2 shadow"
+            ></div>
+          </div>
+
+        </div>
 
       </div>
 
@@ -109,11 +136,9 @@ function renderUsersPage(data) {
 
           <thead>
             <tr>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Status</th>
-              <th>Role</th>
-              <th>Default Access</th>
+              ${visibleUserColumns.map(column => `
+                <th>${escapeHtml(column.title)}</th>
+              `).join('')}
               <th class="text-end">Actions</th>
             </tr>
           </thead>
@@ -126,29 +151,12 @@ function renderUsersPage(data) {
 
                   <tr>
 
-                    <td class="fw-semibold">
-                      ${escapeHtml(user.name || '-')}
-                    </td>
-
-                    <td>
-                      ${escapeHtml(user.email)}
-                    </td>
-
-                    <td>
-                      ${
-                        user.active
-                          ? statusPill('Active')
-                          : statusPill('Inactive')
-                      }
-                    </td>
-
-                    <td>
-                      ${rolePill(user.role)}
-                    </td>
-
-                    <td>
-                      ${permissionPill(user.defaultPermission)}
-                    </td>
+                    ${visibleUserColumns.map(column =>
+                      renderUserTableCell_(
+                        column.field,
+                        user
+                      )
+                    ).join('')}
 
                     <td class="text-end">
 
@@ -175,7 +183,7 @@ function renderUsersPage(data) {
                 : `
                   <tr>
                     <td
-                      colspan="6"
+                      colspan="${visibleUserColumns.length + 1}"
                       class="text-center text-muted py-5"
                     >
                       No additional users configured.
@@ -192,6 +200,346 @@ function renderUsersPage(data) {
 
     </div>
   `;
+
+  buildUserColumnMenu_(
+    userColumns
+  );
+}
+
+
+function getUserTableFields_() {
+
+  return [
+    'Name',
+    'Email',
+    'Status',
+    'Role',
+    'Default Access'
+  ];
+}
+
+
+function getUserDefaultColumns_() {
+
+  return [
+    'Name',
+    'Email',
+    'Status',
+    'Role'
+  ];
+}
+
+
+function getUserRequiredColumns_() {
+
+  return {
+    Email: true
+  };
+}
+
+
+function getUserTableColumns_() {
+
+  const defaults =
+    new Set(
+      getUserDefaultColumns_()
+    );
+
+  const preferences =
+    reconcileColumnVisibilityPreferences_(
+      'users',
+      getUserTableFields_()
+    );
+
+  const requiredColumns =
+    getUserRequiredColumns_();
+
+  const titleByField = {
+    Name: 'Name',
+    Email: 'Email',
+    Status: 'Status',
+    Role: 'Role',
+    'Default Access': 'Default Access'
+  };
+
+  return getUserTableFields_()
+    .map(field => ({
+      field:
+        field,
+      title:
+        titleByField[field] || field,
+      visible:
+        isTableColumnVisibleByPreference_(
+          field,
+          defaults,
+          preferences,
+          requiredColumns
+        )
+    }));
+}
+
+
+function renderUserTableCell_(
+  field,
+  user
+) {
+
+  if (field === 'Name') {
+    return `
+      <td class="fw-semibold">
+        ${escapeHtml(user.name || '-')}
+      </td>
+    `;
+  }
+
+  if (field === 'Email') {
+    return `
+      <td>
+        ${escapeHtml(user.email)}
+      </td>
+    `;
+  }
+
+  if (field === 'Status') {
+    return `
+      <td>
+        ${
+          user.active
+            ? statusPill('Active')
+            : statusPill('Inactive')
+        }
+      </td>
+    `;
+  }
+
+  if (field === 'Role') {
+    return `
+      <td>
+        ${rolePill(user.role)}
+      </td>
+    `;
+  }
+
+  if (field === 'Default Access') {
+    return `
+      <td>
+        ${permissionPill(user.defaultPermission)}
+      </td>
+    `;
+  }
+
+  return '<td></td>';
+}
+
+
+function buildUserColumnMenu_(
+  columns
+) {
+
+  const menu =
+    document.getElementById(
+      'userColumnMenu'
+    );
+
+  if (!menu) {
+    return;
+  }
+
+  menu.innerHTML =
+    '';
+
+  const controls =
+    document.createElement(
+      'div'
+    );
+
+  controls.className =
+    'column-menu-controls';
+
+  const selectAll =
+    document.createElement(
+      'button'
+    );
+
+  selectAll.type =
+    'button';
+  selectAll.className =
+    'btn btn-sm btn-light border';
+  selectAll.textContent =
+    'Select All';
+
+  const clearAll =
+    document.createElement(
+      'button'
+    );
+
+  clearAll.type =
+    'button';
+  clearAll.className =
+    'btn btn-sm btn-light border';
+  clearAll.textContent =
+    'Clear All';
+
+  controls.appendChild(
+    selectAll
+  );
+
+  controls.appendChild(
+    clearAll
+  );
+
+  menu.appendChild(
+    controls
+  );
+
+  const defaults =
+    new Set(
+      getUserDefaultColumns_()
+    );
+
+  const requiredColumns =
+    getUserRequiredColumns_();
+
+  selectAll.addEventListener(
+    'click',
+    function(event) {
+      event.stopPropagation();
+      setAllUserColumnsVisible_(
+        columns,
+        true,
+        defaults,
+        requiredColumns
+      );
+    }
+  );
+
+  clearAll.addEventListener(
+    'click',
+    function(event) {
+      event.stopPropagation();
+      setAllUserColumnsVisible_(
+        columns,
+        false,
+        defaults,
+        requiredColumns
+      );
+    }
+  );
+
+  columns.forEach(column => {
+
+    const wrapper =
+      document.createElement(
+        'label'
+      );
+
+    wrapper.className =
+      'dropdown-item d-flex align-items-center gap-2';
+
+    wrapper.addEventListener(
+      'click',
+      function(event) {
+        event.stopPropagation();
+      }
+    );
+
+    const checkbox =
+      document.createElement(
+        'input'
+      );
+
+    checkbox.type =
+      'checkbox';
+    checkbox.className =
+      'form-check-input m-0';
+    checkbox.checked =
+      !!column.visible;
+    checkbox.disabled =
+      !!requiredColumns[column.field];
+
+    checkbox.addEventListener(
+      'change',
+      function(event) {
+        event.stopPropagation();
+
+        persistColumnVisibilityPreference_(
+          'users',
+          column.field,
+          this.checked,
+          defaults
+        );
+
+        renderUsersPage(
+          currentPageData
+        );
+      }
+    );
+
+    const text =
+      document.createElement(
+        'span'
+      );
+
+    text.textContent =
+      requiredColumns[column.field]
+        ? column.title + ' (required)'
+        : column.title;
+
+    wrapper.appendChild(
+      checkbox
+    );
+
+    wrapper.appendChild(
+      text
+    );
+
+    menu.appendChild(
+      wrapper
+    );
+  });
+}
+
+
+function setAllUserColumnsVisible_(
+  columns,
+  visible,
+  defaults,
+  requiredColumns
+) {
+
+  const preferences = {
+    hidden: [],
+    visible: []
+  };
+
+  columns.forEach(column => {
+
+    if (requiredColumns[column.field]) {
+      return;
+    }
+
+    if (visible) {
+      if (!defaults.has(column.field)) {
+        preferences.visible.push(
+          column.field
+        );
+      }
+    } else {
+      preferences.hidden.push(
+        column.field
+      );
+    }
+
+  });
+
+  setColumnVisibilityPreferences_(
+    'users',
+    preferences
+  );
+
+  renderUsersPage(
+    currentPageData
+  );
 }
 
 

@@ -5,6 +5,15 @@
   --brand-secondary: #0d2342;
   --brand-accent: #f4c430;
   --header-font-color: #0d2342;
+  --sidebar-gradient:
+    linear-gradient(
+      180deg,
+      var(--brand-primary) 0%,
+      var(--brand-secondary) 100%
+    );
+  --integration-aruba-orange: #ff8300;
+  --integration-aruba-orange-dark: #d96100;
+  --integration-aruba-orange-soft: #fff0df;
 
   --navy-950: #08182f;
   --navy-900: #0d2342;
@@ -101,7 +110,7 @@ textarea {
   flex-direction: column;
 
   background:
-    var(--brand-secondary);
+    var(--sidebar-gradient);
 
   color: white;
 
@@ -125,7 +134,7 @@ textarea {
     1px solid rgba(255,255,255,.08);
 
   background:
-    var(--brand-primary);
+    transparent;
 }
 
 
@@ -470,6 +479,44 @@ textarea {
   background: #e6b820;
 
   color: var(--navy-950);
+}
+
+
+.btn-aruba {
+  border-color: var(--integration-aruba-orange);
+  background: var(--integration-aruba-orange);
+  color: #1d160f;
+  font-weight: 750;
+}
+
+
+.btn-aruba:hover,
+.btn-aruba:focus {
+  border-color: var(--integration-aruba-orange-dark);
+  background: var(--integration-aruba-orange-dark);
+  color: #ffffff;
+}
+
+
+.btn-aruba-outline {
+  border-color: rgba(255, 131, 0, .42);
+  background: #ffffff;
+  color: #a74800;
+  font-weight: 700;
+}
+
+
+.btn-aruba-outline:hover,
+.btn-aruba-outline:focus {
+  border-color: var(--integration-aruba-orange);
+  background: var(--integration-aruba-orange-soft);
+  color: #8f3d00;
+}
+
+
+.btn-aruba:disabled,
+.btn-aruba-outline:disabled {
+  opacity: .58;
 }
 
 
@@ -4009,9 +4056,19 @@ textarea {
   padding: 18px;
 }
 
+.settings-branding-grid {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+
+.settings-url-field {
+  grid-column: 1 / -1;
+}
+
 .settings-field {
   display: grid;
   gap: 7px;
+  min-width: 0;
 }
 
 .settings-field > span {
@@ -4024,7 +4081,31 @@ textarea {
 .settings-color-row {
   display: grid;
   grid-template-columns: 58px 1fr;
+  align-items: center;
   gap: 9px;
+}
+
+.settings-field > .form-control,
+.settings-color-row > .form-control {
+  min-width: 0;
+}
+
+.settings-url-field > input {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-color-row .form-control-color {
+  width: 46px;
+  height: 38px;
+  padding: 4px;
+}
+
+@media (min-width: 860px) {
+  .settings-branding-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .settings-switch-field {
@@ -4149,7 +4230,7 @@ textarea {
 .settings-preview-sidebar {
   display: grid;
   grid-template-rows: auto 1fr;
-  background: var(--brand-secondary);
+  background: var(--sidebar-gradient);
   color: #ffffff;
 }
 
@@ -4159,7 +4240,7 @@ textarea {
   gap: 11px;
   min-width: 0;
   padding: 16px;
-  background: var(--brand-primary);
+  background: transparent;
 }
 
 .settings-preview-mark {
@@ -4230,9 +4311,47 @@ textarea {
 
 .settings-preview-main {
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto auto 1fr;
   min-width: 0;
   background: var(--surface-warm);
+}
+
+.settings-preview-browserbar {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+  background: #f3f6fa;
+  color: #465568;
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.settings-preview-browserbar > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-preview-favicon {
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 18px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: #ffffff;
+  color: var(--brand-primary);
+}
+
+.settings-preview-favicon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .settings-preview-header {
@@ -4359,6 +4478,11 @@ textarea {
   background: #ffffff;
 }
 
+.integration-card-aruba {
+  border-color: rgba(255, 131, 0, .34);
+  box-shadow: inset 3px 0 0 var(--integration-aruba-orange);
+}
+
 .integration-card-main {
   display: flex;
   align-items: flex-start;
@@ -4403,6 +4527,12 @@ textarea {
   font-weight: 750;
 }
 
+.integration-capability-list .integration-chip-aruba {
+  border-color: rgba(255, 131, 0, .34);
+  background: var(--integration-aruba-orange-soft);
+  color: #8f3d00;
+}
+
 .integration-note {
   margin-top: 9px;
   color: #725a08;
@@ -4425,6 +4555,14 @@ textarea {
   margin: 0;
   color: var(--muted);
   font-size: 0.84rem;
+}
+
+.user-table-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .integration-toggle {
@@ -4994,7 +5132,7 @@ textarea {
   }
 
   .settings-color-row {
-    grid-template-columns: 1fr;
+    grid-template-columns: 46px minmax(0, 1fr);
   }
 
   .settings-brand-preview {

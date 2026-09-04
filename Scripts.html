@@ -516,6 +516,60 @@ function applyBranding(
     }
 
   }
+
+  applyFavicon_(
+    branding.faviconUrl
+  );
+}
+
+
+function applyFavicon_(
+  faviconUrl
+) {
+
+  const url =
+    String(
+      faviconUrl || ''
+    ).trim();
+
+  let link =
+    document.getElementById(
+      'appFavicon'
+    );
+
+  if (!url) {
+    if (link) {
+      link.removeAttribute(
+        'href'
+      );
+    }
+    return;
+  }
+
+  if (
+    !/^https?:\/\//i.test(
+      url
+    )
+  ) {
+    return;
+  }
+
+  if (!link) {
+    link =
+      document.createElement(
+        'link'
+      );
+    link.id =
+      'appFavicon';
+    link.rel =
+      'icon';
+    document.head.appendChild(
+      link
+    );
+  }
+
+  link.href =
+    url;
 }
 
 
@@ -2102,8 +2156,12 @@ function applyUptimeRobotHealthRefreshResult_(
   options =
     options || {};
 
+  const isStartupRefresh =
+    options.reason === 'startup';
+
   if (
     currentPageKey === 'internetWan' &&
+    !isStartupRefresh &&
     currentPageData &&
     typeof applyInternetWanHealthToData_ === 'function' &&
     typeof renderInternetWanPage === 'function'
@@ -2127,7 +2185,10 @@ function applyUptimeRobotHealthRefreshResult_(
     );
   }
 
-  if (currentPageKey === 'uptimeRobot') {
+  if (
+    currentPageKey === 'uptimeRobot' &&
+    !isStartupRefresh
+  ) {
     loadPage(
       'uptimeRobot',
       true,
@@ -2142,7 +2203,24 @@ function applyUptimeRobotHealthRefreshResult_(
     );
   }
 
-  if (currentPageKey === 'dashboard') {
+  if (
+    currentPageKey === 'dashboard' &&
+    isStartupRefresh &&
+    typeof refreshDashboardUptimeRobotWidgets_ === 'function'
+  ) {
+    refreshDashboardUptimeRobotWidgets_(
+      monitoring
+    );
+    invalidateClientPage(
+      'dashboard'
+    );
+    return;
+  }
+
+  if (
+    currentPageKey === 'dashboard' &&
+    !isStartupRefresh
+  ) {
     loadPage(
       'dashboard',
       true,

@@ -116,6 +116,15 @@ function getAppSettingDefinitions_() {
       description: 'Public image URL or Google Drive thumbnail URL.'
     },
     {
+      key: 'branding.favicon_url',
+      label: 'Favicon URL',
+      category: 'Branding',
+      type: 'url',
+      defaultValue: '',
+      editable: true,
+      description: 'Public http or https image URL used for the browser tab icon.'
+    },
+    {
       key: 'branding.primary_color',
       label: 'Primary Color',
       category: 'Branding',
@@ -970,6 +979,8 @@ var AppConfig = (function() {
       branding: {
         logoUrl:
           values['branding.logo_url'] || '',
+        faviconUrl:
+          values['branding.favicon_url'] || '',
         primaryColor:
           values['branding.primary_color'] || '#17345f',
         secondaryColor:

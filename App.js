@@ -73,12 +73,9 @@ const APP_PAGE_CONFIG = {
     defaultColumns: [
       'Status',
       'Device Label',
-      'Model',
       'IP Address',
-      'Role',
-      'Stack Info',
-      'Port Capacity (Active)',
-      'Campus'
+      'Model',
+      'Role'
     ]
   },
 
@@ -94,11 +91,9 @@ const APP_PAGE_CONFIG = {
     defaultColumns: [
       'Status',
       'Device Label',
-      'Model',
       'IP Address',
-      'Active Clients',
-      'Campus',
-      'Management Mode'
+      'Model',
+      'Active Clients'
     ]
   },
 
@@ -114,13 +109,10 @@ const APP_PAGE_CONFIG = {
 
     defaultColumns: [
       'Server Name',
+      'Status',
       'IP Address',
       'Type',
-      'Status',
-      'Location',
-      'ThreatDown Installed',
-      'Wazuh Installed',
-      'Notes'
+      'Location'
     ]
   },
 
@@ -136,10 +128,7 @@ const APP_PAGE_CONFIG = {
       'Destination',
       'Gateway',
       'VLAN',
-      'Type',
-      'SubType',
-      'Metric',
-      'Dist'
+      'Type'
     ]
   },
 
@@ -156,8 +145,6 @@ const APP_PAGE_CONFIG = {
       'Site / Location',
       'Role',
       'Provider',
-      'Bandwidth',
-      '_publicIpSummary',
       '_monitorHealth',
       'Status'
     ]
@@ -176,9 +163,7 @@ const APP_PAGE_CONFIG = {
       'Circuit Name',
       'Provider',
       'Started',
-      'Restored',
       'Duration',
-      'Source',
       'Status'
     ]
   },
@@ -194,10 +179,8 @@ const APP_PAGE_CONFIG = {
 
     defaultColumns: [
       'Monitor Name',
-      'Monitor Type',
-      'Target',
       'Health',
-      'Provider Status',
+      'Target',
       'Last Checked',
       'Last Sync'
     ]
@@ -226,12 +209,9 @@ const APP_PAGE_CONFIG = {
     defaultColumns: [
       'Location',
       'Asset / System',
-      'Category',
-      'Type',
       'IP Address',
-      'Username',
-      'Server Location',
-      'Notes'
+      'Category',
+      'Server Location'
     ]
 
   },
@@ -268,7 +248,6 @@ const APP_PAGE_CONFIG = {
           'Bus Name/Number',
           'DVR IP',
           'Bridge IP',
-          'Bridge Mac',
           'Bus Type'
         ]
       }
@@ -296,9 +275,7 @@ const APP_PAGE_CONFIG = {
           'Location',
           'IP Address',
           'VLAN Name',
-          'VLAN ID',
-          'Username',
-          'Password'
+          'VLAN ID'
         ]
       }
     ]
@@ -314,12 +291,10 @@ const APP_PAGE_CONFIG = {
 
     defaultColumns: [
       'Server Name',
-      'Size',
-      'Backup Time',
       'Backup Job Name',
+      'Backup Time',
       'Target Location',
-      'Wasabi Job',
-      'Wasabi Schedule'
+      'Wasabi Job'
     ]
   },
 
