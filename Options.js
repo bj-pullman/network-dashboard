@@ -41,6 +41,14 @@ function getControlledOptionDefinitions_() {
       'Paused',
       'Unknown'
     ],
+  outageSource: [
+    'Manual',
+    'UptimeRobot'
+  ],
+    outageStatus: [
+      'Ongoing',
+      'Restored'
+    ],
     workflowPriority: [
       'P1',
       'P2',
@@ -125,6 +133,22 @@ function getControlledOptionAliases_() {
       offline: 'Down',
       paused: 'Paused',
       unknown: 'Unknown'
+    },
+    outageSource: {
+      manual: 'Manual',
+      uptimerobot: 'UptimeRobot',
+      uptime_robot: 'UptimeRobot',
+      uptime: 'UptimeRobot'
+    },
+    outageStatus: {
+      ongoing: 'Ongoing',
+      open: 'Ongoing',
+      active: 'Ongoing',
+      down: 'Ongoing',
+      restored: 'Restored',
+      closed: 'Restored',
+      resolved: 'Restored',
+      up: 'Restored'
     }
   };
 }
@@ -228,6 +252,17 @@ function getControlledOptionsForSheet_(
       );
   }
 
+  if (sheetName === 'Outages') {
+    map.Source =
+      getControlledOptions_(
+        'outageSource'
+      );
+    map.Status =
+      getControlledOptions_(
+        'outageStatus'
+      );
+  }
+
   if (sheetName === 'App Users') {
     map.Role =
       getControlledOptions_(
@@ -284,6 +319,15 @@ function getControlledOptionKeyForSheetField_(
     field === 'Health'
   ) {
     return 'uptimeRobotHealth';
+  }
+
+  if (sheetName === 'Outages') {
+    if (field === 'Source') {
+      return 'outageSource';
+    }
+    if (field === 'Status') {
+      return 'outageStatus';
+    }
   }
 
   if (sheetName === 'App Users') {

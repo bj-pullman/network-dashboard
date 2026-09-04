@@ -122,7 +122,7 @@ function getAppSettingDefinitions_() {
       type: 'color',
       defaultValue: '#17345f',
       editable: true,
-      description: 'Primary brand color.'
+      description: 'Sidebar top section, primary buttons, primary icons and primary chart styling.'
     },
     {
       key: 'branding.secondary_color',
@@ -131,7 +131,7 @@ function getAppSettingDefinitions_() {
       type: 'color',
       defaultValue: '#0d2342',
       editable: true,
-      description: 'Secondary brand color.'
+      description: 'Secondary buttons, lower sidebar/nav treatment and secondary theme surfaces.'
     },
     {
       key: 'branding.accent_color',
@@ -140,7 +140,16 @@ function getAppSettingDefinitions_() {
       type: 'color',
       defaultValue: '#f4c430',
       editable: true,
-      description: 'Accent color for highlights and key actions.'
+      description: 'Active navigation, page accents, breadcrumb accents, logo accents and emphasis elements.'
+    },
+    {
+      key: 'branding.header_font_color',
+      label: 'Header Font Color',
+      category: 'Branding',
+      type: 'color',
+      defaultValue: '#0d2342',
+      editable: true,
+      description: 'Primary page title and breadcrumb/path header text only.'
     },
     {
       key: 'regional.timezone',
@@ -966,7 +975,9 @@ var AppConfig = (function() {
         secondaryColor:
           values['branding.secondary_color'] || '#0d2342',
         accentColor:
-          values['branding.accent_color'] || '#f4c430'
+          values['branding.accent_color'] || '#f4c430',
+        headerFontColor:
+          values['branding.header_font_color'] || '#0d2342'
       },
       regional: {
         timezone:

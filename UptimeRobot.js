@@ -92,6 +92,37 @@ function syncUptimeRobotToSheet() {
       snapshot.fetchedAt
     );
 
+    let outageSyncResult = {
+      status: 'skipped',
+      message: '',
+      fetched: 0,
+      created: 0,
+      updated: 0,
+      unchanged: 0
+    };
+
+    let outageSyncWarning =
+      '';
+
+    if (
+      typeof syncUptimeRobotOutagesForMappedCircuits_ ===
+      'function'
+    ) {
+
+      try {
+        outageSyncResult =
+          syncUptimeRobotOutagesForMappedCircuits_(
+            snapshot.fetchedAt
+          );
+      } catch (error) {
+        outageSyncWarning =
+          sanitizeUptimeRobotError_(
+            error
+          );
+      }
+
+    }
+
     const summary =
       buildUptimeRobotSummary_(
         snapshot.monitors
@@ -107,7 +138,9 @@ function syncUptimeRobotToSheet() {
       paused:
         summary.paused,
       unknown:
-        summary.unknown
+        summary.unknown,
+      outages:
+        outageSyncResult.fetched || 0
     };
 
     updateIntegrationSyncStatus_(
@@ -132,16 +165,24 @@ function syncUptimeRobotToSheet() {
     return {
       status: 'success',
       message:
-        'UptimeRobot monitors synced locally.',
+        outageSyncWarning
+          ? 'UptimeRobot monitors synced locally. Outage sync warning: ' +
+            outageSyncWarning
+          : 'UptimeRobot monitors synced locally.',
       monitorsSynced:
         snapshot.monitors.length,
       lastSync:
         snapshot.fetchedAt,
       counts:
         counts,
+      outageSync:
+        outageSyncResult,
+      outageSyncWarning:
+        outageSyncWarning,
       invalidatePages: [
         'uptimeRobot',
         'internetWan',
+        'outages',
         'dashboard'
       ]
     };
@@ -472,6 +513,61 @@ function fetchUptimeRobotMonitorSnapshot_() {
     monitors:
       monitors
   };
+}
+
+
+function fetchUptimeRobotIncidentsForOutageSync_(
+  options
+) {
+
+  options =
+    options || {};
+
+  const incidents = [];
+
+  let cursor =
+    '';
+
+  let pageCount =
+    0;
+
+  do {
+
+    pageCount++;
+
+    if (pageCount > 25) {
+      throw new Error(
+        'UptimeRobot incident pagination exceeded the local safety limit.'
+      );
+    }
+
+    const response =
+      fetchUptimeRobotJson_(
+        '/incidents',
+        {
+          cursor:
+            cursor,
+          started_after:
+            options.startedAfter || ''
+        }
+      );
+
+    extractUptimeRobotIncidentList_(
+      response.json
+    ).forEach(incident => {
+      incidents.push(
+        incident
+      );
+    });
+
+    cursor =
+      extractUptimeRobotNextCursor_(
+        response.json
+      );
+
+  } while (cursor);
+
+  return incidents;
 }
 
 
@@ -930,6 +1026,10 @@ function invalidateUptimeRobotDataCaches_() {
   );
 
   invalidateAppPage_(
+    'outages'
+  );
+
+  invalidateAppPage_(
     'dashboard'
   );
 }
@@ -1137,6 +1237,36 @@ function extractUptimeRobotMonitorList_(
     Array.isArray(json.data)
   ) {
     return json.data;
+  }
+
+  return [];
+}
+
+
+function extractUptimeRobotIncidentList_(
+  json
+) {
+
+  if (
+    json &&
+    Array.isArray(json.incidents)
+  ) {
+    return json.incidents;
+  }
+
+  if (
+    json &&
+    Array.isArray(json.data)
+  ) {
+    return json.data;
+  }
+
+  if (
+    json &&
+    json.data &&
+    Array.isArray(json.data.incidents)
+  ) {
+    return json.data.incidents;
   }
 
   return [];

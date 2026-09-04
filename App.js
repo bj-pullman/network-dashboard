@@ -163,6 +163,26 @@ const APP_PAGE_CONFIG = {
     ]
   },
 
+  outages: {
+    key: 'outages',
+    label: 'Outages',
+    sheet: 'Outages',
+    type: 'outages',
+    icon: 'fa-triangle-exclamation',
+    group: 'Monitoring',
+
+    defaultColumns: [
+      'Site / Location',
+      'Circuit Name',
+      'Provider',
+      'Started',
+      'Restored',
+      'Duration',
+      'Source',
+      'Status'
+    ]
+  },
+
   uptimeRobot: {
     key: 'uptimeRobot',
     label: 'UptimeRobot',
@@ -409,6 +429,19 @@ const APP_MODULE_REGISTRY = {
       'Internet WAN'
     ],
     permissionKey: 'internetWan'
+  },
+
+  outages: {
+    id: 'outages',
+    name: 'Outages',
+    description: 'WAN circuit outage history from manual entries and UptimeRobot incidents.',
+    classification: 'core',
+    enabledByDefault: true,
+    pageKey: 'outages',
+    requiredSheets: [
+      'Outages'
+    ],
+    permissionKey: 'outages'
   },
 
   securityCameras: {
@@ -2044,6 +2077,12 @@ function appGetPageData(pageKey, forceRefresh) {
         );
       }
 
+      if (config.type === 'outages') {
+        return getOutagesPageData_(
+          forceRefresh
+        );
+      }
+
       if (config.type === 'uptimeRobot') {
         return getUptimeRobotPageData_(
           forceRefresh
@@ -2441,8 +2480,12 @@ function getAppTableData_(
 
       try {
 
-        return JSON.parse(
-          cached
+        return prepareTableDataForAccess_(
+          JSON.parse(
+            cached
+          ),
+          pageKey,
+          config
         );
 
       } catch (error) {}
@@ -2498,21 +2541,40 @@ function getAppTableData_(
   const columns =
     [];
 
+  const credentialColumns =
+    [];
+
 
   rawHeaders.forEach(
     (header, index) => {
 
+      if (!header) {
+        return;
+      }
+
       if (
-        header &&
-        !isCredentialHeader_(header)
+        isCredentialHeader_(header)
       ) {
+
+        credentialColumns.push({
+          header:
+            header,
+          field:
+            isPasswordHeader_(header)
+              ? 'Password'
+              : header,
+          sourceIndex:
+            index
+        });
+
+        return;
+
+      }
 
         columns.push({
           header: header,
           sourceIndex: index
         });
-
-      }
 
     }
   );
@@ -2673,11 +2735,19 @@ function getAppTableData_(
       !!config.centralSync,
 
     permission:
-      getPagePermission_(pageKey),
+      '',
 
     hasCredentials:
-      rawHeaders.some(
-        isCredentialHeader_
+      credentialColumns.length > 0,
+
+    credentialColumns:
+      credentialColumns.map(
+        column => ({
+          header:
+            column.header,
+          field:
+            column.field
+        })
       )
 
   };
@@ -2690,7 +2760,11 @@ function getAppTableData_(
   );
 
 
-  return result;
+  return prepareTableDataForAccess_(
+    result,
+    pageKey,
+    config
+  );
 }
 
 
@@ -2720,8 +2794,12 @@ function getCombinedServersData_(
 
       try {
 
-        return JSON.parse(
-          cached
+        return prepareTableDataForAccess_(
+          JSON.parse(
+            cached
+          ),
+          pageKey,
+          config
         );
 
       } catch (error) {}
@@ -2905,13 +2983,17 @@ function getCombinedServersData_(
       false,
 
     permission:
-      getPagePermission_(
-        pageKey
-      ),
+      '',
 
     hasCredentials:
       activeData.hasCredentials ||
       offlineData.hasCredentials,
+
+    credentialColumns:
+      mergeTableCredentialColumns_(
+        activeData.credentialColumns,
+        offlineData.credentialColumns
+      ),
 
     serverViews: {
 
@@ -2937,7 +3019,11 @@ function getCombinedServersData_(
   );
 
 
-  return result;
+  return prepareTableDataForAccess_(
+    result,
+    pageKey,
+    config
+  );
 }
 
 function readServerSourceSheet_(
@@ -2990,16 +3076,43 @@ function readServerSourceSheet_(
   const columns =
     [];
 
+  const credentialColumns =
+    [];
+
 
   rawHeaders.forEach(
     (header, index) => {
 
+      if (!header) {
+        return;
+      }
+
       if (
-        header &&
-        !isCredentialHeader_(
+        isCredentialHeader_(
           header
         )
       ) {
+
+        credentialColumns.push({
+
+          header:
+            header,
+
+          field:
+            isPasswordHeader_(
+              header
+            )
+              ? 'Password'
+              : header,
+
+          sourceIndex:
+            index
+
+        });
+
+        return;
+
+      }
 
         columns.push({
 
@@ -3010,8 +3123,6 @@ function readServerSourceSheet_(
             index
 
         });
-
-      }
 
     }
   );
@@ -3158,11 +3269,164 @@ function readServerSourceSheet_(
       rows,
 
     hasCredentials:
-      rawHeaders.some(
-        isCredentialHeader_
+      credentialColumns.length > 0,
+
+    credentialColumns:
+      credentialColumns.map(
+        column => ({
+          header:
+            column.header,
+          field:
+            column.field
+        })
       )
 
   };
+}
+
+
+function mergeTableCredentialColumns_() {
+
+  const seen = {};
+
+  const merged = [];
+
+  Array.prototype
+    .slice
+    .call(arguments)
+    .forEach(list => {
+
+      (list || [])
+        .forEach(column => {
+
+          const field =
+            String(
+              column && column.field || ''
+            ).trim();
+
+          if (
+            !field ||
+            seen[field]
+          ) {
+            return;
+          }
+
+          seen[field] =
+            true;
+
+          merged.push({
+            header:
+              column.header || field,
+            field:
+              field
+          });
+
+        });
+
+    });
+
+  return merged;
+}
+
+
+function prepareTableDataForAccess_(
+  result,
+  pageKey,
+  config
+) {
+
+  result =
+    result || {};
+
+  config =
+    config || APP_PAGE_CONFIG[pageKey] || {};
+
+  const permission =
+    getPagePermission_(
+      pageKey
+    );
+
+  const safeHeaders =
+    (result.headers || [])
+      .filter(header =>
+        header &&
+        !isCredentialHeader_(
+          header
+        )
+      );
+
+  const safeDefaultColumns =
+    (result.defaultColumns || [])
+      .filter(header =>
+        safeHeaders.includes(
+          header
+        )
+      );
+
+  const output =
+    Object.assign(
+      {},
+      result,
+      {
+        headers:
+          safeHeaders.slice(),
+        defaultColumns:
+          safeDefaultColumns,
+        permission:
+          permission
+      }
+    );
+
+  const credentialColumns =
+    result.credentialColumns || [];
+
+  credentialColumns.forEach(column => {
+
+    const field =
+      String(
+        column.field || column.header || ''
+      ).trim();
+
+    if (
+      !field ||
+      output.headers.includes(
+        field
+      )
+    ) {
+      return;
+    }
+
+    const usernameIndex =
+      output.headers.findIndex(
+        isUsernameHeader_
+      );
+
+    if (usernameIndex >= 0) {
+      output.headers.splice(
+        usernameIndex + 1,
+        0,
+        field
+      );
+    } else {
+      output.headers.push(
+        field
+      );
+    }
+
+  });
+
+  output.defaultColumns =
+    (
+      config.defaultColumns ||
+      output.defaultColumns ||
+      []
+    ).filter(header =>
+      output.headers.includes(
+        header
+      )
+    );
+
+  return output;
 }
 
 
@@ -4210,6 +4474,17 @@ function appGetRowCredential(
       ? Number(config.endColumn)
       : sheet.getLastColumn();
 
+  if (
+    requestedRow <= headerRow ||
+    requestedRow > sheet.getLastRow()
+  ) {
+
+    throw new Error(
+      'Requested row is outside this table.'
+    );
+
+  }
+
 
   const headers =
     sheet
@@ -4226,6 +4501,18 @@ function appGetRowCredential(
         value =>
           String(value || '').trim()
       );
+
+  if (
+    !isPasswordHeader_(
+      fieldName
+    )
+  ) {
+
+    throw new Error(
+      'Requested field is not a restricted credential.'
+    );
+
+  }
 
 
   const relativeColumn =
@@ -4651,6 +4938,19 @@ function finalizeDashboardData_(
   metricMap
 ) {
 
+  data.outages =
+    typeof buildDashboardOutageData_ === 'function'
+      ? buildDashboardOutageData_()
+      : {
+          summary: {
+            active: 0,
+            last30Days: 0,
+            durationLast30Minutes: 0,
+            durationLast30Label: '0m'
+          },
+          lastUpdated: ''
+        };
+
   data.uptimeRobot =
     buildDashboardUptimeRobotData_();
 
@@ -4799,6 +5099,21 @@ function getDashboardWidgetRegistry_() {
       defaultSize: 'small',
       permission: 'view',
       icon: 'fa-circle-pause'
+    },
+    {
+      id: 'outages.summary',
+      display: 'WAN Outages',
+      description: 'Active outages, recent outage count and recent downtime duration.',
+      category: 'Monitoring',
+      type: 'kpi_group',
+      dataSource: 'Outages sheet',
+      dataPath: 'outages.summary',
+      requiredModule: 'outages',
+      defaultEnabled: true,
+      defaultOrder: 60,
+      defaultSize: 'medium',
+      permission: 'view',
+      icon: 'fa-triangle-exclamation'
     },
     {
       id: 'campus_distribution',
@@ -5145,6 +5460,20 @@ function getDashboardWidgetProvenance_(
         data.uptimeRobot &&
         data.uptimeRobot.lastSuccessfulSync
           ? data.uptimeRobot.lastSuccessfulSync
+          : ''
+    };
+  }
+
+  if (
+    widget.requiredModule === 'outages'
+  ) {
+    return {
+      source:
+        'Outages sheet',
+      lastUpdated:
+        data.outages &&
+        data.outages.lastUpdated
+          ? data.outages.lastUpdated
           : ''
     };
   }
@@ -7483,18 +7812,42 @@ function appUpdateRecord(
           header || ''
         ).trim();
 
-
-      if (
-        name &&
-        !isCredentialHeader_(
-          name
-        ) &&
+      const recordHasField =
         Object.prototype
           .hasOwnProperty
           .call(
             record,
             name
-          )
+          );
+
+
+      if (
+        name &&
+        isCredentialHeader_(
+          name
+        ) &&
+        recordHasField
+      ) {
+
+        const credentialValue =
+          String(
+            record[name] == null
+              ? ''
+              : record[name]
+          );
+
+        if (credentialValue) {
+          output[index] =
+            credentialValue;
+        }
+
+        return;
+      }
+
+
+      if (
+        name &&
+        recordHasField
       ) {
 
         output[index] =
@@ -7604,10 +7957,23 @@ function appAddRecord(
 
 
       if (
-        !name ||
-        isCredentialHeader_(name)
+        !name
       ) {
         return '';
+      }
+
+      if (
+        isCredentialHeader_(name)
+      ) {
+        return Object.prototype
+          .hasOwnProperty
+          .call(record, name)
+            ? String(
+                record[name] == null
+                  ? ''
+                  : record[name]
+              )
+            : '';
       }
 
 

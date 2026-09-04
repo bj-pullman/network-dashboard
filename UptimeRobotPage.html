@@ -324,13 +324,15 @@ function buildUptimeRobotTable_(
         data:
           data.rows || [],
         layout:
-          'fitColumns',
+          getNativeTableLayout_(),
         reactiveData:
           false,
         pagination:
           'local',
         paginationSize:
           15,
+        movableColumns:
+          true,
         placeholder:
           'No synchronized UptimeRobot monitors found.',
         initialSort: [
@@ -347,6 +349,11 @@ function buildUptimeRobotTable_(
           columns
       }
     );
+
+  bindTableColumnPreferenceEvents_(
+    tableInstance,
+    'uptimeRobot'
+  );
 
   tableInstance.on(
     'dataFiltered',
@@ -419,15 +426,20 @@ function getUptimeRobotColumns_(
           preferences,
           requiredColumns
         );
+
+      applyColumnWidthPreference_(
+        column,
+        preferences
+      );
+
       return column;
     };
 
-  return [
+  const columns = [
     applyVisible({
       title: 'Monitor',
       field: 'Monitor Name',
       minWidth: 190,
-      widthGrow: 1.4,
       formatter: function(cell) {
         const row =
           cell.getRow().getData();
@@ -448,8 +460,7 @@ function getUptimeRobotColumns_(
     applyVisible({
       title: 'Target',
       field: 'Target',
-      minWidth: 180,
-      widthGrow: 1.5
+      minWidth: 180
     }),
     applyVisible({
       title: 'Health',
@@ -497,6 +508,11 @@ function getUptimeRobotColumns_(
       minWidth: 150
     })
   ];
+
+  return applyColumnOrderPreference_(
+    columns,
+    preferences
+  );
 }
 
 
@@ -671,15 +687,6 @@ function buildUptimeRobotColumnMenu_(
           defaults
         );
 
-        requestAnimationFrame(
-          function() {
-            if (tableInstance) {
-              tableInstance.redraw(
-                true
-              );
-            }
-          }
-        );
       }
     );
 
@@ -774,15 +781,6 @@ function setAllUptimeRobotColumnsVisible_(
     preferences
   );
 
-  requestAnimationFrame(
-    function() {
-      if (tableInstance) {
-        tableInstance.redraw(
-          true
-        );
-      }
-    }
-  );
 }
 
 

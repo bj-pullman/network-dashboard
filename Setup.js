@@ -204,6 +204,23 @@ function getNetworkDashboardSchema_() {
       tabColor: '#0891b2'
     },
 
+    'Outages': {
+      type: 'operational',
+      category: 'Monitoring',
+      headers:
+        getOutageSheetHeaders_(),
+      requiredHeaders: [
+        'Outage ID',
+        'Circuit ID',
+        'Started',
+        'Source',
+        'Status',
+        'External Event ID'
+      ],
+      frozenRows: 1,
+      tabColor: '#dc2626'
+    },
+
     'Security Cameras': {
       type: 'operational',
       category: 'Physical Systems',
@@ -3270,6 +3287,14 @@ function validateSchemaSheet_(
     );
   }
 
+  if (sheetName === 'Outages') {
+    validateOutageRows_(
+      sheet,
+      definition,
+      result
+    );
+  }
+
 
   result.sheets.push(
     sheetResult
@@ -3470,6 +3495,238 @@ function validateInternetWanRows_(
             ? error.message
             : String(error)
         )
+      );
+    }
+
+  });
+}
+
+
+function validateOutageRows_(
+  sheet,
+  definition,
+  result
+) {
+
+  const headers =
+    definition.headers || [];
+
+  if (sheet.getLastRow() < 2) {
+    return;
+  }
+
+  const values =
+    sheet
+      .getRange(
+        2,
+        1,
+        sheet.getLastRow() - 1,
+        headers.length
+      )
+      .getDisplayValues();
+
+  const seenOutageIds = {};
+  const seenExternalIds = {};
+
+  values.forEach((row, index) => {
+
+    if (
+      !rowHasMeaningfulData_(
+        row,
+        headers
+      )
+    ) {
+      return;
+    }
+
+    const rowNumber =
+      index + 2;
+
+    const record = {};
+
+    headers.forEach((header, columnIndex) => {
+      record[header] =
+        row[columnIndex];
+    });
+
+    const outageId =
+      String(
+        record['Outage ID'] || ''
+      ).trim();
+
+    if (!outageId) {
+      result.errors.push(
+        'Outages row ' +
+        rowNumber +
+        ': Outage ID is required.'
+      );
+    } else if (seenOutageIds[outageId]) {
+      result.errors.push(
+        'Outages row ' +
+        rowNumber +
+        ': Duplicate Outage ID ' +
+        outageId +
+        '.'
+      );
+    } else {
+      seenOutageIds[outageId] =
+        true;
+    }
+
+    const source =
+      String(
+        record.Source || ''
+      ).trim();
+
+    if (
+      !String(
+        record['Circuit ID'] || ''
+      ).trim()
+    ) {
+      result.errors.push(
+        'Outages row ' +
+        rowNumber +
+        ': Circuit ID is required.'
+      );
+    }
+
+    if (
+      !String(
+        record.Started || ''
+      ).trim()
+    ) {
+      result.errors.push(
+        'Outages row ' +
+        rowNumber +
+        ': Started is required.'
+      );
+    }
+
+    if (!source) {
+      result.errors.push(
+        'Outages row ' +
+        rowNumber +
+        ': Source is required.'
+      );
+    }
+
+    if (
+      source &&
+      ![
+        'Manual',
+        'UptimeRobot'
+      ].includes(source)
+    ) {
+      result.warnings.push(
+        'Outages row ' +
+        rowNumber +
+        ': Unknown outage source "' +
+        source +
+        '".'
+      );
+    }
+
+    const status =
+      String(
+        record.Status || ''
+      ).trim();
+
+    if (!status) {
+      result.errors.push(
+        'Outages row ' +
+        rowNumber +
+        ': Status is required.'
+      );
+    }
+
+    if (
+      status &&
+      ![
+        'Ongoing',
+        'Restored'
+      ].includes(status)
+    ) {
+      result.warnings.push(
+        'Outages row ' +
+        rowNumber +
+        ': Unknown outage status "' +
+        status +
+        '".'
+      );
+    }
+
+    const externalId =
+      String(
+        record['External Event ID'] || ''
+      ).trim();
+
+    if (
+      source === 'UptimeRobot' &&
+      !externalId
+    ) {
+      result.errors.push(
+        'Outages row ' +
+        rowNumber +
+        ': UptimeRobot records require an External Event ID.'
+      );
+    }
+
+    if (externalId) {
+      if (seenExternalIds[externalId]) {
+        result.errors.push(
+          'Outages row ' +
+          rowNumber +
+          ': Duplicate External Event ID ' +
+          externalId +
+          '.'
+        );
+      } else {
+        seenExternalIds[externalId] =
+          true;
+      }
+    }
+
+    const startedMs =
+      Date.parse(
+        record.Started || ''
+      );
+
+    const restoredMs =
+      Date.parse(
+        record.Restored || ''
+      );
+
+    if (
+      record.Started &&
+      isNaN(startedMs)
+    ) {
+      result.errors.push(
+        'Outages row ' +
+        rowNumber +
+        ': Started must be a valid date/time.'
+      );
+    }
+
+    if (
+      record.Restored &&
+      isNaN(restoredMs)
+    ) {
+      result.errors.push(
+        'Outages row ' +
+        rowNumber +
+        ': Restored must be a valid date/time.'
+      );
+    }
+
+    if (
+      !isNaN(startedMs) &&
+      !isNaN(restoredMs) &&
+      restoredMs < startedMs
+    ) {
+      result.errors.push(
+        'Outages row ' +
+        rowNumber +
+        ': Restored cannot be earlier than Started.'
       );
     }
 

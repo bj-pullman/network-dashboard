@@ -184,6 +184,27 @@ Operational data rows remain editable. Google Sheets owners can intentionally re
 - `Tags`
 - `Last Sync`
 
+`Outages`
+
+- `Outage ID`
+- `Circuit ID`
+- `Circuit Name`
+- `Site / Location`
+- `Provider`
+- `UptimeRobot Monitor ID`
+- `Started`
+- `Restored`
+- `Duration Minutes`
+- `Duration`
+- `Source`
+- `Cause / Reason`
+- `Notes`
+- `Status`
+- `Entered By`
+- `Created At`
+- `Updated At`
+- `External Event ID`
+
 `Security Cameras`
 
 - `Location`
@@ -292,6 +313,7 @@ The Dashboard web page also has a widget registry in source code. Instance-wide 
 - `branding.primary_color`
 - `branding.secondary_color`
 - `branding.accent_color`
+- `branding.header_font_color`
 - `regional.timezone`
 - `regional.date_format`
 - `regional.time_format`
@@ -302,7 +324,7 @@ The Dashboard web page also has a widget registry in source code. Instance-wide 
 
 ## Branding
 
-Branding is configured through Settings. Supported fields are logo URL, primary color, secondary color, accent color, application name, organization name and organization short name.
+Branding is configured through Settings. Supported fields are logo URL, primary color, secondary color, accent color, header font color, application name, organization name and organization short name. Primary controls the sidebar top section and primary actions, Secondary controls the lower sidebar/navigation surface, Accent controls active/accent marks, and Header Font Color controls the main page title/breadcrumb text.
 
 The default visual design is the Network Dashboard theme. Organization identity belongs in `App Settings`, not source code.
 
@@ -318,7 +340,15 @@ WAN `Status` is administrative/configured state and must be one of `Active`, `St
 
 `APSCN Device Name` is an optional local device/reference name. `UptimeRobot Monitor ID` is optional and should contain the numeric monitor ID from the synchronized local `UptimeRobot` sheet when a circuit is monitored externally.
 
+Circuit rows include a View Outages action when the Outages module is available. It opens the Outages page filtered to the selected circuit.
+
 Do not store circuit portal passwords, ISP credentials or shared secrets in Internet/WAN rows. Public IP ranges, public gateways, provider names, non-secret circuit/account references and operational notes are acceptable.
+
+## Outages
+
+Outages is a core module for WAN outage history. Manual entries are created and closed from the Outages page. UptimeRobot records are synchronized from provider incidents for WAN circuits that have a mapped `UptimeRobot Monitor ID`.
+
+Automated records are deduplicated by `External Event ID`, so the same provider incident updates the existing outage row. When UptimeRobot reports a restored incident, sync closes the matching outage record instead of creating a duplicate. Dashboard outage widgets read the same Outages records for active outage count, last-30-day outage count and last-30-day duration.
 
 ## User Management and RBAC
 
@@ -333,6 +363,8 @@ Supported behavior:
 - Server-side enforcement for viewing, editing, credentials and administrative writes.
 
 Admins receive full administrative access. Non-admin users can only see pages for which they have `view` or `edit`.
+
+Sensitive password columns are virtualized in the web app. Security Cameras includes a Password column in the column selector, hidden by default; normal page payloads and exports do not include password values, and password reveal calls require server-side `edit` permission.
 
 ## User Domain Policy
 
@@ -431,9 +463,9 @@ UptimeRobot requirements:
 - Use Test in Settings to verify the key. Test performs a minimal provider metadata read and does not write sheet data.
 - Use Sync Now to fetch the paginated monitor collection and write the local managed `UptimeRobot` sheet.
 - Map monitor IDs on `Internet WAN` rows in the `UptimeRobot Monitor ID` column. The WAN selector reads synchronized local monitor rows and stores only the monitor ID.
-- Use Sync Health on the Internet / WAN page, or Sync Now on the UptimeRobot page, to refresh the local monitor dataset.
+- Use Sync Health on the Internet / WAN page, or Sync Now on the UptimeRobot page, to refresh the local monitor dataset and synchronize mapped WAN incidents into `Outages`.
 
-The dashboard and operational pages do not create, edit or delete UptimeRobot monitors. Dashboard, UptimeRobot and Internet/WAN renders read local sheet data only. UptimeRobot's v3 documentation lists Free-plan rate limiting at 10 requests per minute, so sync fetches the monitor collection in paginated requests, respects rate-limit responses and does not retry tightly. Sync failures update runtime metadata but do not clear existing local monitor rows.
+The dashboard and operational pages do not create, edit or delete UptimeRobot monitors. Dashboard, UptimeRobot, Outages and Internet/WAN renders read local sheet data only. UptimeRobot's v3 documentation lists Free-plan rate limiting at 10 requests per minute, so sync fetches provider data in paginated requests, respects rate-limit responses and does not retry tightly. Sync failures update runtime metadata but do not clear existing local monitor or outage rows.
 
 ## Department Workflow
 

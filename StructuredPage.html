@@ -503,7 +503,7 @@ function createStructuredTabulator(
     );
 
 
-  const columns =
+  let columns =
     [];
 
 
@@ -513,6 +513,48 @@ function createStructuredTabulator(
     )
       ? section.columns
       : [];
+
+
+  const preferenceKey =
+    getStructuredColumnPreferenceKey_(
+      section
+    );
+
+
+  const availableFields =
+    sourceColumns
+      .map(column =>
+        column.field
+      )
+      .filter(Boolean);
+
+
+  if (
+    section.hasCredentials
+  ) {
+
+    availableFields.push(
+      '_restrictedPassword'
+    );
+
+    if (
+      defaultTitles.has(
+        'Password'
+      )
+    ) {
+      defaults.add(
+        '_restrictedPassword'
+      );
+    }
+
+  }
+
+
+  const columnPreferences =
+    reconcileColumnVisibilityPreferences_(
+      preferenceKey,
+      availableFields
+    );
 
 
   sourceColumns.forEach(
@@ -543,9 +585,11 @@ function createStructuredTabulator(
           field,
 
         visible:
-          defaults.size === 0 ||
-          defaults.has(
-            field
+          isTableColumnVisibleByPreference_(
+            field,
+            defaults,
+            columnPreferences,
+            {}
           ),
 
         headerSort:
@@ -556,12 +600,6 @@ function createStructuredTabulator(
 
         minWidth:
           120,
-
-        widthGrow:
-          1,
-
-        widthShrink:
-          1,
 
         responsive:
           2
@@ -585,12 +623,6 @@ function createStructuredTabulator(
         column.maxWidth =
           190;
 
-        column.widthGrow =
-          0;
-
-        column.widthShrink =
-          0;
-
         column.resizable =
           false;
 
@@ -610,12 +642,6 @@ function createStructuredTabulator(
 
         column.minWidth =
           170;
-
-        column.widthGrow =
-          1;
-
-        column.widthShrink =
-          1;
 
         column.responsive =
           2;
@@ -639,12 +665,6 @@ function createStructuredTabulator(
 
         column.maxWidth =
           200;
-
-        column.widthGrow =
-          0;
-
-        column.widthShrink =
-          0;
 
         column.resizable =
           false;
@@ -673,12 +693,6 @@ function createStructuredTabulator(
         column.maxWidth =
           210;
 
-        column.widthGrow =
-          0;
-
-        column.widthShrink =
-          0;
-
         column.resizable =
           false;
 
@@ -699,12 +713,6 @@ function createStructuredTabulator(
 
         column.minWidth =
           170;
-
-        column.widthGrow =
-          1;
-
-        column.widthShrink =
-          1;
 
         column.responsive =
           3;
@@ -733,6 +741,12 @@ function createStructuredTabulator(
       }
 
 
+      applyColumnWidthPreference_(
+        column,
+        columnPreferences
+      );
+
+
       columns.push(
         column
       );
@@ -754,12 +768,28 @@ function createStructuredTabulator(
         section.hasCredentials
       ) {
 
-        columns.push(
+        const passwordColumn =
           createPasswordColumnDefinition(
             section,
             canEdit,
             defaultTitles
-          )
+          );
+
+        passwordColumn.visible =
+          isTableColumnVisibleByPreference_(
+            '_restrictedPassword',
+            defaults,
+            columnPreferences,
+            {}
+          );
+
+        applyColumnWidthPreference_(
+          passwordColumn,
+          columnPreferences
+        );
+
+        columns.push(
+          passwordColumn
         );
 
       }
@@ -783,6 +813,13 @@ function createStructuredTabulator(
   );
 
 
+  columns =
+    applyColumnOrderPreference_(
+      columns,
+      columnPreferences
+    );
+
+
   const table =
     new Tabulator(
       host,
@@ -794,13 +831,8 @@ function createStructuredTabulator(
         columns:
           columns,
 
-        /*
-         * Normal columns share available space.
-         * Explicitly-sized columns retain their
-         * configured widths.
-         */
         layout:
-          'fitColumns',
+          getNativeTableLayout_(),
 
         responsiveLayout:
           false,
@@ -830,9 +862,34 @@ function createStructuredTabulator(
       }
     );
 
+  bindTableColumnPreferenceEvents_(
+    table,
+    preferenceKey
+  );
+
 
   return table;
 
+}
+
+
+function getStructuredColumnPreferenceKey_(
+  section
+) {
+
+  const pageKey =
+    currentStructuredData &&
+    currentStructuredData.pageKey
+      ? currentStructuredData.pageKey
+      : currentPageKey || 'structured';
+
+  return pageKey + '.' +
+    (
+      section &&
+      section.key
+        ? section.key
+        : 'table'
+    );
 }
 
 
@@ -910,6 +967,32 @@ function buildStructuredColumnMenu(
 
   }
 
+  const preferenceKey =
+    getStructuredColumnPreferenceKey_(
+      section
+    );
+
+  const defaults =
+    new Set(
+      section.defaultColumns || []
+    );
+
+  const defaultTitles =
+    new Set(
+      section.defaultColumnTitles || []
+    );
+
+  if (
+    section.hasCredentials &&
+    defaultTitles.has(
+      'Password'
+    )
+  ) {
+    defaults.add(
+      '_restrictedPassword'
+    );
+  }
+
   const controls =
     document.createElement(
       'div'
@@ -961,7 +1044,9 @@ function buildStructuredColumnMenu(
       setAllStructuredColumnsVisible_(
         table,
         availableColumns,
-        true
+        true,
+        defaults,
+        preferenceKey
       );
       buildStructuredColumnMenu(
         table,
@@ -978,7 +1063,9 @@ function buildStructuredColumnMenu(
       setAllStructuredColumnsVisible_(
         table,
         availableColumns,
-        false
+        false,
+        defaults,
+        preferenceKey
       );
       buildStructuredColumnMenu(
         table,
@@ -1062,18 +1149,11 @@ function buildStructuredColumnMenu(
 
           }
 
-
-          /*
-           * Recalculate remaining column widths.
-           */
-          requestAnimationFrame(
-            function() {
-
-              table.redraw(
-                true
-              );
-
-            }
+          persistColumnVisibilityPreference_(
+            preferenceKey,
+            columnInfo.field,
+            this.checked,
+            defaults
           );
 
         }
@@ -1142,15 +1222,25 @@ function buildStructuredColumnMenu(
 function setAllStructuredColumnsVisible_(
   table,
   columns,
-  visible
+  visible,
+  defaults,
+  preferenceKey
 ) {
+
+  const preferences = {
+    hidden: [],
+    visible: []
+  };
 
   (columns || [])
     .forEach(columnInfo => {
 
+      const field =
+        columnInfo.field;
+
       const column =
         table.getColumn(
-          columnInfo.field
+          field
         );
 
       if (!column) {
@@ -1163,14 +1253,29 @@ function setAllStructuredColumnsVisible_(
         column.hide();
       }
 
+      const defaultVisible =
+        defaults.size === 0 ||
+        defaults.has(
+          field
+        );
+
+      if (visible) {
+        if (!defaultVisible) {
+          preferences.visible.push(
+            field
+          );
+        }
+      } else {
+        preferences.hidden.push(
+          field
+        );
+      }
+
     });
 
-  requestAnimationFrame(
-    function() {
-      table.redraw(
-        true
-      );
-    }
+  setColumnVisibilityPreferences_(
+    preferenceKey,
+    preferences
   );
 }
 
@@ -1221,6 +1326,36 @@ function isUsernameHeaderClient(
 }
 
 
+function isPasswordHeaderClient(
+  header
+) {
+
+  const aliases =
+    new Set([
+      'password',
+      'passwords',
+      'pass',
+      'passwd',
+      'pwd',
+      'pw',
+      'pword',
+      'passcode',
+      'passcodes',
+      'secret',
+      'secrets',
+      'credential',
+      'credentials'
+    ]);
+
+
+  return aliases.has(
+    normalizeSensitiveHeaderClient(
+      header
+    )
+  );
+}
+
+
 function createPasswordColumnDefinition(
   section,
   canEdit,
@@ -1247,12 +1382,6 @@ function createPasswordColumnDefinition(
 
     minWidth:
       112,
-
-    widthGrow:
-      0,
-
-    widthShrink:
-      0,
 
     resizable:
       true,
@@ -1453,8 +1582,8 @@ function restrictedPasswordFormatter(
           !rowData._passwordRevealed;
 
 
-        cell.getTable().redraw(
-          true
+        refreshPasswordCell_(
+          cell
         );
 
 
@@ -1536,11 +1665,9 @@ function restrictedPasswordFormatter(
              * password state because it lives
              * on rowData.
              */
-            cell
-              .getTable()
-              .redraw(
-                true
-              );
+            refreshPasswordCell_(
+              cell
+            );
 
         })
         .catch(function(error) {
@@ -1729,25 +1856,39 @@ function resizePasswordColumn(
       finalWidth
     );
 
-
-    /*
-     * Tabulator recalculates the remaining data
-     * columns around the expanded password column.
-     */
-    const table =
-      cell.getTable();
+  }
+}
 
 
-    requestAnimationFrame(
-      function() {
+function refreshPasswordCell_(
+  cell
+) {
 
-        table.redraw(
-          true
-        );
+  if (!cell) {
+    return;
+  }
 
-      }
-    );
+  const row =
+    cell.getRow &&
+    cell.getRow();
 
+  if (
+    row &&
+    typeof row.reformat === 'function'
+  ) {
+    row.reformat();
+    return;
+  }
+
+  const table =
+    cell.getTable &&
+    cell.getTable();
+
+  if (
+    table &&
+    typeof table.redraw === 'function'
+  ) {
+    table.redraw();
   }
 }
 
@@ -1773,12 +1914,6 @@ return {
 
     maxWidth:
       82,
-
-    widthGrow:
-      0,
-
-    widthShrink:
-      0,
 
     resizable:
       false,

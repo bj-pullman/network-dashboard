@@ -223,6 +223,18 @@ function renderDashboardWidgetAction_(
     `;
   }
 
+  if (widget.id === 'outages.summary') {
+    return `
+      <button
+        type="button"
+        class="btn btn-sm btn-light border"
+        onclick="navigateTo('outages')"
+      >
+        Open
+      </button>
+    `;
+  }
+
   if (
     widget.requiredIntegration === 'uptimerobot'
   ) {
@@ -257,6 +269,17 @@ function renderDashboardWidgetBody_(
   if (widget.type === 'kpi_group') {
     const value =
       widget.value || {};
+
+    if (widget.id === 'outages.summary') {
+      return `
+        <div class="row g-2">
+          ${dashboardMiniMetric('Active Outages', value.active || 0)}
+          ${dashboardMiniMetric('Last 30 Days', value.last30Days || 0)}
+          ${dashboardMiniMetric('30 Day Duration', value.durationLast30Label || '0m')}
+          ${dashboardMiniMetric('Tracked Total', value.total || 0)}
+        </div>
+      `;
+    }
 
     return `
       <div class="row g-2">

@@ -355,19 +355,26 @@ function buildInternetWanTable(data) {
         data:
           data.rows || [],
         layout:
-          'fitDataStretch',
+          getNativeTableLayout_(),
         reactiveData:
           false,
         pagination:
           'local',
         paginationSize:
           15,
+        movableColumns:
+          true,
         placeholder:
           'No WAN circuits found.',
         columns:
           columns
       }
     );
+
+  bindTableColumnPreferenceEvents_(
+    tableInstance,
+    'internetWan'
+  );
 
   tableInstance.on(
     'dataFiltered',
@@ -445,15 +452,19 @@ function getInternetWanColumns_(
           requiredColumns
         );
 
+      applyColumnWidthPreference_(
+        column,
+        preferences
+      );
+
       return column;
     };
 
-  return [
+  const columns = [
     applyVisible({
       title: 'Circuit',
       field: 'Circuit Name',
       minWidth: 180,
-      widthGrow: 1.5,
       formatter: function(cell) {
         const row =
           cell.getRow().getData();
@@ -570,12 +581,9 @@ function getInternetWanColumns_(
     {
   title: 'Actions',
 
-  width: 132,
-  minWidth: 132,
-  maxWidth: 132,
-
-  widthGrow: 0,
-  widthShrink: 0,
+  width: 164,
+  minWidth: 164,
+  maxWidth: 164,
 
   resizable: false,
   movable: false,
@@ -583,6 +591,7 @@ function getInternetWanColumns_(
   hozAlign: 'center',
   headerHozAlign: 'center',
   headerSort: false,
+  download: false,
 
   formatter: function(cell) {
     const row = cell.getRow().getData();
@@ -604,6 +613,26 @@ function getInternetWanColumns_(
     });
 
     actions.appendChild(viewButton);
+
+    if (
+      canOpenInternetWanOutages_() &&
+      String(row['Circuit ID'] || '').trim()
+    ) {
+      const outagesButton = document.createElement('button');
+      outagesButton.type = 'button';
+      outagesButton.className = 'btn btn-sm btn-light border';
+      outagesButton.title = 'View outages';
+      outagesButton.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i>';
+
+      outagesButton.addEventListener('click', function(event) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        openInternetWanOutages(row);
+      });
+
+      actions.appendChild(outagesButton);
+    }
 
     if (canEdit) {
       const editButton = document.createElement('button');
@@ -644,6 +673,11 @@ function getInternetWanColumns_(
   }
 }
   ];
+
+  return applyColumnOrderPreference_(
+    columns,
+    preferences
+  );
 }
 
 
@@ -652,6 +686,44 @@ function getInternetWanRequiredColumns_() {
   return {
     'Circuit Name': true
   };
+}
+
+
+function canOpenInternetWanOutages_() {
+
+  return !!(
+    appBootstrap &&
+    Array.isArray(appBootstrap.pages) &&
+    appBootstrap.pages.some(page =>
+      page.key === 'outages'
+    )
+  );
+}
+
+
+function openInternetWanOutages(
+  row
+) {
+
+  const circuitId =
+    String(
+      row &&
+      row['Circuit ID'] ||
+      ''
+    ).trim();
+
+  if (
+    circuitId &&
+    typeof requestOutageCircuitFilter === 'function'
+  ) {
+    requestOutageCircuitFilter(
+      circuitId
+    );
+  }
+
+  navigateTo(
+    'outages'
+  );
 }
 
 
@@ -831,15 +903,6 @@ function buildInternetWanColumnMenu_(
           defaults
         );
 
-        requestAnimationFrame(
-          function() {
-            if (tableInstance) {
-              tableInstance.redraw(
-                true
-              );
-            }
-          }
-        );
       }
     );
 
@@ -934,15 +997,6 @@ function setAllInternetWanColumnsVisible_(
     preferences
   );
 
-  requestAnimationFrame(
-    function() {
-      if (tableInstance) {
-        tableInstance.redraw(
-          true
-        );
-      }
-    }
-  );
 }
 
 

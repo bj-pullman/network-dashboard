@@ -94,41 +94,108 @@ function renderSettingsPage(data) {
 
         <div class="settings-grid">
           ${settingsTextField('branding.logo_url', 'Logo URL', values)}
-          ${settingsColorField('branding.primary_color', 'Primary Color', values)}
-          ${settingsColorField('branding.secondary_color', 'Secondary Color', values)}
-          ${settingsColorField('branding.accent_color', 'Accent Color', values)}
+          ${settingsColorField(
+            'branding.primary_color',
+            'Primary Color',
+            values,
+            'Controls the sidebar top section, primary buttons, primary icons and primary chart styling.'
+          )}
+          ${settingsColorField(
+            'branding.secondary_color',
+            'Secondary Color',
+            values,
+            'Controls secondary buttons, lower sidebar/navigation treatment and secondary theme surfaces.'
+          )}
+          ${settingsColorField(
+            'branding.accent_color',
+            'Accent Color',
+            values,
+            'Controls active navigation, page accents, breadcrumb accents, logo accents and emphasis elements.'
+          )}
+          ${settingsColorField(
+            'branding.header_font_color',
+            'Header Font Color',
+            values,
+            'Controls only the main page title and breadcrumb/path header text.'
+          )}
         </div>
 
         <div
           id="settingsBrandPreview"
           class="settings-brand-preview"
         >
-          <div class="settings-preview-mark">
-            <img
-              id="settingsPreviewLogo"
-              class="settings-preview-logo"
-              alt=""
-              hidden
-            >
-            <i
-              id="settingsPreviewFallbackIcon"
-              class="fa-solid fa-network-wired"
-            ></i>
-          </div>
-          <div>
-            <div
-              id="settingsPreviewTitle"
-              class="settings-preview-title"
-            >
-              ${escapeHtml(values['organization.short_name'] || values['app.name'] || 'Network Dashboard')}
+          <aside class="settings-preview-sidebar">
+            <div class="settings-preview-sidebar-top">
+              <div class="settings-preview-mark">
+                <img
+                  id="settingsPreviewLogo"
+                  class="settings-preview-logo"
+                  alt=""
+                  hidden
+                >
+                <i
+                  id="settingsPreviewFallbackIcon"
+                  class="fa-solid fa-network-wired"
+                ></i>
+              </div>
+              <div>
+                <div
+                  id="settingsPreviewTitle"
+                  class="settings-preview-title"
+                >
+                  ${escapeHtml(values['organization.short_name'] || values['app.name'] || 'Network Dashboard')}
+                </div>
+                <div class="settings-preview-subtitle">
+                  INFRASTRUCTURE
+                </div>
+              </div>
             </div>
-            <div
-              id="settingsPreviewSubtitle"
-              class="settings-preview-subtitle"
-            >
-              Network infrastructure overview
+
+            <div class="settings-preview-nav">
+              <div class="settings-preview-nav-item active">
+                <i class="fa-solid fa-globe"></i>
+                <span>Internet / WAN</span>
+              </div>
+              <div class="settings-preview-nav-item">
+                <i class="fa-solid fa-server"></i>
+                <span>Servers</span>
+              </div>
             </div>
-          </div>
+          </aside>
+
+          <main class="settings-preview-main">
+            <header class="settings-preview-header">
+              <div
+                id="settingsPreviewEyebrow"
+                class="settings-preview-eyebrow"
+              >
+                ${escapeHtml(values['organization.name'] || values['app.name'] || 'Network Dashboard')}
+              </div>
+              <div class="settings-preview-title-line">
+                <span>/</span>
+                <strong>Switches</strong>
+                <span>/</span>
+              </div>
+              <div class="settings-preview-accent-line"></div>
+            </header>
+
+            <div class="settings-preview-content">
+              <div class="settings-preview-buttons">
+                <button type="button" class="settings-preview-primary-button">
+                  Primary
+                </button>
+                <button type="button" class="settings-preview-secondary-button">
+                  Secondary
+                </button>
+              </div>
+
+              <div class="settings-preview-chart">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+            </div>
+          </main>
         </div>
 
       </section>
@@ -311,10 +378,24 @@ function settingsTextField(key, label, values) {
 }
 
 
-function settingsColorField(key, label, values) {
+function settingsColorField(key, label, values, description) {
+
+  const definition =
+    currentPageData &&
+    currentPageData.settings &&
+    Array.isArray(currentPageData.settings.definitions)
+      ? currentPageData.settings.definitions.find(item =>
+          item.key === key
+        )
+      : null;
 
   const value =
-    values[key] || '#17345f';
+    values[key] ||
+    (
+      definition &&
+      definition.defaultValue
+    ) ||
+    '#17345f';
 
   return `
     <label class="settings-field">
@@ -334,6 +415,11 @@ function settingsColorField(key, label, values) {
           oninput="syncSettingsColorInputs(this)"
         >
       </div>
+      ${
+        description
+          ? `<small class="settings-field-description">${escapeHtml(description)}</small>`
+          : ''
+      }
     </label>
   `;
 }
@@ -830,7 +916,7 @@ function updateSettingsBrandPreview_() {
     'Network infrastructure overview';
 
   preview.style.setProperty(
-    '--settings-preview-primary',
+    '--brand-primary',
     normalizeSettingsPreviewColor_(
       values['branding.primary_color'],
       '#17345f'
@@ -838,7 +924,7 @@ function updateSettingsBrandPreview_() {
   );
 
   preview.style.setProperty(
-    '--settings-preview-secondary',
+    '--brand-secondary',
     normalizeSettingsPreviewColor_(
       values['branding.secondary_color'],
       '#0d2342'
@@ -846,7 +932,39 @@ function updateSettingsBrandPreview_() {
   );
 
   preview.style.setProperty(
-    '--settings-preview-accent',
+    '--brand-accent',
+    normalizeSettingsPreviewColor_(
+      values['branding.accent_color'],
+      '#f4c430'
+    )
+  );
+
+  preview.style.setProperty(
+    '--header-font-color',
+    normalizeSettingsPreviewColor_(
+      values['branding.header_font_color'],
+      '#0d2342'
+    )
+  );
+
+  preview.style.setProperty(
+    '--navy-800',
+    normalizeSettingsPreviewColor_(
+      values['branding.primary_color'],
+      '#17345f'
+    )
+  );
+
+  preview.style.setProperty(
+    '--navy-900',
+    normalizeSettingsPreviewColor_(
+      values['branding.secondary_color'],
+      '#0d2342'
+    )
+  );
+
+  preview.style.setProperty(
+    '--gold',
     normalizeSettingsPreviewColor_(
       values['branding.accent_color'],
       '#f4c430'
@@ -863,13 +981,13 @@ function updateSettingsBrandPreview_() {
       title;
   }
 
-  const subtitleEl =
+  const eyebrowEl =
     document.getElementById(
-      'settingsPreviewSubtitle'
+      'settingsPreviewEyebrow'
     );
 
-  if (subtitleEl) {
-    subtitleEl.textContent =
+  if (eyebrowEl) {
+    eyebrowEl.textContent =
       subtitle;
   }
 

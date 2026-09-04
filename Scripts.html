@@ -28,6 +28,7 @@ const PREFETCH_PAGE_PRIORITY = [
   'accessPoints',
   'servers',
   'internetWan',
+  'outages',
   'routes',
   'securityCameras',
   'busCameras',
@@ -143,6 +144,7 @@ const PAGE_RENDERER_FUNCTIONS = {
   dashboard: 'renderDashboard',
   table: 'renderTablePage',
   internetWan: 'renderInternetWanPage',
+  outages: 'renderOutagesPage',
   uptimeRobot: 'renderUptimeRobotPage',
   structured: 'renderStructuredPage',
   workflow: 'renderWorkflowPage',
@@ -403,6 +405,9 @@ function applyBranding(
   const accent =
     branding.accentColor || '#f4c430';
 
+  const headerFont =
+    branding.headerFontColor || '#0d2342';
+
 
   root.style.setProperty(
     '--brand-primary',
@@ -417,6 +422,11 @@ function applyBranding(
   root.style.setProperty(
     '--brand-accent',
     accent
+  );
+
+  root.style.setProperty(
+    '--header-font-color',
+    headerFont
   );
 
   root.style.setProperty(
@@ -3064,6 +3074,19 @@ function renderPage(
 
 
   if (
+    page.type === 'outages'
+  ) {
+
+    renderOutagesPage(
+      data
+    );
+
+    return;
+
+  }
+
+
+  if (
     page.type === 'uptimeRobot'
   ) {
 
@@ -3226,6 +3249,16 @@ function openRecordModal(
   record
 ) {
 
+  const saveButton =
+    document.getElementById(
+      'saveRecordButton'
+    );
+
+  if (saveButton) {
+    saveButton.style.display =
+      '';
+  }
+
   document.getElementById(
     'recordModalTitle'
   ).textContent =
@@ -3319,6 +3352,15 @@ function openRecordModal(
           ? currentPageData.controlledOptions[header] || []
           : [];
 
+      const credentialField =
+        typeof isPasswordHeaderClient === 'function' &&
+        isPasswordHeaderClient(
+          header
+        ) &&
+        currentPageData &&
+        currentPageData.hasCredentials &&
+        currentPageData.permission === 'edit';
+
       const input =
         options.length
           ? document.createElement(
@@ -3333,6 +3375,20 @@ function openRecordModal(
         options.length
           ? 'form-select'
           : 'form-control';
+
+      if (
+        credentialField &&
+        input.tagName === 'INPUT'
+      ) {
+        input.type =
+          'password';
+        input.autocomplete =
+          'new-password';
+        input.placeholder =
+          editingRow
+            ? 'Leave blank to keep current password'
+            : 'Optional password';
+      }
 
 
       input.dataset.header =
@@ -3396,7 +3452,10 @@ function openRecordModal(
       } else {
 
         input.value =
-          record[header] || '';
+          credentialField &&
+          editingRow
+            ? ''
+            : record[header] || '';
 
       }
 
@@ -3409,6 +3468,28 @@ function openRecordModal(
       column.appendChild(
         input
       );
+
+      if (
+        credentialField &&
+        editingRow
+      ) {
+
+        const help =
+          document.createElement(
+            'div'
+          );
+
+        help.className =
+          'form-text';
+
+        help.textContent =
+          'Leave blank to keep the saved password.';
+
+        column.appendChild(
+          help
+        );
+
+      }
 
 
       row.appendChild(

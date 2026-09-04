@@ -1,0 +1,1519 @@
+<script>
+
+const OUTAGE_CIRCUIT_FILTER_STORAGE_KEY =
+  'networkDashboard.outageCircuitFilter';
+
+
+function renderOutagesPage(
+  data
+) {
+
+  data =
+    data || {};
+
+  data.summary =
+    data.summary || {
+      active: 0,
+      last30Days: 0,
+      durationLast30Label: '0m'
+    };
+
+  data.rows =
+    data.rows || [];
+
+  data.circuits =
+    data.circuits || [];
+
+  currentPageData =
+    data;
+
+  const canEdit =
+    data.permission === 'edit';
+
+  const canAdminAction =
+    appBootstrap &&
+    appBootstrap.user &&
+    appBootstrap.user.admin;
+
+  const integration =
+    data.integration || {};
+
+  const canSyncUptimeRobot =
+    !!(
+      canAdminAction &&
+      integration.enabled &&
+      integration.configurationComplete
+    );
+
+  const syncTitle =
+    integration.enabled
+      ? (
+          integration.configurationComplete
+            ? 'Sync UptimeRobot incidents'
+            : 'UptimeRobot is missing required Script Properties'
+        )
+      : 'UptimeRobot is disabled';
+
+  setPageHeader(
+    'Outages',
+    `${data.totalCount || 0} outage records`
+  );
+
+  document.getElementById(
+    'pageActions'
+  ).innerHTML = `
+    ${
+      canEdit
+        ? `
+          <button
+            type="button"
+            class="btn btn-sm btn-brand"
+            onclick="openOutageAddRecord()"
+          >
+            <i class="fa-solid fa-plus me-2"></i>
+            Add Outage
+          </button>
+        `
+        : ''
+    }
+
+    ${
+      canAdminAction
+        ? `
+          <button
+            type="button"
+            class="btn btn-sm btn-light border"
+            onclick="syncOutagesFromUptimeRobot(this)"
+            title="${escapeAttribute(syncTitle)}"
+            ${canSyncUptimeRobot ? '' : 'disabled'}
+          >
+            <i class="fa-solid fa-cloud-arrow-down me-2"></i>
+            Sync UptimeRobot
+          </button>
+        `
+        : ''
+    }
+
+    <button
+      type="button"
+      class="btn btn-sm btn-light border"
+      onclick="refreshCurrentPage(this)"
+    >
+      <i class="fa-solid fa-rotate me-2"></i>
+      Refresh
+    </button>
+  `;
+
+  document.getElementById(
+    'pageContent'
+  ).innerHTML = `
+    <div class="outages-layout">
+      <div class="outages-summary">
+        ${outageSummaryCard('Active Outages', data.summary.active, 'fa-triangle-exclamation')}
+        ${outageSummaryCard('Last 30 Days', data.summary.last30Days, 'fa-calendar-days')}
+        ${outageSummaryCard('30 Day Duration', data.summary.durationLast30Label, 'fa-clock')}
+      </div>
+
+      <div class="table-toolbar">
+        <div class="table-toolbar-left">
+          <div class="input-group input-group-sm table-search">
+            <span class="input-group-text bg-white">
+              <i class="fa-solid fa-magnifying-glass"></i>
+            </span>
+            <input
+              id="outageSearch"
+              type="search"
+              class="form-control"
+              placeholder="Search outages..."
+              oninput="applyOutageFilters()"
+            >
+          </div>
+
+          <select
+            id="outageCircuitFilter"
+            class="form-select form-select-sm outage-filter"
+            onchange="applyOutageFilters()"
+          >
+            <option value="">All circuits</option>
+            ${(data.circuits || []).map(circuit => `
+              <option value="${escapeAttribute(circuit.circuitId)}">
+                ${escapeHtml(formatOutageCircuitOption_(circuit))}
+              </option>
+            `).join('')}
+          </select>
+
+          <select
+            id="outageStatusFilter"
+            class="form-select form-select-sm outage-filter"
+            onchange="applyOutageFilters()"
+          >
+            <option value="">All statuses</option>
+            ${outageFilterOptions_(['Ongoing', 'Restored'])}
+          </select>
+
+          <select
+            id="outageSourceFilter"
+            class="form-select form-select-sm outage-filter"
+            onchange="applyOutageFilters()"
+          >
+            <option value="">All sources</option>
+            ${outageFilterOptions_(['Manual', 'UptimeRobot'])}
+          </select>
+
+          <div class="dropdown">
+            <button
+              class="btn btn-sm btn-light border dropdown-toggle"
+              data-bs-toggle="dropdown"
+            >
+              <i class="fa-solid fa-table-columns me-2"></i>
+              Columns
+            </button>
+            <div
+              id="outageColumnMenu"
+              class="dropdown-menu table-column-menu p-2 shadow"
+            ></div>
+          </div>
+
+          <button
+            class="btn btn-sm btn-light border"
+            onclick="clearOutageFilters()"
+          >
+            <i class="fa-solid fa-filter-circle-xmark me-2"></i>
+            Clear
+          </button>
+        </div>
+
+        <div class="table-toolbar-right">
+          <span
+            id="outageRecordCount"
+            class="record-count"
+          >
+            ${data.totalCount || 0} records
+          </span>
+        </div>
+      </div>
+
+      <div class="app-card table-card">
+        <div id="outagesTable"></div>
+      </div>
+    </div>
+  `;
+
+  buildOutagesTable_(
+    data
+  );
+
+  applyPendingOutageCircuitFilter_();
+}
+
+
+function outageSummaryCard(
+  label,
+  value,
+  icon
+) {
+
+  return `
+    <div class="metric-card outage-metric">
+      <div class="metric-icon">
+        <i class="fa-solid ${icon}"></i>
+      </div>
+      <div>
+        <div class="metric-label">${escapeHtml(label)}</div>
+        <div class="metric-value">${escapeHtml(value || 0)}</div>
+      </div>
+    </div>
+  `;
+}
+
+
+function outageFilterOptions_(
+  options
+) {
+
+  return (options || [])
+    .map(option => `
+      <option value="${escapeAttribute(option)}">
+        ${escapeHtml(option)}
+      </option>
+    `)
+    .join('');
+}
+
+
+function formatOutageCircuitOption_(
+  circuit
+) {
+
+  return [
+    circuit.circuitName || circuit.circuitId,
+    circuit.site || '',
+    circuit.provider || ''
+  ]
+    .filter(Boolean)
+    .join(' - ');
+}
+
+
+function buildOutagesTable_(
+  data
+) {
+
+  if (tableInstance) {
+    tableInstance.destroy();
+    tableInstance = null;
+  }
+
+  const columns =
+    getOutageColumns_(
+      data
+    );
+
+  tableInstance =
+    new Tabulator(
+      '#outagesTable',
+      {
+        data:
+          data.rows || [],
+        layout:
+          getNativeTableLayout_(),
+        reactiveData:
+          false,
+        pagination:
+          'local',
+        paginationSize:
+          15,
+        movableColumns:
+          true,
+        placeholder:
+          'No outage records found.',
+        columns:
+          columns,
+        rowFormatter:
+          function(row) {
+            const data =
+              row.getData();
+
+            if (data._ongoing) {
+              row
+                .getElement()
+                .classList
+                .add(
+                  'outage-row-ongoing'
+                );
+            }
+          }
+      }
+    );
+
+  bindTableColumnPreferenceEvents_(
+    tableInstance,
+    'outages'
+  );
+
+  tableInstance.on(
+    'dataFiltered',
+    function(filters, rows) {
+      const count =
+        document.getElementById(
+          'outageRecordCount'
+        );
+
+      if (count) {
+        count.textContent =
+          `${rows.length} records`;
+      }
+    }
+  );
+
+  buildOutageColumnMenu_(
+    data,
+    columns
+  );
+
+  bindColumnMenuRefresh_(
+    'outageColumnMenu',
+    function() {
+      buildOutageColumnMenu_(
+        data,
+        columns
+      );
+    }
+  );
+}
+
+
+function getOutageColumns_(
+  data
+) {
+
+  const fields =
+    getOutagePreferenceFields_();
+
+  const defaults =
+    new Set(
+      data.defaultColumns || []
+    );
+
+  const preferences =
+    reconcileColumnVisibilityPreferences_(
+      'outages',
+      fields
+    );
+
+  const requiredColumns = {
+    'Site / Location': true,
+    'Circuit Name': true
+  };
+
+  const applyVisible =
+    column => {
+      column.visible =
+        isTableColumnVisibleByPreference_(
+          column.field,
+          defaults,
+          preferences,
+          requiredColumns
+        );
+
+      applyColumnWidthPreference_(
+        column,
+        preferences
+      );
+
+      return column;
+    };
+
+  const columns = [
+    applyVisible({
+      title: 'Site',
+      field: 'Site / Location',
+      minWidth: 150
+    }),
+    applyVisible({
+      title: 'Circuit',
+      field: 'Circuit Name',
+      minWidth: 190,
+      formatter: function(cell) {
+        const row =
+          cell.getRow().getData();
+
+        return `
+          <div class="outage-circuit-cell">
+            <strong>${escapeHtml(row['Circuit Name'] || row['Circuit ID'])}</strong>
+            <small>${escapeHtml(row['Circuit ID'])}</small>
+          </div>
+        `;
+      }
+    }),
+    applyVisible({
+      title: 'Provider',
+      field: 'Provider',
+      minWidth: 140
+    }),
+    applyVisible({
+      title: 'Started',
+      field: 'Started',
+      minWidth: 165,
+      formatter: function(cell) {
+        return escapeHtml(
+          formatOutageDateDisplay_(
+            cell.getValue()
+          )
+        );
+      }
+    }),
+    applyVisible({
+      title: 'Restored',
+      field: 'Restored',
+      minWidth: 165,
+      formatter: function(cell) {
+        const value =
+          cell.getValue();
+
+        return value
+          ? escapeHtml(
+              formatOutageDateDisplay_(
+                value
+              )
+            )
+          : '<span class="outage-ongoing-text">Ongoing</span>';
+      }
+    }),
+    applyVisible({
+      title: 'Duration',
+      field: 'Duration',
+      minWidth: 115
+    }),
+    applyVisible({
+      title: 'Source',
+      field: 'Source',
+      minWidth: 120,
+      formatter: function(cell) {
+        return statusPill(
+          cell.getValue() || 'Manual'
+        );
+      }
+    }),
+    applyVisible({
+      title: 'Reason',
+      field: 'Cause / Reason',
+      minWidth: 180
+    }),
+    applyVisible({
+      title: 'Status',
+      field: 'Status',
+      minWidth: 120,
+      formatter: function(cell) {
+        return statusPill(
+          cell.getValue() || 'Restored'
+        );
+      }
+    }),
+    applyVisible({
+      title: 'Monitor ID',
+      field: 'UptimeRobot Monitor ID',
+      minWidth: 140
+    }),
+    applyVisible({
+      title: 'Notes',
+      field: 'Notes',
+      minWidth: 220
+    }),
+    applyVisible({
+      title: 'Outage ID',
+      field: 'Outage ID',
+      minWidth: 115
+    }),
+    applyVisible({
+      title: 'Entered By',
+      field: 'Entered By',
+      minWidth: 180
+    }),
+    applyVisible({
+      title: 'Created',
+      field: 'Created At',
+      minWidth: 165,
+      formatter: function(cell) {
+        return escapeHtml(
+          formatOutageDateDisplay_(
+            cell.getValue()
+          )
+        );
+      }
+    }),
+    applyVisible({
+      title: 'Updated',
+      field: 'Updated At',
+      minWidth: 165,
+      formatter: function(cell) {
+        return escapeHtml(
+          formatOutageDateDisplay_(
+            cell.getValue()
+          )
+        );
+      }
+    }),
+    applyVisible({
+      title: 'External Event',
+      field: 'External Event ID',
+      minWidth: 185
+    }),
+    createOutageActionColumn_(
+      data.permission === 'edit'
+    )
+  ];
+
+  return applyColumnOrderPreference_(
+    columns,
+    preferences
+  );
+}
+
+
+function getOutagePreferenceFields_() {
+
+  return [
+    'Site / Location',
+    'Circuit Name',
+    'Provider',
+    'Started',
+    'Restored',
+    'Duration',
+    'Source',
+    'Cause / Reason',
+    'Status',
+    'UptimeRobot Monitor ID',
+    'Notes',
+    'Outage ID',
+    'Entered By',
+    'Created At',
+    'Updated At',
+    'External Event ID'
+  ];
+}
+
+
+function createOutageActionColumn_(
+  canEdit
+) {
+
+  return {
+    title: 'Actions',
+    field: '_actions',
+    width: 92,
+    minWidth: 92,
+    maxWidth: 92,
+    resizable: false,
+    movable: false,
+    hozAlign: 'center',
+    headerHozAlign: 'center',
+    headerSort: false,
+    download: false,
+    formatter: function(cell) {
+
+      const row =
+        cell.getRow().getData();
+
+      const wrapper =
+        document.createElement(
+          'div'
+        );
+
+      wrapper.className =
+        'table-row-actions';
+
+      if (
+        !canEdit ||
+        normalizeClientKey_(
+          row.Source
+        ) !== 'manual'
+      ) {
+        const locked =
+          document.createElement(
+            'span'
+          );
+
+        locked.className =
+          'outage-action-note';
+
+        locked.title =
+          'Synchronized record';
+
+        locked.innerHTML =
+          '<i class="fa-solid fa-cloud-arrow-down"></i>';
+
+        wrapper.appendChild(
+          locked
+        );
+
+        return wrapper;
+      }
+
+      const edit =
+        document.createElement(
+          'button'
+        );
+
+      edit.type =
+        'button';
+      edit.className =
+        'table-row-action table-row-action-edit';
+      edit.title =
+        row._ongoing
+          ? 'Close outage'
+          : 'Edit outage';
+      edit.innerHTML =
+        row._ongoing
+          ? '<i class="fa-solid fa-check"></i>'
+          : '<i class="fa-solid fa-pen"></i>';
+
+      edit.addEventListener(
+        'click',
+        function(event) {
+          event.preventDefault();
+          event.stopPropagation();
+          openOutageEditRecord(
+            row
+          );
+        }
+      );
+
+      wrapper.appendChild(
+        edit
+      );
+
+      const remove =
+        document.createElement(
+          'button'
+        );
+
+      remove.type =
+        'button';
+      remove.className =
+        'table-row-action table-row-action-delete';
+      remove.title =
+        'Delete outage';
+      remove.innerHTML =
+        '<i class="fa-regular fa-trash-can"></i>';
+
+      remove.addEventListener(
+        'click',
+        function(event) {
+          event.preventDefault();
+          event.stopPropagation();
+          confirmDeleteOutage(
+            row,
+            remove
+          );
+        }
+      );
+
+      wrapper.appendChild(
+        remove
+      );
+
+      return wrapper;
+    }
+  };
+}
+
+
+function normalizeClientKey_(
+  value
+) {
+
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+
+function buildOutageColumnMenu_(
+  data,
+  columns
+) {
+
+  const menu =
+    document.getElementById(
+      'outageColumnMenu'
+    );
+
+  if (
+    !menu ||
+    !tableInstance
+  ) {
+    return;
+  }
+
+  menu.innerHTML =
+    '';
+
+  const defaults =
+    new Set(
+      data.defaultColumns || []
+    );
+
+  const requiredColumns = {
+    'Site / Location': true,
+    'Circuit Name': true
+  };
+
+  const selectableColumns =
+    columns.filter(column =>
+      column.field &&
+      column.field !== '_actions'
+    );
+
+  const controls =
+    document.createElement(
+      'div'
+    );
+
+  controls.className =
+    'column-menu-controls';
+
+  const selectAll =
+    document.createElement(
+      'button'
+    );
+
+  selectAll.type =
+    'button';
+  selectAll.className =
+    'btn btn-sm btn-light border';
+  selectAll.textContent =
+    'Select All';
+
+  const clearAll =
+    document.createElement(
+      'button'
+    );
+
+  clearAll.type =
+    'button';
+  clearAll.className =
+    'btn btn-sm btn-light border';
+  clearAll.textContent =
+    'Clear All';
+
+  controls.appendChild(
+    selectAll
+  );
+  controls.appendChild(
+    clearAll
+  );
+  menu.appendChild(
+    controls
+  );
+
+  selectAll.addEventListener(
+    'click',
+    function(event) {
+      event.stopPropagation();
+      setAllOutageColumnsVisible_(
+        selectableColumns,
+        true,
+        defaults,
+        requiredColumns
+      );
+      buildOutageColumnMenu_(
+        data,
+        columns
+      );
+    }
+  );
+
+  clearAll.addEventListener(
+    'click',
+    function(event) {
+      event.stopPropagation();
+      setAllOutageColumnsVisible_(
+        selectableColumns,
+        false,
+        defaults,
+        requiredColumns
+      );
+      buildOutageColumnMenu_(
+        data,
+        columns
+      );
+    }
+  );
+
+  selectableColumns.forEach(columnDefinition => {
+
+    const field =
+      columnDefinition.field;
+
+    const column =
+      tableInstance.getColumn(
+        field
+      );
+
+    const wrapper =
+      document.createElement(
+        'label'
+      );
+
+    wrapper.className =
+      'dropdown-item d-flex align-items-center gap-2';
+
+    wrapper.addEventListener(
+      'click',
+      function(event) {
+        event.stopPropagation();
+      }
+    );
+
+    const checkbox =
+      document.createElement(
+        'input'
+      );
+
+    checkbox.type =
+      'checkbox';
+    checkbox.className =
+      'form-check-input m-0';
+    checkbox.checked =
+      !!(
+        column &&
+        column.isVisible()
+      );
+    checkbox.disabled =
+      !!requiredColumns[field];
+
+    checkbox.addEventListener(
+      'change',
+      function(event) {
+        event.stopPropagation();
+
+        if (this.checked) {
+          tableInstance.showColumn(
+            field
+          );
+        } else {
+          tableInstance.hideColumn(
+            field
+          );
+        }
+
+        persistColumnVisibilityPreference_(
+          'outages',
+          field,
+          this.checked,
+          defaults
+        );
+      }
+    );
+
+    const label =
+      document.createElement(
+        'span'
+      );
+
+    label.textContent =
+      requiredColumns[field]
+        ? columnDefinition.title + ' (required)'
+        : columnDefinition.title;
+
+    wrapper.appendChild(
+      checkbox
+    );
+    wrapper.appendChild(
+      label
+    );
+    menu.appendChild(
+      wrapper
+    );
+
+  });
+}
+
+
+function setAllOutageColumnsVisible_(
+  columns,
+  visible,
+  defaults,
+  requiredColumns
+) {
+
+  const preferences = {
+    hidden: [],
+    visible: []
+  };
+
+  columns.forEach(columnDefinition => {
+
+    const field =
+      columnDefinition.field;
+
+    const column =
+      tableInstance.getColumn(
+        field
+      );
+
+    const shouldShow =
+      visible ||
+      requiredColumns[field];
+
+    if (column) {
+      if (shouldShow) {
+        tableInstance.showColumn(
+          field
+        );
+      } else {
+        tableInstance.hideColumn(
+          field
+        );
+      }
+    }
+
+    if (requiredColumns[field]) {
+      return;
+    }
+
+    const defaultVisible =
+      defaults.size === 0 ||
+      defaults.has(field);
+
+    if (shouldShow) {
+      if (!defaultVisible) {
+        preferences.visible.push(
+          field
+        );
+      }
+    } else {
+      preferences.hidden.push(
+        field
+      );
+    }
+
+  });
+
+  setColumnVisibilityPreferences_(
+    'outages',
+    preferences
+  );
+}
+
+
+function applyOutageFilters() {
+
+  if (!tableInstance) {
+    return;
+  }
+
+  const search =
+    String(
+      document.getElementById(
+        'outageSearch'
+      ).value || ''
+    ).toLowerCase();
+
+  const circuitId =
+    document.getElementById(
+      'outageCircuitFilter'
+    ).value;
+
+  const status =
+    document.getElementById(
+      'outageStatusFilter'
+    ).value;
+
+  const source =
+    document.getElementById(
+      'outageSourceFilter'
+    ).value;
+
+  tableInstance.setFilter(function(row) {
+
+    if (
+      circuitId &&
+      row['Circuit ID'] !== circuitId
+    ) {
+      return false;
+    }
+
+    if (
+      status &&
+      row.Status !== status
+    ) {
+      return false;
+    }
+
+    if (
+      source &&
+      row.Source !== source
+    ) {
+      return false;
+    }
+
+    if (!search) {
+      return true;
+    }
+
+    return [
+      row['Outage ID'],
+      row['Circuit ID'],
+      row['Circuit Name'],
+      row['Site / Location'],
+      row.Provider,
+      row.Source,
+      row['Cause / Reason'],
+      row.Notes,
+      row.Status
+    ]
+      .join(' ')
+      .toLowerCase()
+      .includes(search);
+
+  });
+}
+
+
+function clearOutageFilters() {
+
+  [
+    'outageSearch',
+    'outageCircuitFilter',
+    'outageStatusFilter',
+    'outageSourceFilter'
+  ].forEach(id => {
+    const element =
+      document.getElementById(id);
+
+    if (element) {
+      element.value =
+        '';
+    }
+  });
+
+  if (tableInstance) {
+    tableInstance.clearFilter();
+  }
+}
+
+
+function applyPendingOutageCircuitFilter_() {
+
+  let circuitId =
+    '';
+
+  try {
+    circuitId =
+      sessionStorage.getItem(
+        OUTAGE_CIRCUIT_FILTER_STORAGE_KEY
+      ) || '';
+
+    if (circuitId) {
+      sessionStorage.removeItem(
+        OUTAGE_CIRCUIT_FILTER_STORAGE_KEY
+      );
+    }
+  } catch (error) {
+    circuitId =
+      '';
+  }
+
+  if (!circuitId) {
+    return;
+  }
+
+  const select =
+    document.getElementById(
+      'outageCircuitFilter'
+    );
+
+  if (!select) {
+    return;
+  }
+
+  select.value =
+    circuitId;
+
+  applyOutageFilters();
+}
+
+
+function requestOutageCircuitFilter(
+  circuitId
+) {
+
+  try {
+    sessionStorage.setItem(
+      OUTAGE_CIRCUIT_FILTER_STORAGE_KEY,
+      String(circuitId || '')
+    );
+  } catch (error) {}
+}
+
+
+function openOutageAddRecord() {
+
+  editingRow =
+    null;
+
+  openOutageRecordModal_(
+    'Add Outage',
+    {}
+  );
+}
+
+
+function openOutageEditRecord(
+  row
+) {
+
+  if (
+    normalizeClientKey_(
+      row && row.Source
+    ) !== 'manual'
+  ) {
+    showToast(
+      'UptimeRobot outage records are updated by sync.'
+    );
+    return;
+  }
+
+  editingRow =
+    row;
+
+  openOutageRecordModal_(
+    row && row._ongoing
+      ? 'Close Outage'
+      : 'Edit Outage',
+    row || {}
+  );
+}
+
+
+function openOutageRecordModal_(
+  title,
+  record
+) {
+
+  const saveButton =
+    document.getElementById(
+      'saveRecordButton'
+    );
+
+  if (saveButton) {
+    saveButton.style.display =
+      '';
+  }
+
+  document.getElementById(
+    'recordModalTitle'
+  ).textContent =
+    title;
+
+  const body =
+    document.getElementById(
+      'recordModalBody'
+    );
+
+  body.innerHTML = `
+    <div class="form-required-note">
+      <span class="required-marker">*</span> Required
+    </div>
+
+    <div class="outage-form">
+      <label class="internet-wan-field internet-wan-field-full">
+        <span>Circuit <span class="required-marker">*</span></span>
+        <select
+          class="form-select"
+          data-outage-field="Circuit ID"
+          required
+        >
+          <option value="">Select circuit</option>
+          ${(currentPageData.circuits || []).map(circuit => `
+            <option
+              value="${escapeAttribute(circuit.circuitId)}"
+              ${record['Circuit ID'] === circuit.circuitId ? 'selected' : ''}
+            >
+              ${escapeHtml(formatOutageCircuitOption_(circuit))}
+            </option>
+          `).join('')}
+        </select>
+      </label>
+
+      <label class="internet-wan-field">
+        <span>Started <span class="required-marker">*</span></span>
+        <input
+          class="form-control"
+          type="datetime-local"
+          data-outage-field="Started"
+          value="${escapeAttribute(formatOutageDateInput_(record.Started))}"
+          required
+        >
+      </label>
+
+      <label class="internet-wan-field">
+        <span>Restored</span>
+        <input
+          class="form-control"
+          type="datetime-local"
+          data-outage-field="Restored"
+          value="${escapeAttribute(formatOutageDateInput_(record.Restored))}"
+        >
+      </label>
+
+      <label class="internet-wan-field internet-wan-field-full">
+        <span>Cause / Reason</span>
+        <input
+          class="form-control"
+          data-outage-field="Cause / Reason"
+          value="${escapeAttribute(record['Cause / Reason'] || '')}"
+        >
+      </label>
+
+      <label class="internet-wan-field internet-wan-field-full">
+        <span>Notes</span>
+        <textarea
+          class="form-control"
+          rows="4"
+          data-outage-field="Notes"
+        >${escapeHtml(record.Notes || '')}</textarea>
+      </label>
+    </div>
+  `;
+
+  document.getElementById(
+    'saveRecordButton'
+  ).onclick =
+    saveOutageFromModal;
+
+  recordModal.show();
+}
+
+
+function saveOutageFromModal() {
+
+  const record =
+    {};
+
+  document
+    .querySelectorAll(
+      '#recordModalBody [data-outage-field]'
+    )
+    .forEach(input => {
+      record[input.dataset.outageField] =
+        input.value;
+    });
+
+  if (editingRow) {
+    record._row =
+      editingRow._row;
+  }
+
+  const saveButton =
+    setActionWorking(
+      document.getElementById(
+        'saveRecordButton'
+      ),
+      editingRow
+        ? 'Updating...'
+        : 'Creating...'
+    );
+
+  scriptRunPromise_(
+    'appSaveOutage',
+    runner =>
+      runner.appSaveOutage(
+        record
+      )
+  )
+    .then(function(data) {
+
+      setActionSuccess(
+        saveButton,
+        'Saved'
+      );
+
+      recordModal.hide();
+
+      currentPageData =
+        data;
+
+      setClientCache(
+        'outages',
+        data,
+        {
+          source: 'outage-save'
+        }
+      );
+
+      renderOutagesPage(
+        data
+      );
+
+      showToast(
+        'Outage saved.'
+      );
+
+    })
+    .catch(function(error) {
+      setActionError(
+        saveButton,
+        'Save Failed'
+      );
+      handleFailure(
+        error,
+        'save outage'
+      );
+    });
+}
+
+
+function confirmDeleteOutage(
+  row,
+  button
+) {
+
+  if (
+    !confirm(
+      'Delete this manual outage permanently?'
+    )
+  ) {
+    return;
+  }
+
+  const actionButton =
+    setActionWorking(
+      button,
+      'Deleting...'
+    );
+
+  scriptRunPromise_(
+    'appDeleteOutage',
+    runner =>
+      runner.appDeleteOutage(
+        row._row
+      )
+  )
+    .then(function(data) {
+
+      setActionSuccess(
+        actionButton,
+        'Deleted'
+      );
+
+      currentPageData =
+        data;
+
+      setClientCache(
+        'outages',
+        data,
+        {
+          source: 'outage-delete'
+        }
+      );
+
+      renderOutagesPage(
+        data
+      );
+
+      showToast(
+        'Outage deleted.'
+      );
+
+    })
+    .catch(function(error) {
+      setActionError(
+        actionButton,
+        'Delete Failed'
+      );
+      handleFailure(
+        error,
+        'delete outage'
+      );
+    });
+}
+
+
+function syncOutagesFromUptimeRobot(
+  button
+) {
+
+  const actionButton =
+    setActionWorking(
+      button,
+      'Syncing...'
+    );
+
+  scriptRunPromise_(
+    'appSyncUptimeRobotOutages',
+    runner =>
+      runner.appSyncUptimeRobotOutages()
+  )
+    .then(function(result) {
+
+      const data =
+        result.outages;
+
+      setActionSuccess(
+        actionButton,
+        'Synced'
+      );
+
+      clearClientPageCache_();
+
+      currentPageData =
+        data;
+
+      renderOutagesPage(
+        data
+      );
+
+      showToast(
+        result.syncResult &&
+        result.syncResult.outageSyncWarning
+          ? result.syncResult.message
+          : 'Outages synced.'
+      );
+
+    })
+    .catch(function(error) {
+      setActionError(
+        actionButton,
+        'Sync Failed'
+      );
+      handleFailure(
+        error,
+        'sync outages'
+      );
+    });
+}
+
+
+function formatOutageDateDisplay_(
+  value
+) {
+
+  const text =
+    String(value || '').trim();
+
+  if (!text) {
+    return '';
+  }
+
+  const date =
+    new Date(text);
+
+  if (
+    isNaN(
+      date.getTime()
+    )
+  ) {
+    return text;
+  }
+
+  return date.toLocaleString();
+}
+
+
+function formatOutageDateInput_(
+  value
+) {
+
+  const text =
+    String(value || '').trim();
+
+  if (!text) {
+    return '';
+  }
+
+  const date =
+    new Date(text);
+
+  if (
+    isNaN(
+      date.getTime()
+    )
+  ) {
+    return '';
+  }
+
+  const pad =
+    value =>
+      String(value)
+        .padStart(
+          2,
+          '0'
+        );
+
+  return date.getFullYear() +
+    '-' +
+    pad(date.getMonth() + 1) +
+    '-' +
+    pad(date.getDate()) +
+    'T' +
+    pad(date.getHours()) +
+    ':' +
+    pad(date.getMinutes());
+}
+
+</script>

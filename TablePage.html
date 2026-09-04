@@ -445,7 +445,7 @@ function buildTabulator(data) {
     );
 
 
-  const columns =
+  let columns =
     data.headers.map(
       header => {
 
@@ -454,13 +454,22 @@ function buildTabulator(data) {
             .trim()
             .toLowerCase();
 
+        if (
+          typeof isPasswordHeaderClient === 'function' &&
+          isPasswordHeaderClient(
+            header
+          ) &&
+          data.hasCredentials
+        ) {
 
-        /*
-         * Every visible data column participates in
-         * filling the available table width.
-         *
-         * Do NOT assign fixed widths here.
-         */
+          return createStandardPasswordColumnDefinition_(
+            defaults,
+            columnPreferences,
+            canEdit
+          );
+
+        }
+
         const column = {
 
           title: header,
@@ -479,19 +488,10 @@ function buildTabulator(data) {
 
           tooltip: true,
 
-          minWidth: 90,
-
-          widthGrow: 1,
-
-          widthShrink: 1
+          minWidth: 110
 
         };
 
-
-        /*
-         * Give naturally larger fields a larger
-         * share of the available width.
-         */
 
         if (
           normalized === 'device label' ||
@@ -499,7 +499,6 @@ function buildTabulator(data) {
           normalized === 'destination'
         ) {
 
-          column.widthGrow = 1.35;
           column.minWidth = 120;
 
         }
@@ -514,7 +513,6 @@ function buildTabulator(data) {
           normalized === 'wasabi schedule'
         ) {
 
-          column.widthGrow = 1.65;
           column.minWidth = 130;
 
         }
@@ -525,7 +523,6 @@ function buildTabulator(data) {
           normalized === 'ip address'
         ) {
 
-          column.widthGrow = 1.1;
           column.minWidth = 115;
 
         }
@@ -535,7 +532,6 @@ function buildTabulator(data) {
           normalized === 'status'
         ) {
 
-          column.widthGrow = .8;
           column.minWidth = 100;
 
         }
@@ -547,7 +543,6 @@ function buildTabulator(data) {
           normalized === 'dist'
         ) {
 
-          column.widthGrow = .65;
           column.minWidth = 70;
 
         }
@@ -568,6 +563,11 @@ function buildTabulator(data) {
 
         }
 
+        applyColumnWidthPreference_(
+          column,
+          columnPreferences
+        );
+
 
         return column;
 
@@ -579,9 +579,7 @@ function buildTabulator(data) {
    * ACTION MENU
    *
    * Dedicated column on EVERY table.
-   * Exactly 56px.
-   * Never grows.
-   * Never shrinks.
+   * Fixed width and excluded from user ordering.
    */
 
   columns.push({
@@ -600,12 +598,6 @@ function buildTabulator(data) {
 
     maxWidth:
       82,
-
-    widthGrow:
-      0,
-
-    widthShrink:
-      0,
 
     resizable:
       false,
@@ -747,6 +739,12 @@ function buildTabulator(data) {
 
   });
 
+  columns =
+    applyColumnOrderPreference_(
+      columns,
+      columnPreferences
+    );
+
 
   tableInstance =
     new Tabulator(
@@ -759,15 +757,11 @@ function buildTabulator(data) {
         columns:
           columns,
 
-        /*
-        * Data columns share the available width.
-        * Actions remains fixed-width.
-        *
-        * No fixed table height:
-        * the browser window handles vertical scrolling.
-        */
         layout:
-          'fitColumns',
+          getNativeTableLayout_(),
+
+        responsiveLayout:
+          false,
 
         pagination:
           true,
@@ -794,6 +788,11 @@ function buildTabulator(data) {
       }
     );
 
+  bindTableColumnPreferenceEvents_(
+    tableInstance,
+    data.pageKey
+  );
+
 
   tableInstance.on(
     'dataFiltered',
@@ -801,18 +800,10 @@ function buildTabulator(data) {
   );
 
 
-  /*
-   * Force a redraw after Tabulator has actually
-   * been mounted and knows its container width.
-   */
   requestAnimationFrame(
     function() {
 
       if (tableInstance) {
-
-        tableInstance.redraw(
-          true
-        );
 
         buildColumnMenu(
           data
@@ -1020,14 +1011,6 @@ function buildColumnMenu(
             defaults
           );
 
-          requestAnimationFrame(
-            function() {
-              tableInstance.redraw(
-                true
-              );
-            }
-          );
-
         }
       );
 
@@ -1060,6 +1043,67 @@ function buildColumnMenu(
 
     }
   );
+}
+
+
+function createStandardPasswordColumnDefinition_(
+  defaults,
+  preferences,
+  canEdit
+) {
+
+  const column = {
+
+    title:
+      'Password',
+
+    field:
+      'Password',
+
+    visible:
+      isTableColumnVisibleByPreference_(
+        'Password',
+        defaults,
+        preferences,
+        {}
+      ),
+
+    width:
+      112,
+
+    minWidth:
+      112,
+
+    resizable:
+      true,
+
+    headerSort:
+      false,
+
+    download:
+      false,
+
+    formatter:
+      function(cell) {
+
+        return restrictedPasswordFormatter(
+          cell,
+          {
+            key: 'main'
+          },
+          canEdit
+        );
+
+      }
+
+  };
+
+  applyColumnWidthPreference_(
+    column,
+    preferences
+  );
+
+  return column;
 }
 
 
@@ -1124,16 +1168,6 @@ function setAllTableColumnsVisible_(
     data.pageKey,
     preferences
   );
-
-  requestAnimationFrame(
-    function() {
-      if (tableInstance) {
-        tableInstance.redraw(
-          true
-        );
-      }
-    }
-  );
 }
 
 
@@ -1146,7 +1180,7 @@ function getColumnStorageKey_(
 }
 
 
-function getColumnVisibilityPreferences_(
+function getColumnPreferences_(
   pageKey
 ) {
 
@@ -1171,14 +1205,35 @@ function getColumnVisibilityPreferences_(
       visible:
         Array.isArray(parsed.visible)
           ? parsed.visible
+          : [],
+      widths:
+        parsed.widths &&
+        typeof parsed.widths === 'object'
+          ? parsed.widths
+          : {},
+      order:
+        Array.isArray(parsed.order)
+          ? parsed.order
           : []
     };
   } catch (error) {
     return {
       hidden: [],
-      visible: []
+      visible: [],
+      widths: {},
+      order: []
     };
   }
+}
+
+
+function getColumnVisibilityPreferences_(
+  pageKey
+) {
+
+  return getColumnPreferences_(
+    pageKey
+  );
 }
 
 
@@ -1193,7 +1248,7 @@ function reconcileColumnVisibilityPreferences_(
     );
 
   const current =
-    getColumnVisibilityPreferences_(
+    getColumnPreferences_(
       pageKey
     );
 
@@ -1209,24 +1264,59 @@ function reconcileColumnVisibilityPreferences_(
         available.has(field)
       );
 
+  const widths = {};
+
+  Object.keys(
+    current.widths || {}
+  ).forEach(field => {
+
+    const width =
+      normalizeColumnWidthPreference_(
+        current.widths[field]
+      );
+
+    if (
+      available.has(field) &&
+      width
+    ) {
+      widths[field] =
+        width;
+    }
+
+  });
+
+  const order =
+    (current.order || [])
+      .filter(field =>
+        available.has(field)
+      );
+
   if (
     hidden.length !==
       (current.hidden || []).length ||
     visible.length !==
-      (current.visible || []).length
+      (current.visible || []).length ||
+    Object.keys(widths).length !==
+      Object.keys(current.widths || {}).length ||
+    order.length !==
+      (current.order || []).length
   ) {
-    setColumnVisibilityPreferences_(
+    setColumnPreferences_(
       pageKey,
       {
         hidden: hidden,
-        visible: visible
+        visible: visible,
+        widths: widths,
+        order: order
       }
     );
   }
 
   return {
     hidden: hidden,
-    visible: visible
+    visible: visible,
+    widths: widths,
+    order: order
   };
 }
 
@@ -1272,10 +1362,22 @@ function bindColumnMenuRefresh_(
 }
 
 
-function setColumnVisibilityPreferences_(
+function setColumnPreferences_(
   pageKey,
   preferences
 ) {
+
+  const current =
+    getColumnPreferences_(
+      pageKey
+    );
+
+  const next =
+    Object.assign(
+      {},
+      current,
+      preferences || {}
+    );
 
   try {
     localStorage.setItem(
@@ -1284,12 +1386,278 @@ function setColumnVisibilityPreferences_(
       ),
       JSON.stringify({
         hidden:
-          preferences.hidden || [],
+          next.hidden || [],
         visible:
-          preferences.visible || []
+          next.visible || [],
+        widths:
+          next.widths || {},
+        order:
+          next.order || []
       })
     );
   } catch (error) {}
+}
+
+
+function setColumnVisibilityPreferences_(
+  pageKey,
+  preferences
+) {
+
+  setColumnPreferences_(
+    pageKey,
+    {
+      hidden:
+        preferences.hidden || [],
+      visible:
+        preferences.visible || []
+    }
+  );
+}
+
+
+function normalizeColumnWidthPreference_(
+  width
+) {
+
+  const value =
+    Math.round(
+      Number(width)
+    );
+
+  return Number.isFinite(value) &&
+    value >= 40 &&
+    value <= 1400
+      ? value
+      : 0;
+}
+
+
+function applyColumnWidthPreference_(
+  column,
+  preferences
+) {
+
+  if (
+    !column ||
+    !column.field
+  ) {
+    return column;
+  }
+
+  const width =
+    normalizeColumnWidthPreference_(
+      preferences &&
+      preferences.widths &&
+      preferences.widths[column.field]
+    );
+
+  if (width) {
+    column.width =
+      width;
+  }
+
+  return column;
+}
+
+
+function applyColumnOrderPreference_(
+  columns,
+  preferences
+) {
+
+  const order =
+    preferences &&
+    Array.isArray(preferences.order)
+      ? preferences.order
+      : [];
+
+  if (!order.length) {
+    return columns;
+  }
+
+  const actionColumns = [];
+
+  const byField = {};
+
+  const remaining = [];
+
+  (columns || [])
+    .forEach(column => {
+
+      if (column.field === '_actions') {
+        actionColumns.push(
+          column
+        );
+        return;
+      }
+
+      if (column.field) {
+        byField[column.field] =
+          column;
+      }
+
+      remaining.push(
+        column
+      );
+
+    });
+
+  const ordered = [];
+
+  order.forEach(field => {
+
+    if (byField[field]) {
+      ordered.push(
+        byField[field]
+      );
+      delete byField[field];
+    }
+
+  });
+
+  remaining.forEach(column => {
+
+    if (
+      !column.field ||
+      byField[column.field]
+    ) {
+      ordered.push(
+        column
+      );
+
+      if (column.field) {
+        delete byField[column.field];
+      }
+    }
+
+  });
+
+  return ordered.concat(
+    actionColumns
+  );
+}
+
+
+function getNativeTableLayout_() {
+
+  return 'fitDataTable';
+}
+
+
+function bindTableColumnPreferenceEvents_(
+  table,
+  pageKey
+) {
+
+  if (
+    !table ||
+    !pageKey
+  ) {
+    return;
+  }
+
+  table.on(
+    'columnResized',
+    function(column) {
+
+      persistColumnWidthPreference_(
+        pageKey,
+        column
+      );
+
+    }
+  );
+
+  table.on(
+    'columnMoved',
+    function() {
+
+      persistColumnOrderPreference_(
+        pageKey,
+        table
+      );
+
+    }
+  );
+}
+
+
+function persistColumnWidthPreference_(
+  pageKey,
+  column
+) {
+
+  if (
+    !column ||
+    column.getField() === '_actions'
+  ) {
+    return;
+  }
+
+  const field =
+    column.getField();
+
+  const width =
+    normalizeColumnWidthPreference_(
+      column.getWidth()
+    );
+
+  if (!width) {
+    return;
+  }
+
+  const preferences =
+    getColumnPreferences_(
+      pageKey
+    );
+
+  const widths =
+    Object.assign(
+      {},
+      preferences.widths || {}
+    );
+
+  widths[field] =
+    width;
+
+  setColumnPreferences_(
+    pageKey,
+    {
+      widths:
+        widths
+    }
+  );
+}
+
+
+function persistColumnOrderPreference_(
+  pageKey,
+  table
+) {
+
+  if (!table) {
+    return;
+  }
+
+  const order =
+    table
+      .getColumns()
+      .map(column =>
+        column.getField()
+      )
+      .filter(field =>
+        field &&
+        field !== '_actions'
+      );
+
+  setColumnPreferences_(
+    pageKey,
+    {
+      order:
+        order
+    }
+  );
 }
 
 
