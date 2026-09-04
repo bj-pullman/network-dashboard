@@ -355,7 +355,7 @@ function buildInternetWanTable(data) {
         data:
           data.rows || [],
         layout:
-          'fitColumns',
+          'fitDataStretch',
         reactiveData:
           false,
         pagination:
@@ -437,15 +437,14 @@ function getInternetWanColumns_(
 
   const applyVisible =
     column => {
-      if (column.field !== '_actions') {
-        column.visible =
-          isTableColumnVisibleByPreference_(
-            column.field,
-            defaults,
-            preferences,
-            requiredColumns
-          );
-      }
+      column.visible =
+        isTableColumnVisibleByPreference_(
+          column.field,
+          defaults,
+          preferences,
+          requiredColumns
+        );
+
       return column;
     };
 
@@ -569,79 +568,81 @@ function getInternetWanColumns_(
       minWidth: 180
     }),
     {
-      title: 'Actions',
-      field: '_actions',
-      width: 132,
-      minWidth: 132,
-      maxWidth: 132,
-      widthGrow: 0,
-      widthShrink: 0,
-      resizable: false,
-      movable: false,
-      hozAlign: 'right',
-      headerHozAlign: 'right',
-      headerSort: false,
-      formatter: function() {
-        return `
-          <div class="internet-wan-actions">
-            <button
-              type="button"
-              class="btn btn-sm btn-light border"
-              data-wan-action="view"
-              title="View circuit"
-            >
-              <i class="fa-solid fa-eye"></i>
-            </button>
-            ${
-              canEdit
-                ? `
-                  <button
-                    type="button"
-                    class="btn btn-sm btn-light border"
-                    data-wan-action="edit"
-                    title="Edit circuit"
-                  >
-                    <i class="fa-solid fa-pen"></i>
-                  </button>
-                  <button
-                    type="button"
-                    class="btn btn-sm btn-light border text-danger"
-                    data-wan-action="delete"
-                    title="Delete circuit"
-                  >
-                    <i class="fa-solid fa-trash"></i>
-                  </button>
-                `
-                : ''
-            }
-          </div>
-        `;
-      },
-      cellClick: function(event, cell) {
-        const action =
-          event.target.closest(
-            '[data-wan-action]'
-          );
+  title: 'Actions',
 
-        if (!action) {
-          return;
-        }
+  width: 132,
+  minWidth: 132,
+  maxWidth: 132,
 
-        const row =
-          cell.getRow().getData();
+  widthGrow: 0,
+  widthShrink: 0,
 
-        if (action.dataset.wanAction === 'view') {
-          openInternetWanViewCircuit(row);
-        } else if (action.dataset.wanAction === 'edit') {
-          openInternetWanEditCircuit(row);
-        } else if (action.dataset.wanAction === 'delete') {
-          confirmDeleteInternetWanCircuit(
-            row,
-            action
-          );
-        }
-      }
+  resizable: false,
+  movable: false,
+
+  hozAlign: 'center',
+  headerHozAlign: 'center',
+  headerSort: false,
+
+  formatter: function(cell) {
+    const row = cell.getRow().getData();
+
+    const actions = document.createElement('div');
+    actions.className = 'internet-wan-actions';
+
+    const viewButton = document.createElement('button');
+    viewButton.type = 'button';
+    viewButton.className = 'btn btn-sm btn-light border';
+    viewButton.title = 'View circuit';
+    viewButton.innerHTML = '<i class="fa-solid fa-eye"></i>';
+
+    viewButton.addEventListener('click', function(event) {
+      event.preventDefault();
+      event.stopPropagation();
+
+      openInternetWanViewCircuit(row);
+    });
+
+    actions.appendChild(viewButton);
+
+    if (canEdit) {
+      const editButton = document.createElement('button');
+      editButton.type = 'button';
+      editButton.className = 'btn btn-sm btn-light border';
+      editButton.title = 'Edit circuit';
+      editButton.innerHTML = '<i class="fa-solid fa-pen"></i>';
+
+      editButton.addEventListener('click', function(event) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        openInternetWanEditCircuit(row);
+      });
+
+      actions.appendChild(editButton);
+
+      const deleteButton = document.createElement('button');
+      deleteButton.type = 'button';
+      deleteButton.className = 'btn btn-sm btn-light border text-danger';
+      deleteButton.title = 'Delete circuit';
+      deleteButton.innerHTML = '<i class="fa-solid fa-trash"></i>';
+
+      deleteButton.addEventListener('click', function(event) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        confirmDeleteInternetWanCircuit(
+          row,
+          deleteButton
+        );
+      });
+
+      actions.appendChild(deleteButton);
     }
+
+    return actions;
+  }
+}
   ];
 }
 
