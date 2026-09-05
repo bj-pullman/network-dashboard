@@ -1,11 +1,9 @@
 <script>
 
-let currentServerView =
-  'active';
+const RECORD_PAGE_DEFINITIONS = {};
+let currentRecordDefinition = null;
 
-function renderTablePage(
-  data
-) {
+function renderRecordTable_(data, definition) {
 
   currentTableData =
     data;
@@ -15,94 +13,12 @@ function renderTablePage(
     data.headers || [];
 
 
-  /*
-   * Servers always opens to Active.
-   */
-  if (
-    data.pageKey === 'servers' &&
-    data.serverViews
-  ) {
-
-    currentServerView =
-      'active';
-
-  }
-
-
-  const subtitle =
-    data.pageKey === 'servers' &&
-    data.serverViews
-      ? `${data.serverViews.active} active - ${data.serverViews.offline} offline`
-      : `${data.totalCount} records`;
-
-
-  setPageHeader(
-    data.label,
-    subtitle
-  );
-
-
-  renderTablePageActions(
-    data
-  );
-
-
-  const serverViewSelector =
-    data.pageKey === 'servers' &&
-    data.serverViews
-      ? `
-
-        <div
-          class="btn-group btn-group-sm me-2"
-          role="group"
-          aria-label="Server view"
-        >
-
-          <button
-            id="serverViewActive"
-            type="button"
-            class="btn btn-brand"
-            onclick="setServerView('active')"
-          >
-            <i class="fa-solid fa-circle-check me-1"></i>
-            Active
-            <span class="ms-1">
-              ${data.serverViews.active}
-            </span>
-          </button>
-
-
-          <button
-            id="serverViewOffline"
-            type="button"
-            class="btn btn-light border"
-            onclick="setServerView('offline')"
-          >
-            <i class="fa-solid fa-circle-xmark me-1"></i>
-            Offline
-            <span class="ms-1">
-              ${data.serverViews.offline}
-            </span>
-          </button>
-
-
-          <button
-            id="serverViewAll"
-            type="button"
-            class="btn btn-light border"
-            onclick="setServerView('all')"
-          >
-            All
-            <span class="ms-1">
-              ${data.serverViews.all}
-            </span>
-          </button>
-
-        </div>
-
-      `
-      : '';
-
+  currentRecordDefinition = definition;
+  data.defaultColumns = definition.defaultColumns.filter(field => data.headers.includes(field));
+  if (definition.onOpen) definition.onOpen(data);
+  definition.header(data);
+  definition.actions(data);
+  const toolbarPrefix = definition.toolbar ? definition.toolbar(data) : '';
 
   document.getElementById(
     'pageContent'
@@ -112,7 +28,7 @@ function renderTablePage(
 
       <div class="table-toolbar-left">
 
-        ${serverViewSelector}
+        ${toolbarPrefix}
 
 
         <div class="input-group input-group-sm table-search">
@@ -178,9 +94,7 @@ function renderTablePage(
           id="recordCount"
           class="record-count"
         >
-          ${data.pageKey === 'servers'
-            ? data.serverViews.active
-            : data.totalCount} records
+          ${definition.recordCount ? definition.recordCount(data) : data.totalCount} records
         </span>
 
 
@@ -222,143 +136,20 @@ function renderTablePage(
   `;
 
 
-  buildTabulator(
+  buildRecordTable_(
     data
   );
 
 
-  if (
-    data.pageKey === 'servers' &&
-    data.serverViews
-  ) {
-
-    applyTableSearch();
-
-  }
-
-}
-
-function setServerView(
-  view
-) {
-
-  if (
-    ![
-      'active',
-      'offline',
-      'all'
-    ].includes(view)
-  ) {
-
-    return;
-
-  }
-
-
-  currentServerView =
-    view;
-
-
-  const activeButton =
-    document.getElementById(
-      'serverViewActive'
-    );
-
-
-  const offlineButton =
-    document.getElementById(
-      'serverViewOffline'
-    );
-
-
-  const allButton =
-    document.getElementById(
-      'serverViewAll'
-    );
-
-
-  [
-    activeButton,
-    offlineButton,
-    allButton
-  ].forEach(
-    button => {
-
-      if (!button) {
-        return;
-      }
-
-
-    button.classList.remove(
-      'btn-brand'
-      );
-
-
-      button.classList.add(
-        'btn-light',
-        'border'
-      );
-
-    }
-  );
-
-
-  const selectedButton =
-    view === 'active'
-      ? activeButton
-      : view === 'offline'
-        ? offlineButton
-        : allButton;
-
-
-  if (selectedButton) {
-
-    selectedButton.classList.remove(
-      'btn-light',
-      'border'
-    );
-
-
-    selectedButton.classList.add(
-      'btn-brand'
-    );
-
-  }
-
-
-  applyTableSearch();
 }
 
 
-function renderTablePageActions(
-  data
-) {
+
+
+function renderRecordActions_(data, extraActions) {
 
   const canEdit =
     data.permission === 'edit';
-
-
-  const centralButton =
-    data.centralSync &&
-    canEdit &&
-    appBootstrap &&
-    appBootstrap.user &&
-    appBootstrap.user.admin
-      ? `
-
-        <button
-          class="btn btn-sm btn-aruba"
-          onclick="runCentralSync(this)"
-        >
-
-          <i class="fa-solid fa-cloud-arrow-down me-2"></i>
-
-          Sync Central
-
-        </button>
-
-      `
-      : '';
 
 
   const addButton =
@@ -384,7 +175,7 @@ function renderTablePageActions(
     'pageActions'
   ).innerHTML = `
 
-    ${centralButton}
+    ${extraActions || ''}
 
     ${addButton}
 
@@ -416,12 +207,9 @@ function renderTablePageActions(
 }
 
 
-function buildTabulator(data) {
+function buildRecordColumns_(data, definition) {
 
-  if (tableInstance) {
-    tableInstance.destroy();
-    tableInstance = null;
-  }
+
 
 
   const canEdit =
@@ -449,10 +237,7 @@ function buildTabulator(data) {
     data.headers.map(
       header => {
 
-        const normalized =
-          String(header || '')
-            .trim()
-            .toLowerCase();
+
 
         if (
           typeof isPasswordHeaderClient === 'function' &&
@@ -493,60 +278,7 @@ function buildTabulator(data) {
         };
 
 
-        if (
-          normalized === 'device label' ||
-          normalized === 'server name' ||
-          normalized === 'destination'
-        ) {
-
-          column.minWidth = 120;
-
-        }
-
-
-        if (
-          normalized === 'model' ||
-          normalized.includes('note') ||
-          normalized === 'backup job name' ||
-          normalized === 'target location' ||
-          normalized === 'wasabi job' ||
-          normalized === 'wasabi schedule'
-        ) {
-
-          column.minWidth = 130;
-
-        }
-
-
-        if (
-          normalized === 'ip' ||
-          normalized === 'ip address'
-        ) {
-
-          column.minWidth = 115;
-
-        }
-
-
-        if (
-          normalized === 'status'
-        ) {
-
-          column.minWidth = 100;
-
-        }
-
-
-        if (
-          normalized === 'vlan' ||
-          normalized === 'metric' ||
-          normalized === 'dist'
-        ) {
-
-          column.minWidth = 70;
-
-        }
-
+        Object.assign(column, definition.columns[header] || {});
 
         if (
           isStatusColumn(header)
@@ -739,15 +471,17 @@ function buildTabulator(data) {
 
   });
 
-  columns =
-    applyColumnOrderPreference_(
-      columns,
-      columnPreferences
-    );
+  columns = applyColumnOrderPreference_(columns, { order: data.defaultColumns || [] });
+  columns = applyColumnOrderPreference_(columns, columnPreferences);
 
 
+  return columns;
+}
+
+function buildRecordTable_(data) {
+  const columns = currentRecordDefinition.buildColumns(data);
   tableInstance =
-    new Tabulator(
+    createAppTable_(
       '#tabulatorTable',
       {
 
@@ -800,20 +534,12 @@ function buildTabulator(data) {
   );
 
 
-  requestAnimationFrame(
-    function() {
-
-      if (tableInstance) {
-
-        buildColumnMenu(
-          data
-        );
-
-      }
-
-    }
-  );
-
+  const createdTable = tableInstance;
+  createdTable.on('tableBuilt', function() {
+    if (tableInstance !== createdTable) return;
+    buildColumnMenu(data);
+    applyTableSearch();
+  });
 
   bindColumnMenuRefresh_(
     'columnMenu',
@@ -887,6 +613,7 @@ function buildColumnMenu(
     clearAll
   );
 
+  controls.appendChild(createColumnResetButton_(data.pageKey));
   menu.appendChild(
     controls
   );
@@ -1745,190 +1472,34 @@ function persistColumnVisibilityPreference_(
 }
 
 
-function getRequiredVisibleColumns_(
-  data
-) {
-
-  const requiredByPage = {
-    switches: [
-      'Device Label'
-    ],
-    accessPoints: [
-      'Device Label'
-    ],
-    servers: [
-      'Server Name'
-    ],
-    routes: [
-      'Destination'
-    ],
-    securityCameras: [
-      'Location'
-    ],
-    backups: [
-      'Server Name'
-    ]
-  };
-
+function getRequiredVisibleColumns_(data) {
+  const definition = RECORD_PAGE_DEFINITIONS[data.pageKey];
   const required = {};
-
-  (
-    requiredByPage[data.pageKey] ||
-    [
-      data.headers &&
-      data.headers[0]
-    ]
-  )
-    .filter(Boolean)
-    .forEach(header => {
-      if (
-        data.headers.includes(
-          header
-        )
-      ) {
-        required[header] =
-          true;
-      }
-    });
-
+  (definition ? definition.requiredColumns : [data.headers && data.headers[0]])
+    .filter(field => (data.headers || []).includes(field))
+    .forEach(field => { required[field] = true; });
   return required;
 }
 
 
 function applyTableSearch() {
-
-  if (!tableInstance) {
-    return;
-  }
-
-
-  const searchElement =
-    document.getElementById(
-      'tableSearch'
-    );
-
-
-  const query =
-    String(
-      searchElement
-        ? searchElement.value
-        : ''
-    )
-      .trim()
-      .toLowerCase();
-
-
-  const isServers =
-    currentPageKey === 'servers' &&
-    currentTableData &&
-    currentTableData.serverViews;
-
-
-  /*
-   * No filters at all on ordinary tables.
-   */
-  if (
-    !query &&
-    !isServers
-  ) {
-
-    tableInstance.clearFilter();
-
-    return;
-
-  }
-
-
-  tableInstance.setFilter(
-    function(data) {
-
-      /*
-       * First apply the Servers logical view.
-       */
-      if (
-        isServers &&
-        currentServerView !== 'all' &&
-        data._serverView !==
-          currentServerView
-      ) {
-
-        return false;
-
-      }
-
-
-      /*
-       * If there is no search query, the server
-       * view filter alone determines visibility.
-       */
-      if (!query) {
-        return true;
-      }
-
-
-      /*
-       * Search only actual displayed data fields.
-       * Internal fields such as _sourceSheet and
-       * _serverView are intentionally ignored.
-       */
-      return currentHeaders.some(
-        header =>
-
-          String(
-            data[header] || ''
-          )
-            .toLowerCase()
-            .includes(
-              query
-            )
-
-      );
-
-    }
-  );
+  if (!tableInstance) return;
+  const input = document.getElementById('tableSearch');
+  const query = String(input ? input.value : '').trim().toLowerCase();
+  const matches = currentRecordDefinition && currentRecordDefinition.matchesRow;
+  if (!query && !matches) { tableInstance.clearFilter(); return; }
+  tableInstance.setFilter(function(row) {
+    if (matches && !matches(row)) return false;
+    return !query || currentHeaders.some(header =>
+      String(row[header] || '').toLowerCase().includes(query));
+  });
 }
 
 
 function clearTableFilters() {
-
-  const search =
-    document.getElementById(
-      'tableSearch'
-    );
-
-
-  if (search) {
-
-    search.value =
-      '';
-
-  }
-
-
-  /*
-   * Servers retains the selected Active / Offline / All
-   * view. We only clear the search filter.
-   */
-  if (
-    currentPageKey === 'servers' &&
-    currentTableData &&
-    currentTableData.serverViews
-  ) {
-
-    applyTableSearch();
-
-    return;
-
-  }
-
-
-  if (
-    tableInstance
-  ) {
-
-    tableInstance.clearFilter();
-
-  }
+  const search = document.getElementById('tableSearch');
+  if (search) search.value = '';
+  applyTableSearch();
 }
 
 
@@ -2168,4 +1739,29 @@ function createActionMenuItem(
 }
 
 
+async function updateRecordTablePage_(data) {
+  const definition = currentRecordDefinition;
+  const table = tableInstance;
+  data.defaultColumns = definition.defaultColumns.filter(field => data.headers.includes(field));
+  currentTableData = data;
+  currentHeaders = data.headers || [];
+  definition.header(data);
+  if (definition.updateSummary) definition.updateSummary(data);
+  await replaceTableRows_(table, data.rows);
+}
+
+function createColumnResetButton_(preferenceKey) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'btn btn-sm btn-light border';
+  button.title = 'Reset columns to defaults';
+  button.setAttribute('aria-label', button.title);
+  button.innerHTML = '<i class="fa-solid fa-rotate-left"></i>';
+  button.addEventListener('click', event => {
+    event.stopPropagation();
+    setColumnPreferences_(preferenceKey, { hidden: [], visible: [], widths: {}, order: [] });
+    renderPage(currentPageKey, currentPageData);
+  });
+  return button;
+}
 </script>

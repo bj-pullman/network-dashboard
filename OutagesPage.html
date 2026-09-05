@@ -270,7 +270,7 @@ function buildOutagesTable_(
     );
 
   tableInstance =
-    new Tabulator(
+    createAppTable_(
       '#outagesTable',
       {
         data:
@@ -326,10 +326,7 @@ function buildOutagesTable_(
     }
   );
 
-  buildOutageColumnMenu_(
-    data,
-    columns
-  );
+  tableInstance.on('tableBuilt', function() { buildOutageColumnMenu_(data, columns); });
 
   bindColumnMenuRefresh_(
     'outageColumnMenu',
@@ -1514,6 +1511,39 @@ function formatOutageDateInput_(
     pad(date.getHours()) +
     ':' +
     pad(date.getMinutes());
+}
+
+
+function refreshOutagesPageSummary_(data) {
+  setPageHeader(
+    'Outages',
+    `${data.totalCount || 0} outage records`
+  );
+  const summary = document.querySelector('.outages-summary');
+  if (summary) summary.innerHTML = `
+        ${outageSummaryCard('Active Outages', data.summary.active, 'fa-triangle-exclamation')}
+        ${outageSummaryCard('Last 30 Days', data.summary.last30Days, 'fa-calendar-days')}
+        ${outageSummaryCard('30 Day Duration', data.summary.durationLast30Label, 'fa-clock')}
+      `;
+}
+
+async function updateOutagesPage_(data) {
+  const table = tableInstance;
+  currentPageData = data;
+
+  refreshOutagesPageSummary_(data);
+  const select = document.getElementById('outageCircuitFilter');
+  if (select) {
+    const selected = select.value;
+    select.innerHTML = '<option value="">All circuits</option>' + (data.circuits || []).map(circuit =>
+      '<option value="' + escapeAttribute(circuit.circuitId) + '">' +
+      escapeHtml(formatOutageCircuitOption_(circuit)) + '</option>').join('');
+    if (selected && !Array.from(select.options).some(option => option.value === selected)) {
+      select.add(new Option(selected, selected));
+    }
+    select.value = selected;
+  }
+  await replaceTableRows_(table, data.rows);
 }
 
 </script>

@@ -1,0 +1,54 @@
+<script>
+RECORD_PAGE_DEFINITIONS.switches = {
+  defaultColumns: ["Status","Device Label","Model","Type","IP Address","Campus"],
+  requiredColumns: ["Device Label"],
+  columns: {
+    "Device Label": { minWidth: 120 },
+    "Model": { minWidth: 130 },
+    "IP Address": { minWidth: 115 },
+    "Status": { minWidth: 100 },
+    "Notes": { minWidth: 130 }
+  },
+  buildColumns: function(data) {
+    return buildRecordColumns_(data, RECORD_PAGE_DEFINITIONS.switches);
+  },
+  header: function(data) {
+    setPageHeader(data.label, data.totalCount + ' records');
+  },
+  actions: function(data) {
+    renderRecordActions_(data, renderCentralSyncAction_(data));
+  }
+};
+
+function renderSwitchesPage(data) {
+  renderRecordTable_(data, RECORD_PAGE_DEFINITIONS.switches);
+}
+
+function renderCentralSyncAction_(data) {
+  const canEdit = data.permission === 'edit';
+  const centralButton =
+    data.centralSync &&
+    canEdit &&
+    appBootstrap &&
+    appBootstrap.user &&
+    appBootstrap.user.admin
+      ? `
+
+        <button
+          class="btn btn-sm btn-aruba"
+          onclick="runCentralSync(this)"
+        >
+
+          <i class="fa-solid fa-cloud-arrow-down me-2"></i>
+
+          Sync Central
+
+        </button>
+
+      `
+      : '';
+
+
+  return centralButton;
+}
+</script>

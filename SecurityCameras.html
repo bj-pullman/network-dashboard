@@ -1,0 +1,23 @@
+<script>
+RECORD_PAGE_DEFINITIONS.securityCameras = {
+  defaultColumns: ["Location","Asset / System","Username","Password","Server Location"],
+  requiredColumns: ["Location"],
+  columns: {
+    "IP Address": { minWidth: 115 },
+    "Notes": { minWidth: 130 }
+  },
+  buildColumns: function(data) {
+    return buildRecordColumns_(data, RECORD_PAGE_DEFINITIONS.securityCameras);
+  },
+  header: function(data) {
+    setPageHeader(data.label, data.totalCount + ' records');
+  },
+  actions: function(data) {
+    renderRecordActions_(data);
+  }
+};
+
+function renderSecurityCamerasPage(data) {
+  renderRecordTable_(data, RECORD_PAGE_DEFINITIONS.securityCameras);
+}
+</script>

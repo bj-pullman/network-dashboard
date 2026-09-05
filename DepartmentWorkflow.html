@@ -937,7 +937,7 @@ function buildWorkflowMatrixTable(
 
 
   window.workflowMatrixInstance =
-    new Tabulator(
+    createAppTable_(
       tableElement,
       {
 
@@ -1011,9 +1011,7 @@ function buildWorkflowMatrixTable(
     }
   );
 
-  buildWorkflowColumnMenu_(
-    columns
-  );
+  window.workflowMatrixInstance.on('tableBuilt', function() { buildWorkflowColumnMenu_(columns); });
 
   bindColumnMenuRefresh_(
     'workflowColumnMenu',
@@ -1561,6 +1559,11 @@ function clearWorkflowMatrixFilters() {
 
   }
 
+}
+
+
+async function updateWorkflowPage_(data) {
+  await replaceTableRows_(window.workflowMatrixInstance, data.workflows);
 }
 
 </script>

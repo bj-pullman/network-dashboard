@@ -1,0 +1,14 @@
+<script>
+STRUCTURED_PAGE_DEFINITIONS.busCameras = {
+  buses: {
+    defaultColumns: ["Bus Name/Number","DVR Type","DVR IP","Bridge IP","Bus Type"],
+    columns: { Notes: { minWidth: 170 } }
+  }
+};
+
+function renderBusCamerasPage(data) {
+  setPageHeader(data.label, 'Infrastructure reference and operational information');
+  renderReferencePageActions_();
+  renderStructuredSections_(data);
+}
+</script>

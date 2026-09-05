@@ -108,6 +108,26 @@ function getIntegrationRegistry_() {
         'Partial implementation: endpoint inventory matching exists; broader ThreatDown management, alerting and reporting are not implemented yet.'
     },
 
+    wazuh: {
+      id: 'wazuh',
+      name: 'Wazuh',
+      description: 'Controls visibility of locally maintained Wazuh server inventory fields.',
+      implementationStatus: 'planned',
+      capabilities: ['Server field visibility'],
+      requiredProperties: [],
+      optionalProperties: [],
+      settings: [],
+      supportsSync: false,
+      supportsConnectionTest: false,
+      supportsTestConnection: false,
+      supportsManualSync: false,
+      supportsScheduledSync: false,
+      hasLocalDataset: false,
+      localDatasetSheets: [],
+      providesDashboardWidgets: false,
+      enrichesModules: ['servers'],
+      notes: 'Visibility placeholder only. No Wazuh API or credential configuration is implemented.'
+    },
     uptimerobot: {
       id: 'uptimerobot',
       name: 'UptimeRobot',
@@ -305,8 +325,11 @@ function readIntegrationStateMap_(
   createIfMissing
 ) {
 
+  if (!createIfMissing && APP_EXECUTION_METADATA.integrationState) {
+    return APP_EXECUTION_METADATA.integrationState;
+  }
   const ss =
-    SpreadsheetApp.getActiveSpreadsheet();
+    getReadSpreadsheet_();
 
   const sheet =
     createIfMissing
@@ -317,28 +340,11 @@ function readIntegrationStateMap_(
 
   const map = {};
 
-  if (
-    !sheet ||
-    sheet.getLastRow() < 2
-  ) {
-    return map;
-  }
+  if (!sheet) return map;
 
 
-  const headers =
-    sheet
-      .getRange(
-        1,
-        1,
-        1,
-        sheet.getLastColumn()
-      )
-      .getDisplayValues()[0]
-      .map(value =>
-        String(value || '').trim()
-      );
-
-
+  const allValues = readSheetDisplayBatch_(sheet);
+  const headers = (allValues[0] || []).map(value => String(value || '').trim());
   const index = {};
 
   headers.forEach((header, columnIndex) => {
@@ -446,16 +452,7 @@ function readIntegrationStateMap_(
     );
 
 
-  const values =
-    sheet
-      .getRange(
-        2,
-        1,
-        sheet.getLastRow() - 1,
-        sheet.getLastColumn()
-      )
-      .getDisplayValues();
-
+  const values = allValues.slice(1);
 
   values.forEach((row, offset) => {
 
@@ -515,11 +512,12 @@ function readIntegrationStateMap_(
   });
 
 
+  if (!createIfMissing) APP_EXECUTION_METADATA.integrationState = map;
   return map;
 }
 
 
-function getIntegrationStatusList_() {
+function getIntegrationStatusList_(onlyId, includeLiveCounts) {
 
   const registry =
     getIntegrationRegistry_();
@@ -531,7 +529,7 @@ function getIntegrationStatusList_() {
     PropertiesService.getScriptProperties();
 
 
-  return Object.keys(registry)
+  return Object.keys(registry).filter(id => !onlyId || id === onlyId)
     .map(id => {
 
       const definition =
@@ -581,11 +579,9 @@ function getIntegrationStatusList_() {
           : !!definition.supportsSync;
 
       const recordCounts =
-        getIntegrationRecordCounts_(
-          id,
-          definition,
-          itemState
-        );
+        includeLiveCounts === false
+          ? parseIntegrationRecordCounts_(itemState.recordCountsJson)
+          : getIntegrationRecordCounts_(id, definition, itemState);
 
       const recordCount =
         getIntegrationPrimaryRecordCount_(
@@ -831,41 +827,18 @@ function countIntegrationSheetRecords_(
   try {
 
     const sheet =
-      SpreadsheetApp
-        .getActiveSpreadsheet()
-        .getSheetByName(
-          sheetName
-        );
+      getReadSheet_(sheetName);
 
     if (
-      !sheet ||
-      sheet.getLastRow() < 2
+      !sheet
     ) {
       return 0;
     }
 
-    const headers =
-      sheet
-        .getRange(
-          1,
-          1,
-          1,
-          sheet.getLastColumn()
-        )
-        .getDisplayValues()[0]
-        .map(value =>
-          String(value || '').trim()
-        );
+    const allValues = readSheetDisplayBatch_(sheet);
+    const headers = (allValues[0] || []).map(value => String(value || '').trim());
 
-    const values =
-      sheet
-        .getRange(
-          2,
-          1,
-          sheet.getLastRow() - 1,
-          sheet.getLastColumn()
-        )
-        .getDisplayValues();
+    const values = allValues.slice(1);
 
     return values.filter(row =>
       typeof rowHasMeaningfulData_ === 'function'
@@ -893,31 +866,16 @@ function countIntegrationSheetRowsWhere_(
   try {
 
     const sheet =
-      SpreadsheetApp
-        .getActiveSpreadsheet()
-        .getSheetByName(
-          sheetName
-        );
+      getReadSheet_(sheetName);
 
     if (
-      !sheet ||
-      sheet.getLastRow() < 2
+      !sheet
     ) {
       return 0;
     }
 
-    const headers =
-      sheet
-        .getRange(
-          1,
-          1,
-          1,
-          sheet.getLastColumn()
-        )
-        .getDisplayValues()[0]
-        .map(value =>
-          String(value || '').trim()
-        );
+    const allValues = readSheetDisplayBatch_(sheet);
+    const headers = (allValues[0] || []).map(value => String(value || '').trim());
 
     const index =
       headers.indexOf(field);
@@ -926,19 +884,11 @@ function countIntegrationSheetRowsWhere_(
       return 0;
     }
 
-    const values =
-      sheet
-        .getRange(
-          2,
-          index + 1,
-          sheet.getLastRow() - 1,
-          1
-        )
-        .getDisplayValues();
+    const values = allValues.slice(1);
 
     return values.filter(row =>
       predicate(
-        row[0]
+        row[index]
       )
     ).length;
 
@@ -1625,9 +1575,7 @@ function isIntegrationOperationalPageEnabled_(
       );
 
     const status =
-      getIntegrationStatusById_(
-        integrationId
-      );
+      (readIntegrationStateMap_(false)[integrationId] || {});
 
     return !!(
       status.enabled &&
@@ -1762,7 +1710,7 @@ function getIntegrationStatusById_(
 ) {
 
   const status =
-    getIntegrationStatusList_()
+    getIntegrationStatusList_(integrationId, false)
       .find(item =>
         item.id === integrationId
       );
@@ -1783,6 +1731,7 @@ function upsertIntegrationRow_(
   updates,
   existingSheet
 ) {
+  APP_EXECUTION_METADATA.integrationState = null;
 
   const definition =
     getIntegrationDefinition_(

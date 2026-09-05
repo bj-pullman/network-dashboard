@@ -80,7 +80,7 @@ function renderUptimeRobotPage(data) {
         ${uptimeRobotSummaryCard_('Unknown', currentPageData.summary.unknown, 'fa-circle-question')}
       </div>
 
-      ${uptimeRobotBanner_(currentPageData, canAdminAction)}
+      <div id="uptime-robot-banner-host" style="display:contents">${uptimeRobotBanner_(currentPageData, canAdminAction)}</div>
 
       <div class="table-toolbar">
         <div class="table-toolbar-left">
@@ -318,7 +318,7 @@ function buildUptimeRobotTable_(
     );
 
   tableInstance =
-    new Tabulator(
+    createAppTable_(
       '#uptimeRobotTable',
       {
         data:
@@ -369,10 +369,7 @@ function buildUptimeRobotTable_(
     }
   );
 
-  buildUptimeRobotColumnMenu_(
-    data,
-    columns
-  );
+  tableInstance.on('tableBuilt', function() { buildUptimeRobotColumnMenu_(data, columns); });
 
   bindColumnMenuRefresh_(
     'uptimeRobotColumnMenu',
@@ -960,6 +957,33 @@ function syncUptimeRobotNow(
         'sync UptimeRobot'
       );
     });
+}
+
+
+function refreshUptimeRobotPageSummary_(data) {
+  setPageHeader(
+    'UptimeRobot',
+    `${currentPageData.totalCount || 0} synchronized monitors`
+  );
+  const summary = document.querySelector('.uptime-robot-summary');
+  if (summary) summary.innerHTML = `
+        ${uptimeRobotSummaryCard_('Total', currentPageData.summary.total, 'fa-heart-pulse')}
+        ${uptimeRobotSummaryCard_('Online', currentPageData.summary.online, 'fa-circle-check')}
+        ${uptimeRobotSummaryCard_('Down', currentPageData.summary.down, 'fa-triangle-exclamation')}
+        ${uptimeRobotSummaryCard_('Paused', currentPageData.summary.paused, 'fa-circle-pause')}
+        ${uptimeRobotSummaryCard_('Unknown', currentPageData.summary.unknown, 'fa-circle-question')}
+      `;
+}
+
+async function updateUptimeRobotPage_(data) {
+  const table = tableInstance;
+  currentPageData = data;
+
+  refreshUptimeRobotPageSummary_(data);
+  document.getElementById('uptime-robot-banner-host').innerHTML = uptimeRobotBanner_(data, !!(appBootstrap.user && appBootstrap.user.admin));
+  const stamp = document.querySelector('.uptime-robot-health-stamp');
+  if (stamp) stamp.innerHTML = uptimeRobotFreshnessText_(data.integration);
+  await replaceTableRows_(table, data.rows);
 }
 
 </script>

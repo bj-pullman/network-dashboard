@@ -92,12 +92,11 @@ function renderInternetWanPage(data) {
         ${internetWanSummaryCard('WAN Circuits', data.summary.total, 'fa-globe')}
         ${internetWanSummaryCard('Active', data.summary.active, 'fa-circle-check')}
         ${internetWanSummaryCard('Standby', data.summary.standby, 'fa-circle-pause')}
-        ${internetWanSummaryCard('Maintenance', data.summary.maintenance, 'fa-screwdriver-wrench')}
         ${internetWanSummaryCard('Disabled', data.summary.disabled, 'fa-circle-minus')}
         ${internetWanSummaryCard('Health Down', data.summary.healthDown, 'fa-triangle-exclamation')}
       </div>
 
-      ${internetWanMonitoringBanner_(data.monitoring)}
+      <div id="internet-wan-banner-host" style="display:contents">${internetWanMonitoringBanner_(data.monitoring)}</div>
 
       <div class="table-toolbar">
         <div class="table-toolbar-left">
@@ -137,7 +136,7 @@ function renderInternetWanPage(data) {
             ${internetWanFilterOptions_(
               getInternetWanControlledOptions_(
                 'Status',
-                ['Active', 'Standby', 'Maintenance', 'Disabled']
+                ['Active', 'Standby', 'Disabled']
               )
             )}
           </select>
@@ -349,7 +348,7 @@ function buildInternetWanTable(data) {
     );
 
   tableInstance =
-    new Tabulator(
+    createAppTable_(
       '#internetWanTable',
       {
         data:
@@ -390,10 +389,7 @@ function buildInternetWanTable(data) {
     }
   );
 
-  buildInternetWanColumnMenu_(
-    data,
-    columns
-  );
+  tableInstance.on('tableBuilt', function() { buildInternetWanColumnMenu_(data, columns); });
 
   bindColumnMenuRefresh_(
     'internetWanColumnMenu',
@@ -1265,7 +1261,6 @@ function buildInternetWanClientSummary_(
     backup: 0,
     active: 0,
     standby: 0,
-    maintenance: 0,
     disabled: 0,
     healthDown: 0,
     notMonitored: 0,
@@ -1398,7 +1393,7 @@ function openInternetWanForm_(
           ${internetWanTextField_('Provider', row && row['Provider'], false, true)}
           ${internetWanSelectField_('Service Type', row && row['Service Type'], ['Fiber', 'DIA', 'Cable', 'Fixed Wireless', 'DSL', 'Cellular', 'Other'], true)}
           ${internetWanTextField_('APSCN Device Name', row && row['APSCN Device Name'])}
-          ${internetWanSelectField_('Status', row && row['Status'], ['Active', 'Standby', 'Maintenance', 'Disabled'], true)}
+          ${internetWanSelectField_('Status', row && row['Status'], ['Active', 'Standby', 'Disabled'], true)}
         </div>
       </div>
 
@@ -1495,7 +1490,7 @@ function internetWanSelectField_(
 
   const selected =
     String(
-      value || options[0] || ''
+      label === 'Status' && value === '' ? '' : value || options[0] || ''
     ).trim();
 
   const optionList =
@@ -1515,6 +1510,7 @@ function internetWanSelectField_(
         data-wan-field="${escapeAttribute(label)}"
         ${required ? 'required aria-required="true"' : ''}
       >
+        ${selected === '' ? '<option value="" selected>Select status</option>' : ''}
         ${optionList.map(option => `
           <option
             value="${escapeAttribute(option)}"
@@ -1856,22 +1852,32 @@ function openInternetWanViewCircuit(row) {
     'recordModalBody'
   ).innerHTML = `
     <div class="internet-wan-detail">
-      ${internetWanDetailItem_('Circuit ID', row['Circuit ID'])}
-      ${internetWanDetailItem_('Circuit Name', row['Circuit Name'])}
-      ${internetWanDetailItem_('Site / Location', row['Site / Location'])}
-      ${internetWanDetailItem_('Role', row['Role'])}
-      ${internetWanDetailItem_('Provider', row['Provider'])}
-      ${internetWanDetailItem_('Service Type', row['Service Type'])}
-      ${internetWanDetailItem_('APSCN Device Name', row['APSCN Device Name'])}
-      ${internetWanDetailItem_('Bandwidth', row.Bandwidth)}
-      ${internetWanDetailItem_('Public Network / CIDR', row['Public Network / CIDR'])}
-      ${internetWanDetailItem_('Gateway', row['Gateway'])}
-      ${internetWanDetailItem_('Public IP Addresses', internetWanPublicIpLines_(row))}
-      ${internetWanDetailItem_('Circuit / Account ID', row['Circuit / Account ID'])}
-      ${internetWanDetailItem_('UptimeRobot Monitor ID', row['UptimeRobot Monitor ID'])}
-      ${internetWanDetailItem_('Status', row['Status'])}
-      ${internetWanDetailItem_('Health', internetWanHealthDetail_(row))}
-      ${internetWanDetailItem_('Notes', row['Notes'])}
+      <section><h3>Circuit</h3>
+        ${internetWanDetailItem_('Circuit ID', row['Circuit ID'])}
+        ${internetWanDetailItem_('Circuit Name', row['Circuit Name'])}
+        ${internetWanDetailItem_('Site / Location', row['Site / Location'])}
+        ${internetWanDetailItem_('Role', row['Role'])}
+        ${internetWanDetailItem_('APSCN Device Name', row['APSCN Device Name'])}
+        ${internetWanDetailItem_('Status', row['Status'])}
+      </section>
+      <section><h3>Addressing</h3>
+        ${internetWanDetailItem_('Public Network / CIDR', row['Public Network / CIDR'])}
+        ${internetWanDetailItem_('Gateway', row['Gateway'])}
+        ${internetWanDetailItem_('Public IP Addresses', internetWanPublicIpLines_(row))}
+      </section>
+      <section><h3>Provider</h3>
+        ${internetWanDetailItem_('Provider', row['Provider'])}
+        ${internetWanDetailItem_('Service Type', row['Service Type'])}
+        ${internetWanDetailItem_('Bandwidth', row.Bandwidth)}
+        ${internetWanDetailItem_('Circuit / Account ID', row['Circuit / Account ID'])}
+      </section>
+      <section><h3>Monitoring</h3>
+        ${internetWanDetailItem_('UptimeRobot Monitor ID', row['UptimeRobot Monitor ID'])}
+        ${internetWanDetailItem_('Health', internetWanHealthDetail_(row))}
+      </section>
+      <section><h3>Notes</h3>
+        ${internetWanDetailItem_('Notes', row['Notes'])}
+      </section>
     </div>
   `;
 
@@ -1994,6 +2000,33 @@ function confirmDeleteInternetWanCircuit(
         'delete Internet WAN circuit'
       );
     });
+}
+
+
+function refreshInternetWanPageSummary_(data) {
+  setPageHeader(
+    'Internet / WAN',
+    `${data.totalCount || 0} WAN circuits`
+  );
+  const summary = document.querySelector('.internet-wan-summary');
+  if (summary) summary.innerHTML = `
+        ${internetWanSummaryCard('WAN Circuits', data.summary.total, 'fa-globe')}
+        ${internetWanSummaryCard('Active', data.summary.active, 'fa-circle-check')}
+        ${internetWanSummaryCard('Standby', data.summary.standby, 'fa-circle-pause')}
+        ${internetWanSummaryCard('Disabled', data.summary.disabled, 'fa-circle-minus')}
+        ${internetWanSummaryCard('Health Down', data.summary.healthDown, 'fa-triangle-exclamation')}
+      `;
+}
+
+async function updateInternetWanPage_(data) {
+  const table = tableInstance;
+  currentPageData = data;
+  applyInternetWanHealthToData_(data, data.monitoring);
+  refreshInternetWanPageSummary_(data);
+  document.getElementById('internet-wan-banner-host').innerHTML = internetWanMonitoringBanner_(data.monitoring);
+  const stamp = document.querySelector('.internet-wan-health-stamp');
+  if (stamp) stamp.innerHTML = internetWanHealthStamp_(data.monitoring);
+  await replaceTableRows_(table, data.rows);
 }
 
 </script>

@@ -1,0 +1,27 @@
+<script>
+RECORD_PAGE_DEFINITIONS.backups = {
+  defaultColumns: ["Server Name","Backup Job Name","Backup Time","Target Location","Wasabi Job"],
+  requiredColumns: ["Server Name"],
+  columns: {
+    "Server Name": { minWidth: 120 },
+    "Backup Job Name": { minWidth: 130 },
+    "Target Location": { minWidth: 130 },
+    "Wasabi Job": { minWidth: 130 },
+    "Wasabi Schedule": { minWidth: 130 },
+    "Notes": { minWidth: 130 }
+  },
+  buildColumns: function(data) {
+    return buildRecordColumns_(data, RECORD_PAGE_DEFINITIONS.backups);
+  },
+  header: function(data) {
+    setPageHeader(data.label, data.totalCount + ' records');
+  },
+  actions: function(data) {
+    renderRecordActions_(data);
+  }
+};
+
+function renderBackupsPage(data) {
+  renderRecordTable_(data, RECORD_PAGE_DEFINITIONS.backups);
+}
+</script>

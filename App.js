@@ -70,13 +70,7 @@ const APP_PAGE_CONFIG = {
     group: 'Infrastructure',
     centralSync: true,
 
-    defaultColumns: [
-      'Status',
-      'Device Label',
-      'IP Address',
-      'Model',
-      'Role'
-    ]
+    defaultColumns: ["Status","Device Label","Model","Type","IP Address","Campus"]
   },
 
   accessPoints: {
@@ -88,13 +82,7 @@ const APP_PAGE_CONFIG = {
     group: 'Infrastructure',
     centralSync: true,
 
-    defaultColumns: [
-      'Status',
-      'Device Label',
-      'IP Address',
-      'Model',
-      'Active Clients'
-    ]
+    defaultColumns: ["Status","Device Label","IP Address","Model","MAC Address"]
   },
 
   servers: {
@@ -118,18 +106,13 @@ const APP_PAGE_CONFIG = {
 
   routes: {
     key: 'routes',
-    label: 'IP Route Tables',
+    label: 'VLANs & Routing',
     sheet: 'IP Route Tables',
     type: 'table',
     icon: 'fa-route',
     group: 'Infrastructure',
 
-    defaultColumns: [
-      'Destination',
-      'Gateway',
-      'VLAN',
-      'Type'
-    ]
+    defaultColumns: ["Campus / Location","VLAN ID","VLAN Name","Network / CIDR","Gateway"]
   },
 
   internetWan: {
@@ -206,13 +189,7 @@ const APP_PAGE_CONFIG = {
     group:
       'Physical Systems',
 
-    defaultColumns: [
-      'Location',
-      'Asset / System',
-      'IP Address',
-      'Category',
-      'Server Location'
-    ]
+    defaultColumns: ["Location","Asset / System","Username","Password","Server Location"]
 
   },
 
@@ -242,14 +219,8 @@ const APP_PAGE_CONFIG = {
         type: 'table',
         headerRow: 7,
         startColumn: 1,
-        endColumn: 6,
 
-        defaultColumns: [
-          'Bus Name/Number',
-          'DVR IP',
-          'Bridge IP',
-          'Bus Type'
-        ]
+        defaultColumns: ["Bus Name/Number","DVR Type","DVR IP","Bridge IP","Bus Type"]
       }
     ]
   },
@@ -271,12 +242,7 @@ const APP_PAGE_CONFIG = {
         headerRow: 1,
         startColumn: 1,
 
-        defaultColumns: [
-          'Location',
-          'IP Address',
-          'VLAN Name',
-          'VLAN ID'
-        ]
+        defaultColumns: ["Location","IP Address","Username","Password","Subnet","Port"]
       }
     ]
   },
@@ -382,7 +348,7 @@ const APP_MODULE_REGISTRY = {
 
   routes: {
     id: 'routes',
-    name: 'IP Route Tables',
+    name: 'VLANs & Routing',
     description: 'Network route and VLAN reference data.',
     classification: 'core',
     enabledByDefault: true,
@@ -643,6 +609,7 @@ function normalizeModuleEnabledValue_(
 
 
 function getModuleStateMap_() {
+  if (APP_EXECUTION_METADATA.modules) return APP_EXECUTION_METADATA.modules;
 
   const cache =
     CacheService.getScriptCache();
@@ -655,7 +622,7 @@ function getModuleStateMap_() {
 
   if (cached) {
     try {
-      return JSON.parse(cached);
+      return APP_EXECUTION_METADATA.modules = JSON.parse(cached);
     } catch (error) {}
   }
 
@@ -703,11 +670,12 @@ function getModuleStateMap_() {
   );
 
 
-  return states;
+  return APP_EXECUTION_METADATA.modules = states;
 }
 
 
 function invalidateModuleCache_() {
+  APP_EXECUTION_METADATA.modules = null;
 
   try {
     CacheService
@@ -773,6 +741,8 @@ function isModuleEnabled_(
   moduleId
 ) {
 
+  const definition = APP_MODULE_REGISTRY[moduleId];
+  if (definition && definition.classification !== 'optional') return true;
   const states =
     getModuleStateMap_();
 
@@ -1130,6 +1100,14 @@ function getAppUserHeaders_() {
  *******************************************************/
 
 function getUserAccess_(email) {
+  const key = String(email || '').trim().toLowerCase();
+  if (!Object.prototype.hasOwnProperty.call(APP_EXECUTION_METADATA.access, key)) {
+    APP_EXECUTION_METADATA.access[key] = resolveUserAccess_(key);
+  }
+  return APP_EXECUTION_METADATA.access[key];
+}
+
+function resolveUserAccess_(email) {
 
   email = String(email || '')
     .trim()
@@ -1152,6 +1130,7 @@ function getUserAccess_(email) {
    * Breakglass accounts do not need a Sheet lookup.
    */
   if (isBreakglassAdmin_(email)) {
+    if (APP_READ_CONTEXT) APP_READ_CONTEXT.accessCache = 'breakglass';
 
     const permissions =
       getFullEditPermissions_();
@@ -1187,6 +1166,7 @@ function getUserAccess_(email) {
     cache.get(cacheKey);
 
 
+  if (APP_READ_CONTEXT) APP_READ_CONTEXT.accessCache = cached ? 'hit' : 'miss';
   if (cached) {
 
     try {
@@ -1200,42 +1180,15 @@ function getUserAccess_(email) {
   }
 
 
-  const sheet =
-    ensureAppUsersSheet_();
-
-
-  const indexes =
-    getAppUsersHeaderIndexes_(
-      sheet
-    );
-
-
-  const emailIndex =
-    indexes.email;
-
-
-  if (sheet.getLastRow() < 2) {
-
-    return {
-      authorized: false,
-      admin: false,
-      email: email,
-      permissions: {}
-    };
-
-  }
-
-
-  const values =
-    sheet
-      .getRange(
-        2,
-        1,
-        sheet.getLastRow() - 1,
-        sheet.getLastColumn()
-      )
-      .getValues();
-
+  const sheet = getReadSheet_(APP_USERS_SHEET);
+  if (!sheet) return { authorized: false, admin: false, email: email, permissions: {} };
+  const allValues = measureAppReadStep_('accessSheetRead', function() {
+    if (APP_READ_CONTEXT) APP_READ_CONTEXT.sheetReads += 1;
+    return sheet.getDataRange().getValues();
+  });
+  const indexes = getAppUsersHeaderIndexes_(null, allValues[0] || []);
+  const emailIndex = indexes.email;
+  const values = allValues.slice(1);
 
   const match =
     values.find(
@@ -1558,12 +1511,10 @@ function getRequiredHeaderIndex_(
 }
 
 
-function getAppUsersHeaderIndexes_(sheet) {
+function getAppUsersHeaderIndexes_(sheet, headers) {
 
   const headerMap =
-    getAppUsersHeaderMap_(
-      sheet
-    );
+    headers ? mapHeaders_(headers.map(value => String(value || '').trim())) : getAppUsersHeaderMap_(sheet);
 
   const expectedHeaders =
     getAppUserHeaders_();
@@ -1637,6 +1588,8 @@ function normalizePermission_(permission) {
 
 
 function getPagePermission_(pageKey) {
+  if (APP_READ_CONTEXT && APP_READ_CONTEXT.pageKey === pageKey &&
+      APP_READ_CONTEXT.permission) return APP_READ_CONTEXT.permission;
 
   if (
     !isPageEnabled_(
@@ -1660,13 +1613,13 @@ function getPagePermission_(pageKey) {
 
 function requirePagePermission_(pageKey, level) {
 
-  requirePageModuleEnabled_(
-    pageKey
-  );
+  if (APP_READ_CONTEXT && APP_READ_CONTEXT.pageKey === pageKey &&
+      APP_READ_CONTEXT.access && level === 'view') return APP_READ_CONTEXT.access;
+  measureAppReadStep_('enablement', function() { requirePageModuleEnabled_(pageKey); });
 
 
   const access =
-    getUserAccess_(getCurrentUserEmail_());
+    measureAppReadStep_('permission', function() { return getUserAccess_(getCurrentUserEmail_()); });
 
 
   if (!access.authorized) {
@@ -1674,7 +1627,11 @@ function requirePagePermission_(pageKey, level) {
   }
 
 
+  if (APP_PAGE_CONFIG[pageKey].adminOnly && !access.admin) {
+    throw new Error('Administrator access is required.');
+  }
   if (access.admin) {
+    if (APP_READ_CONTEXT && APP_READ_CONTEXT.pageKey === pageKey) APP_READ_CONTEXT.access = access;
     return access;
   }
 
@@ -1704,6 +1661,7 @@ function requirePagePermission_(pageKey, level) {
   }
 
 
+  if (APP_READ_CONTEXT && APP_READ_CONTEXT.pageKey === pageKey) APP_READ_CONTEXT.access = access;
   return access;
 }
 
@@ -1942,67 +1900,8 @@ function getAppBootstrap() {
 }
 
 
-function getClientTemplateNameForPageType_(
-  type
-) {
-
-  const templates = {
-    table: 'TablePage',
-    internetWan: 'InternetWan',
-    uptimeRobot: 'UptimeRobotPage',
-    structured: 'StructuredPage',
-    workflow: 'DepartmentWorkflow',
-    users: 'UserManagement',
-    settings: 'Settings'
-  };
-
-  return templates[type] || '';
-}
 
 
-function appGetPageClientTemplate(
-  pageKey
-) {
-
-  return withPerformanceTiming_(
-    'appGetPageClientTemplate:' + pageKey,
-    function() {
-
-      const config =
-        APP_PAGE_CONFIG[pageKey];
-
-
-      if (!config) {
-        throw new Error(
-          'Unknown application page.'
-        );
-      }
-
-
-      requirePagePermission_(
-        pageKey,
-        'view'
-      );
-
-
-      const templateName =
-        getClientTemplateNameForPageType_(
-          config.type
-        );
-
-
-      if (!templateName) {
-        return '';
-      }
-
-
-      return include(
-        templateName
-      );
-
-    }
-  );
-}
 
 
 /*******************************************************
@@ -2010,85 +1909,34 @@ function appGetPageClientTemplate(
  *******************************************************/
 
 function appGetPageData(pageKey, forceRefresh) {
-
-  return withPerformanceTiming_(
-    'appGetPageData:' + pageKey,
-    function() {
-
-      const config =
-        APP_PAGE_CONFIG[pageKey];
-
-
-      if (!config) {
-        throw new Error(
-          'Unknown application page.'
-        );
-      }
-
-
-      requirePagePermission_(
-        pageKey,
-        'view'
-      );
-
-
-      if (config.type === 'dashboard') {
-        return getAppDashboardData_(
-          forceRefresh
-        );
-      }
-
-
-      if (config.type === 'workflow') {
-        return getDepartmentWorkflowData_(
-          forceRefresh
-        );
-      }
-
-
-      if (config.type === 'internetWan') {
-        return getInternetWanPageData_(
-          forceRefresh
-        );
-      }
-
-      if (config.type === 'outages') {
-        return getOutagesPageData_(
-          forceRefresh
-        );
-      }
-
-      if (config.type === 'uptimeRobot') {
-        return getUptimeRobotPageData_(
-          forceRefresh
-        );
-      }
-
-
-      if (config.type === 'users') {
-        return getAppUsers_();
-      }
-
-
-      if (config.type === 'settings') {
-        return getSettingsPageData_();
-      }
-
-
-      if (config.type === 'structured') {
-        return getStructuredPageData_(
-          pageKey,
-          forceRefresh
-        );
-      }
-
-      return getAppTableData_(
-        pageKey,
-        forceRefresh
-      );
-
-    }
-  );
+  const config = APP_PAGE_CONFIG[pageKey];
+  if (!config) throw new Error('Unknown application page.');
+  const previousContext = APP_READ_CONTEXT;
+  const context = { pageKey: pageKey, started: Date.now(), timings: {}, sheetReads: 0 };
+  APP_READ_CONTEXT = context;
+  try {
+    const access = requirePagePermission_(pageKey, 'view');
+    context.permission = access.admin ? 'edit' : access.permissions[pageKey];
+    const loaders = {
+      dashboard: getAppDashboardData_, workflow: getDepartmentWorkflowData_,
+      internetWan: getInternetWanPageData_, outages: getOutagesPageData_,
+      uptimeRobot: getUptimeRobotPageData_, users: getAppUsers_, settings: getSettingsPageData_
+    };
+    const result = measureAppReadStep_('pageData', function() {
+      if (loaders[pageKey]) return loaders[pageKey](!!forceRefresh);
+      if (config.type === 'structured') return getStructuredPageData_(pageKey, !!forceRefresh);
+      return getAppTableData_(pageKey, !!forceRefresh);
+    });
+    // Shared row caches never determine the caller's permission.
+    const output = Object.assign({}, result, { permission: context.permission });
+    output.performance = finishAppReadPerformance_(context, 'success');
+    return output;
+  } catch (error) {
+    finishAppReadPerformance_(context, 'error');
+    throw error;
+  } finally {
+    APP_READ_CONTEXT = previousContext;
+  }
 }
 
 
@@ -2219,83 +2067,8 @@ function getNetworkDashboardReadColumnCount_(
 }
 
 
-function getStructuredPageReadColumnCount_(
-  config,
-  fallback
-) {
-
-  let columnCount =
-    getNetworkDashboardReadColumnCount_(
-      config.sheet,
-      fallback,
-      true
-    );
 
 
-  (config.sections || [])
-    .forEach(section => {
-
-      if (section.endColumn) {
-
-        columnCount =
-          Math.max(
-            columnCount,
-            Number(section.endColumn)
-          );
-
-        return;
-      }
-
-
-      const startColumn =
-        Number(section.startColumn || 1);
-
-      const defaultColumnCount =
-        (section.defaultColumns || []).length;
-
-
-      if (defaultColumnCount) {
-        columnCount =
-          Math.max(
-            columnCount,
-            startColumn +
-              defaultColumnCount -
-              1
-          );
-      }
-
-    });
-
-
-  return Math.max(
-    columnCount,
-    1
-  );
-}
-
-
-function getStructuredPageMinimumRows_(config) {
-
-  let rowCount =
-    1;
-
-
-  (config.sections || [])
-    .forEach(section => {
-
-      rowCount =
-        Math.max(
-          rowCount,
-          Number(section.headerRow || 0),
-          Number(section.startRow || 0),
-          Number(section.endRow || 0)
-        );
-
-    });
-
-
-  return rowCount;
-}
 
 
 function readAppSheetDisplayValues_(
@@ -2363,39 +2136,10 @@ function readNetworkDashboardSheetValues_(
 }
 
 
-function readConfiguredPageValues_(
-  sheet,
-  config
-) {
-
-  if (
-    config &&
-    config.type === 'structured'
-  ) {
-
-    return readAppSheetDisplayValues_(
-      sheet,
-      getStructuredPageReadColumnCount_(
-        config,
-        sheet.getLastColumn()
-      ),
-      getStructuredPageMinimumRows_(
-        config
-      )
-    );
-
-  }
-
-
-  return readAppSheetDisplayValues_(
-    sheet,
-    getNetworkDashboardReadColumnCount_(
-      config ? config.sheet : sheet.getName(),
-      sheet.getLastColumn(),
-      true
-    ),
-    1
-  );
+function readConfiguredPageValues_(sheet, config) {
+  // Display values preserve formulas, dates, IPs and leading zeros.
+  // Actual headers retain installation-specific extra columns.
+  return readSheetDisplayBatch_(sheet);
 }
 
 
@@ -2441,6 +2185,7 @@ function getAppTableData_(
     CacheService.getScriptCache();
 
 
+  if (APP_READ_CONTEXT) APP_READ_CONTEXT.dataCache = 'miss';
   const cacheKey =
     'app_page_' + pageKey;
 
@@ -2448,10 +2193,11 @@ function getAppTableData_(
   if (!forceRefresh) {
 
     const cached =
-      cache.get(cacheKey);
+      measureAppReadStep_('cacheRead', function() { return cache.get(cacheKey); });
 
 
     if (cached) {
+      if (APP_READ_CONTEXT) APP_READ_CONTEXT.dataCache = 'hit';
 
       try {
 
@@ -2471,11 +2217,7 @@ function getAppTableData_(
 
 
   const sheet =
-    SpreadsheetApp
-      .getActiveSpreadsheet()
-      .getSheetByName(
-        config.sheet
-      );
+    getReadSheet_(config.sheet);
 
 
   if (!sheet) {
@@ -2505,6 +2247,7 @@ function getAppTableData_(
   }
 
 
+  const schemaStarted = Date.now();
   const rawHeaders =
     values[0]
       .map(
@@ -2562,8 +2305,9 @@ function getAppTableData_(
     );
 
 
-  const rows =
-    [];
+  if (APP_READ_CONTEXT) APP_READ_CONTEXT.timings.schema = Date.now() - schemaStarted;
+  const transformStarted = Date.now();
+  const rows = [];
 
 
   for (
@@ -2663,6 +2407,7 @@ function getAppTableData_(
   }
 
 
+  if (APP_READ_CONTEXT) APP_READ_CONTEXT.timings.transform = Date.now() - transformStarted;
   let defaultColumns =
     config.defaultColumns ||
     headers.slice(0, 8);
@@ -2784,23 +2529,8 @@ function getCombinedServersData_(
   }
 
 
-  const ss =
-    SpreadsheetApp
-      .getActiveSpreadsheet();
-
-
-  const activeSheet =
-    ss.getSheetByName(
-      config.sheet
-    );
-
-
-  const offlineSheet =
-    ss.getSheetByName(
-      config.offlineSheet
-    );
-
-
+  const activeSheet = getReadSheet_(config.sheet);
+  const offlineSheet = getReadSheet_(config.offlineSheet);
   const activeData =
     readServerSourceSheet_(
       activeSheet,
@@ -3017,17 +2747,8 @@ function readServerSourceSheet_(
   }
 
 
-  const values =
-    readAppSheetDisplayValues_(
-      sheet,
-      getNetworkDashboardReadColumnCount_(
-        sheet.getName(),
-        sheet.getLastColumn(),
-        true
-      ),
-      1
-    );
-
+  const sourceName = sheet.getName();
+  const values = readSheetDisplayBatch_(sheet);
 
   if (!values.length) {
 
@@ -3176,8 +2897,7 @@ function readServerSourceSheet_(
       /*
        * Critical for Edit/Delete.
        */
-      _sourceSheet:
-        sheet.getName(),
+      _sourceSheet: sourceName,
 
       /*
        * Used only by the Servers UI filter.
@@ -3310,6 +3030,7 @@ function prepareTableDataForAccess_(
   config
 ) {
 
+  const sensitiveStarted = Date.now();
   result =
     result || {};
 
@@ -3321,8 +3042,13 @@ function prepareTableDataForAccess_(
       pageKey
     );
 
+  const integrationState = pageKey === 'servers' ? readIntegrationStateMap_(false) : {};
+  const availableHeader = header => isManagedPageHeader_(pageKey, header) &&
+    (pageKey !== 'servers' ||
+      (!/threatdown/i.test(header) || !!(integrationState.threatdown || {}).enabled) &&
+      (!/wazuh/i.test(header) || !!(integrationState.wazuh || {}).enabled));
   const safeHeaders =
-    (result.headers || [])
+    (result.headers || []).filter(availableHeader)
       .filter(header =>
         header &&
         !isCredentialHeader_(
@@ -3348,7 +3074,18 @@ function prepareTableDataForAccess_(
         defaultColumns:
           safeDefaultColumns,
         permission:
-          permission
+          permission,
+        rows: (result.rows || []).map(row => {
+          const clean = {};
+          Object.keys(row).forEach(key => {
+            if (key[0] === '_' || safeHeaders.includes(key)) clean[key] = row[key];
+          });
+          if (pageKey === 'switches') {
+            clean.Role = normalizeArubaSwitchRole_(clean.Role);
+            clean['Stack Info'] = normalizeArubaStackInfo_(clean['Stack Info']);
+          }
+          return clean;
+        })
       }
     );
 
@@ -3401,6 +3138,7 @@ function prepareTableDataForAccess_(
       )
     );
 
+  if (APP_READ_CONTEXT) APP_READ_CONTEXT.timings.sensitive = Date.now() - sensitiveStarted;
   return output;
 }
 
@@ -3470,9 +3208,7 @@ function getStructuredPageData_(
 
 
   const sheet =
-    SpreadsheetApp
-      .getActiveSpreadsheet()
-      .getSheetByName(config.sheet);
+    getReadSheet_(config.sheet);
 
 
   if (!sheet) {
@@ -3536,7 +3272,7 @@ function getStructuredPageData_(
     sheetName: config.sheet,
 
     permission:
-      getPagePermission_(pageKey),
+      '',
 
     controlledOptions:
       getControlledOptionsForSheet_(
@@ -3647,7 +3383,7 @@ function parseStructuredTable_(
   sourceHeaders.forEach(
     (header, localIndex) => {
 
-      if (!header) {
+      if (!header || /^Legacy: /i.test(header)) {
         return;
       }
 
@@ -4767,14 +4503,7 @@ function getAppDashboardData_(
     'getAppDashboardData',
     function() {
 
-  const ss =
-    SpreadsheetApp.getActiveSpreadsheet();
-
-  const sheet =
-    ss.getSheetByName(
-      'Dashboard'
-    );
-
+  const sheet = getReadSheet_('Dashboard');
 
   const result =
     sheet
@@ -4795,27 +4524,7 @@ function buildDashboardDataFromSheet_(
   sheet
 ) {
 
-  const rowCount =
-    Math.max(
-      getDashboardReadRowCount_(),
-      sheet.getLastRow()
-    );
-
-  const columnCount =
-    Math.max(
-      getDashboardSheetHeaders_().length,
-      8
-    );
-
-  const values =
-    sheet
-      .getRange(
-        1,
-        1,
-        rowCount,
-        columnCount
-      )
-      .getDisplayValues();
+  const values = readSheetDisplayBatch_(sheet);
 
   const metricMap =
     readDashboardMetricMap_(
@@ -6090,11 +5799,7 @@ function getInternetWanPageData_(
     APP_PAGE_CONFIG.internetWan;
 
   const sheet =
-    SpreadsheetApp
-      .getActiveSpreadsheet()
-      .getSheetByName(
-        config.sheet
-      );
+    getReadSheet_(config.sheet);
 
   const result =
     buildEmptyInternetWanPageData_();
@@ -6194,7 +5899,7 @@ function getInternetWanPageData_(
   cacheJson_(
     cacheKey,
     result,
-    300
+    60
   );
 
 
@@ -6259,6 +5964,7 @@ function applyInternetWanDisplayFields_(
   monitoring
 ) {
 
+  if (/^maintenance$/i.test(String(row.Status || '').trim())) row.Status = '';
   const ips =
     splitInternetWanPublicIps_(
       row['Public IPs']
@@ -6457,7 +6163,6 @@ function buildInternetWanSummary_(
     backup: 0,
     active: 0,
     standby: 0,
-    maintenance: 0,
     disabled: 0,
     healthDown: 0,
     notMonitored: 0,
@@ -7439,11 +7144,7 @@ function getDepartmentWorkflowData_(
 
 
   const sheet =
-    SpreadsheetApp
-      .getActiveSpreadsheet()
-      .getSheetByName(
-        'Department Workflow'
-      );
+    getReadSheet_('Department Workflow');
 
 
   const result = {
@@ -7460,17 +7161,7 @@ function getDepartmentWorkflowData_(
   }
 
 
-  const data =
-    readAppSheetDisplayValues_(
-      sheet,
-      getNetworkDashboardReadColumnCount_(
-        'Department Workflow',
-        sheet.getLastColumn(),
-        false
-      ),
-      30
-    );
-
+  const data = readSheetDisplayBatch_(sheet);
 
   let section = '';
 
@@ -8025,7 +7716,7 @@ function getRequiredRecordFieldsForPage_(
       'Server Name'
     ],
     routes: [
-      'Destination'
+      'Network / CIDR'
     ],
     securityCameras: [
       'Location'
@@ -8195,7 +7886,7 @@ function cacheJson_(
   try {
 
     const json =
-      JSON.stringify(value);
+      measureAppReadStep_('cacheSerialize', function() { return JSON.stringify(value); });
 
 
     /*
@@ -8205,13 +7896,9 @@ function cacheJson_(
      */
     if (json.length < 90000) {
 
-      CacheService
-        .getScriptCache()
-        .put(
-          key,
-          json,
-          seconds
-        );
+      measureAppReadStep_('cacheWrite', function() {
+        CacheService.getScriptCache().put(key, json, seconds);
+      });
 
     }
 
@@ -8335,53 +8022,14 @@ function getAppUsers_() {
   requireAdmin_();
 
 
-  const sheet =
-    ensureAppUsersSheet_();
-
-
-  const indexes =
-    getAppUsersHeaderIndexes_(
-      sheet
-    );
-
-
-  if (sheet.getLastRow() < 2) {
-
-    return {
-      users: [],
-      pages:
-        getPermissionPageList_(),
-      controlledOptions:
-        getControlledOptionsForSheet_(
-          APP_USERS_SHEET
-        ),
-      breakglass:
-        getBreakGlassAdmins_(),
-      domainPolicy:
-        getUserDomainPolicy_()
-    };
-
-  }
-
-
-  const values =
-    sheet
-      .getRange(
-        2,
-        1,
-        sheet.getLastRow() - 1,
-        sheet.getLastColumn()
-      )
-      .getDisplayValues();
-
+  const sheet = getReadSheet_(APP_USERS_SHEET);
+  if (!sheet) throw new Error('App Users sheet not found. Run Setup / Initialize.');
+  const allValues = readSheetDisplayBatch_(sheet);
+  const indexes = getAppUsersHeaderIndexes_(null, allValues[0] || []);
+  const values = allValues.slice(1);
 
   const users =
     values
-      .filter(row =>
-        String(
-          row[indexes.email] || ''
-        ).trim()
-      )
       .map((row, index) => {
 
         let permissions = {};
@@ -8436,7 +8084,7 @@ function getAppUsers_() {
 
         };
 
-      });
+      }).filter(user => String(user.email || '').trim());
 
 
   return {
@@ -8714,6 +8362,8 @@ function saveAppUser(user) {
 
   }
 
+  delete APP_EXECUTION_METADATA.access[email];
+
   CacheService
     .getScriptCache()
     .remove(
@@ -8864,6 +8514,8 @@ function deleteAppUser(email) {
 
   }
 
+  delete APP_EXECUTION_METADATA.access[email];
+
   CacheService
     .getScriptCache()
     .remove(
@@ -8905,4 +8557,11 @@ function rowHasMeaningfulData_(row, headers) {
   }
 
   return false;
+}
+
+function isManagedPageHeader_(pageKey, header) {
+  if (/^Legacy: /i.test(header)) return false;
+  const config = APP_PAGE_CONFIG[pageKey] || {};
+  const definition = getNetworkDashboardSchema_()[config.sheet] || {};
+  return !(definition.retiredHeaders || []).includes(header);
 }

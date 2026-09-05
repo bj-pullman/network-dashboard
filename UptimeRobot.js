@@ -14,7 +14,7 @@ const UPTIMEROBOT_MONITOR_CACHE_KEY =
   'uptimerobot.monitors.normalized';
 
 const UPTIMEROBOT_LOCAL_CACHE_SECONDS =
-  300;
+  60;
 
 
 function getUptimeRobotSheetHeaders_() {
@@ -439,7 +439,7 @@ function getUptimeRobotPageData_(
   cacheJson_(
     cacheKey,
     result,
-    300
+    UPTIMEROBOT_LOCAL_CACHE_SECONDS
   );
 
   return result;
@@ -754,41 +754,16 @@ function getUptimeRobotCurrentHeaders_(
 function readUptimeRobotLocalMonitors_() {
 
   const sheet =
-    SpreadsheetApp
-      .getActiveSpreadsheet()
-      .getSheetByName(
-        UPTIMEROBOT_SHEET_NAME
-      );
+    getReadSheet_(UPTIMEROBOT_SHEET_NAME);
 
-  if (
-    !sheet ||
-    sheet.getLastRow() < 2
-  ) {
+  if (!sheet) {
     return [];
   }
 
-  const headers =
-    sheet
-      .getRange(
-        1,
-        1,
-        1,
-        sheet.getLastColumn()
-      )
-      .getDisplayValues()[0]
-      .map(value =>
-        String(value || '').trim()
-      );
+  const allValues = readSheetDisplayBatch_(sheet);
+  const headers = (allValues[0] || []).map(value => String(value || '').trim());
 
-  const values =
-    sheet
-      .getRange(
-        2,
-        1,
-        sheet.getLastRow() - 1,
-        sheet.getLastColumn()
-      )
-      .getDisplayValues();
+  const values = allValues.slice(1);
 
   const rows = [];
 

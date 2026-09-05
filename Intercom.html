@@ -1,0 +1,19 @@
+<script>
+STRUCTURED_PAGE_DEFINITIONS.intercom = {
+  intercomSystems: {
+    defaultColumns: ["Location","IP Address","Username","Password","Subnet","Port"],
+    columns: {
+      Location: { minWidth: 170 },
+      'IP Address': { width: 200, minWidth: 200, maxWidth: 200, resizable: false },
+      Username: { width: 210, minWidth: 210, maxWidth: 210, resizable: false },
+      Notes: { minWidth: 170 }
+    }
+  }
+};
+
+function renderIntercomPage(data) {
+  setPageHeader(data.label, 'Infrastructure reference and operational information');
+  renderReferencePageActions_();
+  renderStructuredSections_(data);
+}
+</script>

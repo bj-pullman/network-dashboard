@@ -1,5 +1,5 @@
 var NETWORK_DASHBOARD_VERSION = '1.0.0';
-var NETWORK_DASHBOARD_SCHEMA_VERSION = '1';
+var NETWORK_DASHBOARD_SCHEMA_VERSION = '2';
 var NETWORK_DASHBOARD_APP_NAME = 'Network Dashboard';
 var NETWORK_DASHBOARD_SETTINGS_SHEET = 'App Settings';
 var NETWORK_DASHBOARD_BREAK_GLASS_ADMINS_PROPERTY =
@@ -256,6 +256,7 @@ function getDefaultTimezone_() {
 
 
 var AppConfig = (function() {
+  let executionValues = null;
 
   const CACHE_KEY =
     'network_dashboard_app_settings';
@@ -289,86 +290,24 @@ var AppConfig = (function() {
 
 
   function readSheetValues_() {
-
-    const ss =
-      SpreadsheetApp.getActiveSpreadsheet();
-
-    const sheet =
-      ss.getSheetByName(
-        NETWORK_DASHBOARD_SETTINGS_SHEET
-      );
-
-
-    if (
-      !sheet ||
-      sheet.getLastRow() < 2
-    ) {
-      return {};
-    }
-
-
-    const headers =
-      sheet
-        .getRange(
-          1,
-          1,
-          1,
-          sheet.getLastColumn()
-        )
-        .getDisplayValues()[0]
-        .map(value =>
-          String(value || '').trim()
-        );
-
-
-    const keyIndex =
-      headers.indexOf('Key');
-
-
-    const valueIndex =
-      headers.indexOf('Value');
-
-
-    if (
-      keyIndex < 0 ||
-      valueIndex < 0
-    ) {
-      return {};
-    }
-
-
-    const values =
-      sheet
-        .getRange(
-          2,
-          1,
-          sheet.getLastRow() - 1,
-          sheet.getLastColumn()
-        )
-        .getDisplayValues();
-
-
+    const sheet = getReadSheet_(NETWORK_DASHBOARD_SETTINGS_SHEET);
+    if (!sheet) return {};
+    const allValues = readSheetDisplayBatch_(sheet);
+    const headers = (allValues[0] || []).map(value => String(value || '').trim());
+    const keyIndex = headers.indexOf('Key');
+    const valueIndex = headers.indexOf('Value');
+    if (keyIndex < 0 || valueIndex < 0) return {};
     const result = {};
-
-
-    values.forEach(row => {
-
-      const key =
-        String(row[keyIndex] || '').trim();
-
-      if (key) {
-        result[key] =
-          String(row[valueIndex] || '');
-      }
-
+    allValues.slice(1).forEach(row => {
+      const key = String(row[keyIndex] || '').trim();
+      if (key) result[key] = String(row[valueIndex] || '');
     });
-
-
     return result;
   }
 
 
   function getAll() {
+    if (executionValues) return Object.assign({}, executionValues);
 
     try {
 
@@ -378,7 +317,8 @@ var AppConfig = (function() {
           .get(CACHE_KEY);
 
       if (cached) {
-        return JSON.parse(cached);
+        executionValues = JSON.parse(cached);
+        return Object.assign({}, executionValues);
       }
 
     } catch (error) {}
@@ -409,7 +349,8 @@ var AppConfig = (function() {
     } catch (error) {}
 
 
-    return values;
+    executionValues = values;
+    return Object.assign({}, values);
   }
 
 
@@ -946,6 +887,7 @@ var AppConfig = (function() {
 
 
   function invalidate_() {
+    executionValues = null;
 
     try {
       CacheService

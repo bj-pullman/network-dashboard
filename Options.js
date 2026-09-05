@@ -25,7 +25,6 @@ function getControlledOptionDefinitions_() {
     wanStatus: [
       'Active',
       'Standby',
-      'Maintenance',
       'Disabled'
     ],
     wanHealth: [
@@ -109,8 +108,6 @@ function getControlledOptionAliases_() {
       primary: 'Active',
       standby: 'Standby',
       backup: 'Standby',
-      warning: 'Maintenance',
-      maintenance: 'Maintenance',
       down: 'Disabled',
       disabled: 'Disabled',
       inactive: 'Disabled'

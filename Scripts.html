@@ -19,27 +19,6 @@ const CLIENT_CACHE_TTL_MS =
   5 * 60 * 1000;
 
 
-const PREFETCH_CONCURRENCY =
-  2;
-
-
-const PREFETCH_PAGE_PRIORITY = [
-  'switches',
-  'accessPoints',
-  'servers',
-  'internetWan',
-  'outages',
-  'routes',
-  'securityCameras',
-  'busCameras',
-  'intercom',
-  'backups',
-  'uptimeRobot',
-  'workflow',
-  'users'
-];
-
-
 const ACTION_SUCCESS_RESET_MS =
   1200;
 
@@ -112,22 +91,6 @@ const clientPageCache =
   new Map();
 
 
-const pageRendererPromises =
-  new Map();
-
-
-let prefetchStarted =
-  false;
-
-
-let prefetchQueue =
-  [];
-
-
-let prefetchActiveCount =
-  0;
-
-
 let uptimeRobotStartupRefreshStarted =
   false;
 
@@ -141,22 +104,30 @@ const structuredTables =
 
 
 const PAGE_RENDERER_FUNCTIONS = {
-  dashboard: 'renderDashboard',
-  table: 'renderTablePage',
-  internetWan: 'renderInternetWanPage',
-  outages: 'renderOutagesPage',
-  uptimeRobot: 'renderUptimeRobotPage',
-  structured: 'renderStructuredPage',
-  workflow: 'renderWorkflowPage',
-  users: 'renderUsersPage',
-  settings: 'renderSettingsPage'
+  dashboard: 'renderDashboard', switches: 'renderSwitchesPage',
+  accessPoints: 'renderAccessPointsPage', servers: 'renderServersPage',
+  routes: 'renderRoutesPage', securityCameras: 'renderSecurityCamerasPage',
+  busCameras: 'renderBusCamerasPage', intercom: 'renderIntercomPage',
+  backups: 'renderBackupsPage', internetWan: 'renderInternetWanPage',
+  outages: 'renderOutagesPage', uptimeRobot: 'renderUptimeRobotPage',
+  workflow: 'renderWorkflowPage', users: 'renderUsersPage', settings: 'renderSettingsPage'
 };
 
-
-const loadedPageRendererTypes = {
-  dashboard: true
+const PAGE_UPDATE_FUNCTIONS = {
+  switches: 'updateRecordTablePage_', accessPoints: 'updateRecordTablePage_',
+  servers: 'updateRecordTablePage_', routes: 'updateRecordTablePage_',
+  securityCameras: 'updateRecordTablePage_', backups: 'updateRecordTablePage_',
+  busCameras: 'updateStructuredTables_', intercom: 'updateStructuredTables_',
+  internetWan: 'updateInternetWanPage_', outages: 'updateOutagesPage_',
+  uptimeRobot: 'updateUptimeRobotPage_', workflow: 'updateWorkflowPage_'
 };
 
+const pageRequestVersions = new Map();
+const activeAppTables = new Set();
+let activePagePerformance = null;
+let renderedPageKey = '';
+let pageDataRequests = 0;
+let uptimeRobotStartupTimer = null;
 
 const SCRIPT_RUN_TIMEOUT_MS =
   60000;
@@ -729,6 +700,7 @@ function buildNavigation(
 function navigateTo(
   pageKey
 ) {
+  const started = nowClient_();
 
   if (
     !appBootstrap ||
@@ -748,9 +720,7 @@ function navigateTo(
     nextNavigationGeneration_();
 
 
-  prioritizePrefetchForNavigation_(
-    pageKey
-  );
+  cancelUptimeRobotStartupTimer_();
 
 
   document
@@ -774,6 +744,7 @@ function navigateTo(
     false,
     {
       generation: generation,
+      started: started,
       reason: 'navigation'
     }
   );
@@ -883,18 +854,6 @@ function isClientCacheFresh_(
 }
 
 
-function isClientCacheStale_(
-  entry
-) {
-
-  return !!(
-    entry &&
-    entry.data &&
-    !isClientCacheFresh_(
-      entry
-    )
-  );
-}
 
 
 function setClientCache(
@@ -1039,24 +998,12 @@ function setClientPageError_(
 }
 
 
-function invalidateClientPage(
-  pageKey
-) {
-
-  clientPageCache.delete(
-    pageKey
-  );
-
-
-  if (
-    pageKey !== 'dashboard'
-  ) {
-
-    clientPageCache.delete(
-      'dashboard'
-    );
-
-  }
+function invalidateClientPage(pageKey) {
+  const keys = pageKey === 'dashboard' ? [pageKey] : [pageKey, 'dashboard'];
+  keys.forEach(key => {
+    pageRequestVersions.set(key, (pageRequestVersions.get(key) || 0) + 1);
+    clientPageCache.delete(key);
+  });
 }
 
 
@@ -1067,14 +1014,7 @@ function clearClientPageCache_() {
 
   clientPageCache.clear();
 
-  prefetchStarted =
-    false;
-
-  prefetchQueue =
-    [];
-
-  prefetchActiveCount =
-    0;
+  cancelUptimeRobotStartupTimer_();
 
   uptimeRobotStartupRefreshStarted =
     false;
@@ -1086,6 +1026,7 @@ function markClientPageWritten(
   data
 ) {
 
+  pageRequestVersions.set(pageKey, (pageRequestVersions.get(pageKey) || 0) + 1);
   setClientCache(
     pageKey,
     data,
@@ -1104,27 +1045,6 @@ function markClientPageWritten(
 }
 
 
-function logCacheEvent_(
-  pageKey,
-  message
-) {
-
-  const page =
-    getBootstrapPage_(
-      pageKey
-    );
-
-  console.log(
-    '[Cache] ' +
-    (
-      page && page.label
-        ? page.label
-        : pageKey
-    ) +
-    ': ' +
-    message
-  );
-}
 
 
 function closeRowActionMenu() {
@@ -1172,92 +1092,22 @@ function setActionWorking(
   );
 
   button.innerHTML =
-    '<i class="fa-solid fa-circle-notch fa-spin me-2 action-state-icon"></i>' +
-    escapeHtml(
-      label || 'Working...'
-    );
+    '<span>' + escapeHtml(/^(creating|updating|saving)/i.test(label || '') ? 'Saving...' : label || 'Working...') +
+    '</span><span class="action-progress" role="progressbar" aria-label="Working"></span>';
 
   return button;
 }
 
 
-function setActionSuccess(
-  button,
-  label
-) {
-
-  button =
-    resolveActionButton_(
-      button
-    );
-
-  if (!button) {
-    return null;
-  }
-
-  captureActionState_(
-    button
-  );
-
-  button.disabled =
-    true;
-
-  button.removeAttribute(
-    'aria-busy'
-  );
-
-  button.innerHTML =
-    '<i class="fa-solid fa-check me-2 action-state-icon"></i>' +
-    escapeHtml(
-      label || 'Done'
-    );
-
-  scheduleActionRestore_(
-    button
-  );
-
+function setActionSuccess(button) {
+  restoreAction(button);
   return button;
 }
 
-
-function setActionError(
-  button,
-  label
-) {
-
-  button =
-    resolveActionButton_(
-      button
-    );
-
-  if (!button) {
-    return null;
-  }
-
-  captureActionState_(
-    button
-  );
-
-  button.disabled =
-    false;
-
-  button.removeAttribute(
-    'aria-busy'
-  );
-
-  button.innerHTML =
-    '<i class="fa-solid fa-triangle-exclamation me-2 action-state-icon"></i>' +
-    escapeHtml(
-      label || 'Failed'
-    );
-
-  scheduleActionRestore_(
-    button
-  );
-
+function setActionError(button) {
+  restoreAction(button);
   return button;
 }
-
 
 function restoreAction(
   button
@@ -1414,7 +1264,7 @@ function showAppWorkingModal(
       aria-modal="true"
     >
       <div class="app-working-modal-icon">
-        <i class="fa-solid fa-circle-notch fa-spin"></i>
+        <span class="action-progress" role="progressbar" aria-label="Saving"></span>
       </div>
       <div class="app-working-modal-title">
         ${escapeHtml(options.title || 'Working...')}
@@ -1545,7 +1395,7 @@ function updateAppWorkingModal(
         ? '<i class="fa-solid fa-check"></i>'
         : options.state === 'error'
           ? '<i class="fa-solid fa-triangle-exclamation"></i>'
-          : '<i class="fa-solid fa-circle-notch fa-spin"></i>';
+          : '<span class="action-progress" role="progressbar" aria-label="Working"></span>';
 
     icon.classList.toggle(
       'is-success',
@@ -1669,416 +1519,95 @@ function isActivePageRequest_(
 }
 
 
-function loadPage(
-  pageKey,
-  forceRefresh,
-  options
-) {
-
-  options =
-    options || {};
-
+async function loadPage(pageKey, forceRefresh, options) {
+  options = options || {};
   closeRowActionMenu();
-
-
-  const page =
-    getBootstrapPage_(
-      pageKey
-    );
-
-
-  if (!page) {
-    return;
-  }
-
-  if (
-    currentPageKey !== pageKey
-  ) {
-    console.log(
-      '[Navigation] inactive load ignored for ' +
-      pageKey
-    );
-    return;
-  }
-
-  const generation =
-    options.generation ||
-    nextNavigationGeneration_();
-
-  const requestReason =
-    options.reason ||
-    (
-      forceRefresh
-        ? 'refresh'
-        : 'navigation'
-    );
-
-  const actionButton =
-    options.actionButton || null;
-
-  const cacheEntry =
-    forceRefresh ||
-    !shouldClientCachePage_(
-      pageKey
-    )
-      ? null
-      : getClientCacheEntry_(
-          pageKey
-        );
-
-  if (
-    cacheEntry &&
-    cacheEntry.data
-  ) {
-
-    const cacheState =
-      isClientCacheFresh_(cacheEntry)
-        ? 'hit'
-        : 'stale';
-
-    logCacheEvent_(
-      pageKey,
-      cacheState
-    );
-
-    const renderStart =
-      nowClient_();
-
-    Promise
-      .resolve()
-      .then(() =>
-        ensurePageRendererPromise_(
-          pageKey,
-          page
-        )
-      )
-      .then(() => {
-
-        if (
-          !isActivePageRequest_(
-            pageKey,
-            generation
-          )
-        ) {
-          console.log(
-            '[Navigation] stale cached render ignored for ' +
-            pageKey
-          );
-          return;
-        }
-
-        currentPageData =
-          cacheEntry.data;
-
-        renderPage(
-          pageKey,
-          cacheEntry.data
-        );
-
-        logClientPerformance_(
-          pageKey,
-          'cache=' +
-            cacheState +
-            ' render=' +
-            Math.round(
-              nowClient_() - renderStart
-            ) +
-            'ms'
-        );
-
-        scheduleOperationalPrefetch_();
-
-        scheduleUptimeRobotStartupRefresh_();
-
-        if (
-          isClientCacheStale_(
-            cacheEntry
-          )
-        ) {
-          refreshPageQuietly_(
-            pageKey,
-            generation,
-            requestReason
-          );
-        }
-
-      })
-      .catch(error => {
-
-        if (
-          isActivePageRequest_(
-            pageKey,
-            generation
-          )
-        ) {
-          showPageError(
-            pageKey,
-            error
-          );
-
-          handleFailure(
-            error,
-            'cached page render: ' + pageKey
-          );
-        } else {
-          console.warn(
-            '[Navigation] stale cached render failed for ' +
-            pageKey,
-            error
-          );
-        }
-
+  const page = getBootstrapPage_(pageKey);
+  if (!page || currentPageKey !== pageKey) return;
+  const generation = options.generation || nextNavigationGeneration_();
+  const entry = forceRefresh ? null : getClientCacheEntry_(pageKey);
+  const cacheState = entry && entry.data ? (isClientCacheFresh_(entry) ? 'hit' : 'stale') : 'miss';
+  const trace = beginPagePerformance_(pageKey, generation, cacheState);
+  if (options.started !== undefined) trace.started = options.started;
+  activePagePerformance = trace;
+  try {
+    getPageRenderer_(pageKey);
+    trace.renderer = nowClient_() - trace.started;
+    let data;
+    if (entry && entry.data) {
+      data = entry.data;
+    } else {
+      showPageLoading();
+      data = await requestPageData_(pageKey, !!forceRefresh, {
+        mode: 'foreground', reason: options.reason || 'navigation', trace: trace
       });
-
-    return;
-
-  }
-
-
-  showPageLoading();
-
-  logCacheEvent_(
-    pageKey,
-    forceRefresh
-      ? 'refresh'
-      : 'miss'
-  );
-
-  const requestStart =
-    nowClient_();
-
-  requestPageData_(
-    pageKey,
-    !!forceRefresh,
-    {
-      mode: 'foreground',
-      reason: requestReason
     }
-  )
-    .then(data => {
-
-      if (
-        !isActivePageRequest_(
-          pageKey,
-          generation
-        )
-      ) {
-        console.log(
-          '[Navigation] stale response ignored for ' +
-          pageKey
-        );
-        return;
-      }
-
-      currentPageData =
-        data;
-
-      const renderStart =
-        nowClient_();
-
-      renderPage(
-        pageKey,
-        data
-      );
-
-      logClientPerformance_(
-        pageKey,
-        'cache=miss roundTrip=' +
-          Math.round(
-            renderStart - requestStart
-          ) +
-          'ms render=' +
-          Math.round(
-            nowClient_() - renderStart
-          ) +
-          'ms'
-      );
-
-      scheduleOperationalPrefetch_();
-
-      scheduleUptimeRobotStartupRefresh_();
-
-      if (actionButton) {
-        setActionSuccess(
-          actionButton,
-          'Refreshed'
-        );
-      }
-
-    })
-    .catch(error => {
-
-      if (
-        isActivePageRequest_(
-          pageKey,
-          generation
-        )
-      ) {
-        showPageError(
-          pageKey,
-          error
-        );
-
-        handleFailure(
-          error,
-          'page load: ' + pageKey
-        );
-      } else {
-        console.warn(
-          '[Navigation] stale request failed for ' +
-          pageKey,
-          error
-        );
-      }
-
-      if (actionButton) {
-        setActionError(
-          actionButton,
-          'Refresh Failed'
-        );
-      }
-
-    });
-}
-
-
-function refreshPageQuietly_(
-  pageKey,
-  generation,
-  reason
-) {
-
-  console.log(
-    '[Cache] ' +
-    pageKey +
-    ': stale-while-revalidate'
-  );
-
-  const requestStart =
-    nowClient_();
-
-  requestPageData_(
-    pageKey,
-    true,
-    {
-      mode: 'quiet-refresh',
-      reason: reason || 'stale'
+    if (!isActivePageRequest_(pageKey, generation)) return;
+    trace.dataReceived = nowClient_() - trace.started;
+    renderPage(pageKey, data, trace);
+    if (cacheState === 'stale') refreshPageQuietly_(pageKey, generation, options.reason);
+    if (options.actionButton) setActionSuccess(options.actionButton, 'Refreshed');
+    return data;
+  } catch (error) {
+    if (isActivePageRequest_(pageKey, generation)) {
+      trace.failed = true;
+      showPageError(pageKey, error);
+      handleFailure(error, 'page load: ' + pageKey);
     }
-  )
-    .then(data => {
-
-      if (
-        !isActivePageRequest_(
-          pageKey,
-          generation
-        )
-      ) {
-        console.log(
-          '[Navigation] quiet refresh cached stale page ' +
-          pageKey
-        );
-        return;
-      }
-
-      currentPageData =
-        data;
-
-      const renderStart =
-        nowClient_();
-
-      renderPage(
-        pageKey,
-        data
-      );
-
-      logClientPerformance_(
-        pageKey,
-        'cache=stale roundTrip=' +
-          Math.round(
-            renderStart - requestStart
-          ) +
-          'ms render=' +
-          Math.round(
-            nowClient_() - renderStart
-          ) +
-          'ms'
-      );
-
-    })
-    .catch(error => {
-      console.warn(
-        '[Cache] quiet refresh failed for ' +
-        pageKey,
-        error
-      );
-    });
-}
-
-
-function shouldClientCachePage_(
-  pageKey
-) {
-
-  return !!pageKey;
-}
-
-
-function scheduleOperationalPrefetch_() {
-
-  if (
-    prefetchStarted ||
-    !appBootstrap ||
-    !appBootstrap.pages
-  ) {
-    return;
+    if (options.actionButton) setActionError(options.actionButton, 'Refresh Failed');
   }
-
-  setTimeout(
-    startOperationalPrefetch_,
-    250
-  );
 }
 
+
+async function refreshPageQuietly_(pageKey, generation, reason) {
+  const trace = beginPagePerformance_(pageKey, generation, 'revalidate');
+  try {
+    const data = await requestPageData_(pageKey, true, {
+      mode: 'quiet-refresh', reason: reason || 'stale', trace: trace
+    });
+    if (!isActivePageRequest_(pageKey, generation)) return;
+    const update = window[PAGE_UPDATE_FUNCTIONS[pageKey]];
+    trace.dataReceived = nowClient_() - trace.started;
+    if (renderedPageKey === pageKey && typeof update === 'function' &&
+        pageStructureSignature_(currentPageData) === pageStructureSignature_(data)) {
+      const started = nowClient_();
+      await update(data);
+      if (!isActivePageRequest_(pageKey, generation)) return;
+      trace.tableRender = nowClient_() - started;
+      trace.update = 'in-place';
+      currentPageData = data;
+      trace.shellReady = true;
+      finishPagePerformanceAfterPaint_(trace);
+    } else {
+      activePagePerformance = trace;
+      renderPage(pageKey, data, trace);
+    }
+  } catch (error) {
+    console.warn('[Cache] quiet refresh failed for ' + pageKey);
+  }
+}
+
+
+
+
+function cancelUptimeRobotStartupTimer_() {
+  if (uptimeRobotStartupTimer !== null) clearTimeout(uptimeRobotStartupTimer);
+  uptimeRobotStartupTimer = null;
+}
 
 function scheduleUptimeRobotStartupRefresh_() {
-
-  if (
-    uptimeRobotStartupRefreshStarted ||
-    !appBootstrap ||
-    !appBootstrap.startupTasks
-  ) {
-    return;
-  }
-
-  const task =
-    appBootstrap.startupTasks
-      .uptimeRobotHealthRefresh;
-
-  if (
-    !task ||
-    !task.enabled
-  ) {
-    return;
-  }
-
-  uptimeRobotStartupRefreshStarted =
-    true;
-
-  setTimeout(
-    function() {
-      runUptimeRobotHealthRefresh_({
-        reason: 'startup',
-        silent: true
-      })
-        .catch(function(error) {
-          console.warn(
-            '[UptimeRobot] startup health refresh failed',
-            error
-          );
-        });
-    },
-    600
-  );
+  const task = appBootstrap && appBootstrap.startupTasks &&
+    appBootstrap.startupTasks.uptimeRobotHealthRefresh;
+  if (uptimeRobotStartupRefreshStarted || uptimeRobotStartupTimer !== null ||
+      !task || !task.enabled || currentPageKey !== 'dashboard' || pageDataRequests) return;
+  // Dispatch only after Dashboard is usable and navigation has remained idle.
+  uptimeRobotStartupTimer = setTimeout(function() {
+    uptimeRobotStartupTimer = null;
+    if (currentPageKey !== 'dashboard' || pageDataRequests) return;
+    uptimeRobotStartupRefreshStarted = true;
+    runUptimeRobotHealthRefresh_({ reason: 'startup', silent: true })
+      .catch(function() { console.warn('[UptimeRobot] startup health refresh failed'); });
+  }, 600);
 }
 
 
@@ -2237,219 +1766,6 @@ function applyUptimeRobotHealthRefreshResult_(
 }
 
 
-function startOperationalPrefetch_() {
-
-  if (
-    prefetchStarted ||
-    !appBootstrap ||
-    !appBootstrap.pages
-  ) {
-    return;
-  }
-
-  prefetchStarted =
-    true;
-
-  prefetchQueue =
-    buildPrefetchQueue_();
-
-  if (!prefetchQueue.length) {
-    return;
-  }
-
-  console.log(
-    '[Prefetch] queued ' +
-    prefetchQueue.length +
-    ' page(s)'
-  );
-
-  drainPrefetchQueue_();
-}
-
-
-function buildPrefetchQueue_() {
-
-  const pages =
-    appBootstrap.pages || [];
-
-  const keyed = {};
-
-  pages.forEach(page => {
-    keyed[page.key] = page;
-  });
-
-  const queue = [];
-
-  PREFETCH_PAGE_PRIORITY
-    .forEach(pageKey => {
-
-      const page =
-        keyed[pageKey];
-
-      if (
-        shouldPrefetchPage_(page) &&
-        !queue.includes(pageKey)
-      ) {
-        queue.push(pageKey);
-      }
-
-    });
-
-  pages.forEach(page => {
-
-    if (
-      shouldPrefetchPage_(page) &&
-      !queue.includes(page.key)
-    ) {
-      queue.push(page.key);
-    }
-
-  });
-
-  return queue.filter(pageKey => {
-
-    const entry =
-      getClientCacheEntry_(
-        pageKey
-      );
-
-    return !(
-      entry &&
-      (
-        entry.data ||
-        entry.inFlight
-      )
-    );
-
-  });
-}
-
-
-function shouldPrefetchPage_(
-  page
-) {
-
-  if (
-    !page ||
-    page.key === 'dashboard' ||
-    page.key === 'settings'
-  ) {
-    return false;
-  }
-
-  return page.type === 'table' ||
-    page.type === 'internetWan' ||
-    page.type === 'uptimeRobot' ||
-    page.type === 'structured' ||
-    page.type === 'workflow' ||
-    page.type === 'users';
-}
-
-
-function prioritizePrefetchForNavigation_(
-  pageKey
-) {
-
-  const index =
-    prefetchQueue.indexOf(
-      pageKey
-    );
-
-  if (index >= 0) {
-    prefetchQueue.splice(
-      index,
-      1
-    );
-
-    console.log(
-      '[Prefetch] foreground navigation claimed ' +
-      pageKey
-    );
-  }
-}
-
-
-function drainPrefetchQueue_() {
-
-  while (
-    prefetchActiveCount <
-      PREFETCH_CONCURRENCY &&
-    prefetchQueue.length
-  ) {
-
-    const pageKey =
-      prefetchQueue.shift();
-
-    const page =
-      getBootstrapPage_(
-        pageKey
-      );
-
-    if (
-      !shouldPrefetchPage_(page)
-    ) {
-      continue;
-    }
-
-    const entry =
-      getClientCacheEntry_(
-        pageKey
-      );
-
-    if (
-      entry &&
-      (
-        entry.data ||
-        entry.inFlight
-      )
-    ) {
-      continue;
-    }
-
-    prefetchActiveCount += 1;
-
-    console.log(
-      '[Prefetch] starting ' +
-      page.label
-    );
-
-    requestPageData_(
-      pageKey,
-      false,
-      {
-        mode: 'prefetch',
-        reason: 'startup-prefetch'
-      }
-    )
-      .then(() => {
-        console.log(
-          '[Prefetch] cached ' +
-          page.label
-        );
-      })
-      .catch(error => {
-        console.warn(
-          '[Prefetch] failed ' +
-          page.label,
-          error
-        );
-      })
-      .then(() => {
-
-        prefetchActiveCount =
-          Math.max(
-            0,
-            prefetchActiveCount - 1
-          );
-
-        drainPrefetchQueue_();
-
-      });
-
-  }
-}
-
-
 function nowClient_() {
 
   return window.performance &&
@@ -2488,26 +1804,8 @@ function runAfterNextPaint_(
 }
 
 
-function logClientPerformance_(
-  pageKey,
-  message
-) {
-
-  const page =
-    getBootstrapPage_(
-      pageKey
-    );
-
-  console.log(
-    '[Performance] ' +
-    (
-      page && page.label
-        ? page.label
-        : pageKey
-    ) +
-    ' ' +
-    message
-  );
+function logClientPerformance_(pageKey, message) {
+  console.log('[Performance][' + pageKey + '] ' + message);
 }
 
 
@@ -2537,241 +1835,45 @@ function getPageDataPromise_(
 }
 
 
-function requestPageData_(
-  pageKey,
-  forceRefresh,
-  metadata
-) {
-
-  metadata =
-    metadata || {};
-
-  const page =
-    getBootstrapPage_(
-      pageKey
-    );
-
-  if (!page) {
-    return Promise.reject(
-      new Error(
-        'Unknown application page.'
-      )
-    );
-  }
-
-  const entry =
-    getClientCacheEntry_(
-      pageKey
-    );
-
-  if (
-    entry &&
-    entry.inFlight &&
-    (
-      !forceRefresh ||
-      metadata.mode === 'quiet-refresh' ||
-      metadata.mode === 'prefetch'
-    )
-  ) {
-
-    logCacheEvent_(
-      pageKey,
-      'reusing in-flight request'
-    );
-
-    return entry.inFlight;
-  }
-
-  const requestStart =
-    nowClient_();
-
-  const cacheGeneration =
-    clientCacheGeneration;
-
-  const promise =
-    Promise
-      .all([
-        ensurePageRendererPromise_(
-          pageKey,
-          page
-        ),
-        getPageDataPromise_(
-          pageKey,
-          !!forceRefresh
-        )
-      ])
-      .then(results => {
-
-        const data =
-          results[1];
-
-        if (
-          cacheGeneration ===
-            clientCacheGeneration &&
-          shouldClientCachePage_(
-            pageKey
-          )
-        ) {
-          setClientCache(
-            pageKey,
-            data,
-            metadata
-          );
-        }
-
-        if (
-          metadata.mode !== 'foreground'
-        ) {
-          logClientPerformance_(
-            pageKey,
-            (metadata.mode || 'request') +
-              ' roundTrip=' +
-              Math.round(
-                nowClient_() - requestStart
-              ) +
-              'ms'
-          );
-        }
-
-        return data;
-
-      })
-      .catch(error => {
-
-        if (
-          cacheGeneration ===
-            clientCacheGeneration
-        ) {
-          setClientPageError_(
-            pageKey,
-            error,
-            metadata
-          );
-        }
-
-        throw error;
-
-      })
-      .then(
-        data => {
-          clearClientPageInFlight_(
-            pageKey,
-            promise
-          );
-          return data;
-        },
-        error => {
-          clearClientPageInFlight_(
-            pageKey,
-            promise
-          );
-          throw error;
-        }
-      );
-
-  setClientPageInFlight_(
-    pageKey,
-    promise,
-    metadata
-  );
-
-  return promise;
-}
-
-
-function ensurePageRendererPromise_(
-  pageKey,
-  page
-) {
-
-  if (
-    isPageRendererReady_(page)
-  ) {
-
-    loadedPageRendererTypes[page.type] =
-      true;
-
-    return Promise.resolve();
-
-  }
-
-
-  if (
-    loadedPageRendererTypes[page.type]
-  ) {
-    return Promise.resolve();
-  }
-
-  const rendererKey =
-    page.type;
-
-  if (
-    pageRendererPromises.has(
-      rendererKey
-    )
-  ) {
-    return pageRendererPromises.get(
-      rendererKey
-    );
-  }
-
-  const promise =
-    scriptRunPromise_(
-    'appGetPageClientTemplate:' + pageKey,
-    runner =>
-      runner.appGetPageClientTemplate(
-        pageKey
-      )
-  )
-    .then(function(html) {
-
-        try {
-
-          installPageRendererTemplate_(
-            html
-          );
-
-          if (
-            !isPageRendererReady_(page)
-          ) {
-            throw new Error(
-              'Page renderer failed to load: ' +
-                page.type
-            );
-          }
-
-          loadedPageRendererTypes[page.type] =
-            true;
-
-          return true;
-
-        } catch (error) {
-
-          throw error;
-
-        }
-
-    })
-    .then(
-      result => {
-        pageRendererPromises.delete(
-          rendererKey
-        );
-        return result;
-      },
-      error => {
-        pageRendererPromises.delete(
-          rendererKey
-        );
-        throw error;
+function requestPageData_(pageKey, forceRefresh, metadata) {
+  metadata = metadata || {};
+  if (!getBootstrapPage_(pageKey)) return Promise.reject(new Error('Unknown application page.'));
+  const entry = getClientCacheEntry_(pageKey);
+  if (entry && entry.inFlight && (!forceRefresh || metadata.mode === 'quiet-refresh')) {
+    const waiting = nowClient_();
+    return entry.inFlight.then(data => {
+      if (metadata.trace) {
+        metadata.trace.roundTrip = nowClient_() - (entry.metadata.requestStarted || waiting);
+        metadata.trace.server = data.performance || null;
+        metadata.trace.request = 'reused';
       }
-    );
-
-  pageRendererPromises.set(
-    rendererKey,
-    promise
-  );
-
+      return data;
+    });
+  }
+  const version = (pageRequestVersions.get(pageKey) || 0) + 1;
+  pageRequestVersions.set(pageKey, version);
+  const cacheGeneration = clientCacheGeneration;
+  const started = nowClient_();
+  pageDataRequests += 1;
+  const isCurrent = () => cacheGeneration === clientCacheGeneration &&
+    pageRequestVersions.get(pageKey) === version;
+  const promise = getPageDataPromise_(pageKey, !!forceRefresh).then(data => {
+    if (metadata.trace) {
+      metadata.trace.roundTrip = nowClient_() - started;
+      metadata.trace.server = data.performance || null;
+    }
+    if (isCurrent()) {
+      setClientCache(pageKey, data, { mode: metadata.mode, reason: metadata.reason });
+    }
+    return data;
+  }).catch(error => {
+    if (isCurrent()) setClientPageError_(pageKey, error);
+    throw error;
+  }).finally(() => {
+    pageDataRequests = Math.max(0, pageDataRequests - 1);
+    clearClientPageInFlight_(pageKey, promise);
+  });
+  setClientPageInFlight_(pageKey, promise, { mode: metadata.mode, requestStarted: started });
   return promise;
 }
 
@@ -2860,59 +1962,6 @@ function scriptRunPromise_(
 }
 
 
-function isPageRendererReady_(
-  page
-) {
-
-  const functionName =
-    PAGE_RENDERER_FUNCTIONS[
-      page.type
-    ];
-
-  return (
-    !functionName ||
-    typeof window[functionName] === 'function'
-  );
-}
-
-
-function installPageRendererTemplate_(
-  html
-) {
-
-  const wrapper =
-    document.createElement(
-      'div'
-    );
-
-  wrapper.innerHTML =
-    html || '';
-
-
-  wrapper
-    .querySelectorAll(
-      'script'
-    )
-    .forEach(source => {
-
-      const script =
-        document.createElement(
-          'script'
-        );
-
-      script.textContent =
-        source.textContent || '';
-
-      document.body.appendChild(
-        script
-      );
-
-      source.remove();
-
-    });
-}
-
-
 function refreshCurrentPage(
   button
 ) {
@@ -2949,6 +1998,7 @@ function refreshCurrentPage(
  *******************************************************/
 
 function showPageLoading() {
+  destroyActiveTables();
 
   document.getElementById(
     'pageContent'
@@ -3092,179 +2142,58 @@ function getSafeErrorMessage_(
  * RENDER ROUTER
  *******************************************************/
 
-function renderPage(
-  pageKey,
-  data
-) {
+function getPageRenderer_(pageKey) {
+  const render = window[PAGE_RENDERER_FUNCTIONS[pageKey]];
+  if (typeof render !== 'function') throw new Error('Page renderer is unavailable: ' + pageKey);
+  return render;
+}
 
+function renderPage(pageKey, data, trace) {
   destroyActiveTables();
-
-
-  const page =
-    appBootstrap.pages.find(
-      item =>
-        item.key === pageKey
-    );
-
-
-  if (!page) {
-    return;
+  currentPageData = data;
+  renderedPageKey = pageKey;
+  const started = nowClient_();
+  getPageRenderer_(pageKey)(data);
+  if (trace) {
+    trace.shell = nowClient_() - started;
+    trace.shellReady = true;
+    finishPagePerformanceAfterPaint_(trace);
   }
+}
 
-
-  if (
-    page.type === 'dashboard'
-  ) {
-
-    renderDashboard(
-      data
-    );
-
-    return;
-
-  }
-
-
-  if (
-    page.type === 'workflow'
-  ) {
-
-    renderWorkflowPage(
-      data
-    );
-
-    return;
-
-  }
-
-
-  if (
-    page.type === 'internetWan'
-  ) {
-
-    renderInternetWanPage(
-      data
-    );
-
-    return;
-
-  }
-
-
-  if (
-    page.type === 'outages'
-  ) {
-
-    renderOutagesPage(
-      data
-    );
-
-    return;
-
-  }
-
-
-  if (
-    page.type === 'uptimeRobot'
-  ) {
-
-    renderUptimeRobotPage(
-      data
-    );
-
-    return;
-
-  }
-
-
-  if (
-    page.type === 'users'
-  ) {
-
-    renderUsersPage(
-      data
-    );
-
-    return;
-
-  }
-
-
-  if (
-    page.type === 'settings'
-  ) {
-
-    renderSettingsPage(
-      data
-    );
-
-    return;
-
-  }
-
-
-  if (
-    page.type === 'structured'
-  ) {
-
-    renderStructuredPage(
-      data
-    );
-
-    return;
-
-  }
-
-
-  renderTablePage(
-    data
-  );
+function pageStructureSignature_(data) {
+  data = data || {};
+  return JSON.stringify({
+    pageKey: data.pageKey, headers: data.headers, permission: data.permission,
+    credentials: data.credentialColumns, hasCredentials: data.hasCredentials,
+    options: data.controlledOptions,
+    integrationControls: [data.integration, data.monitoring].map(item => item && [
+      item.enabled, item.configurationComplete, item.canSync, item.canRefresh
+    ]),
+    workflowReference: data.workflows && [data.groups, data.tiers, data.ticketSteps, data.priorities],
+    sections: (data.sections || []).map(section => {
+      const shape = Object.assign({}, section);
+      delete shape.rows;
+      delete shape.totalCount;
+      shape.paginated = (section.rows || []).length > 15;
+      return shape;
+    })
+  });
 }
 
 
 function destroyActiveTables() {
-
-  if (tableInstance) {
-
-    try {
-      tableInstance.destroy();
-    } catch (error) {}
-
-
-    tableInstance =
-      null;
-
-  }
-
-
-  Object.keys(
-    structuredTables
-  ).forEach(
-    key => {
-
-      try {
-
-        structuredTables[
-          key
-        ].destroy();
-
-      } catch (error) {}
-
-    }
-  );
-
-
-  Object.keys(
-    structuredTables
-  ).forEach(
-    key => {
-
-      delete structuredTables[
-        key
-      ];
-
-    }
-  );
+  if (tableInstance) activeAppTables.add(tableInstance);
+  if (window.workflowMatrixInstance) activeAppTables.add(window.workflowMatrixInstance);
+  Object.values(structuredTables).forEach(table => activeAppTables.add(table));
+  activeAppTables.forEach(table => { try { table.destroy(); } catch (error) {} });
+  activeAppTables.clear();
+  tableInstance = null;
+  window.workflowMatrixInstance = null;
+  Object.keys(structuredTables).forEach(key => delete structuredTables[key]);
+  currentTableData = null;
+  currentStructuredData = null;
+  renderedPageKey = '';
 }
 
 
@@ -4219,6 +3148,103 @@ function safeJson(
       /&/g,
       '\\u0026'
     );
+}
+
+
+function beginPagePerformance_(pageKey, generation, cache) {
+  return { pageKey: pageKey, generation: generation, cache: cache,
+    started: nowClient_(), navigationStart: Date.now(), pendingTables: 0 };
+}
+
+function finishPagePerformanceAfterPaint_(trace) {
+  runAfterNextPaint_(function() {
+    if (!trace || trace.finished || trace.failed || !trace.shellReady ||
+        trace.pendingTables || !isActivePageRequest_(trace.pageKey, trace.generation)) return;
+    trace.finished = true;
+    const report = { pageKey: trace.pageKey, cache: trace.cache,
+      navigationStart: trace.navigationStart, update: trace.update || 'render' };
+    ['renderer', 'roundTrip', 'dataReceived', 'shell', 'tableInit', 'tableBuilt', 'tableRender'].forEach(key => {
+      report[key] = Math.round(trace[key] || 0);
+    });
+    report.total = Math.round(nowClient_() - trace.started);
+    report.server = trace.server || null;
+    const history = window.networkDashboardPerformance || (window.networkDashboardPerformance = []);
+    history.push(report);
+    if (history.length > 60) history.shift();
+    logClientPerformance_(trace.pageKey, 'cache=' + report.cache + ' ' +
+      ['renderer', 'roundTrip', 'dataReceived', 'shell', 'tableInit', 'tableBuilt', 'tableRender', 'total']
+        .map(key => key + '=' + report[key] + 'ms').join(' ') + ' update=' + report.update);
+    if (report.server) console.log('[Performance][' + trace.pageKey + '][server]', report.server);
+    scheduleUptimeRobotStartupRefresh_();
+  });
+}
+
+function createAppTable_(host, options) {
+  const trace = activePagePerformance;
+  const started = nowClient_();
+  if (trace && !trace.finished) trace.pendingTables += 1;
+  // Tabulator 6.3 has no per-column "movable" option. Keep action columns
+  // anchored with the supported columnMoved event instead.
+  const fixedFields = (options.columns || []).filter(column => column.movable === false).map(column => column.field);
+  options.columns = (options.columns || []).map(column => {
+    const definition = Object.assign({}, column);
+    delete definition.movable;
+    return definition;
+  });
+  const table = new Tabulator(host, options);
+  if (fixedFields.length) {
+    let restoringOrder = false;
+    table.on('columnMoved', function() {
+      if (restoringOrder) return;
+      const columns = table.getColumns();
+      const fixed = columns.filter(column => fixedFields.includes(column.getField()));
+      const movable = columns.filter(column => !fixedFields.includes(column.getField()));
+      if (!fixed.length || !movable.length) return;
+      if (fixed.every((column, index) => columns[columns.length - fixed.length + index] === column)) return;
+      restoringOrder = true;
+      let anchor = movable[movable.length - 1];
+      fixed.forEach(column => { column.move(anchor, true); anchor = column; });
+      restoringOrder = false;
+    });
+  }
+  activeAppTables.add(table);
+  table.on('tableDestroyed', function() { activeAppTables.delete(table); });
+  if (trace && !trace.finished) {
+    trace.tableInit = (trace.tableInit || 0) + nowClient_() - started;
+    table.on('tableBuilt', function() {
+      trace.tableBuilt = Math.max(trace.tableBuilt || 0, nowClient_() - started);
+    });
+    let renderStarted = started;
+    table.on('renderStarted', function() { renderStarted = nowClient_(); });
+    const rendered = function() {
+      table.off('renderComplete', rendered);
+      trace.tableRender = Math.max(trace.tableRender || 0, nowClient_() - renderStarted);
+      trace.pendingTables = Math.max(0, trace.pendingTables - 1);
+      finishPagePerformanceAfterPaint_(trace);
+    };
+    table.on('renderComplete', rendered);
+  }
+  return table;
+}
+
+async function replaceTableRows_(table, rows) {
+  const holder = table.element.querySelector('.tabulator-tableholder');
+  const scrollers = [holder, document.getElementById('main'), document.scrollingElement]
+    .filter(Boolean).map(element => ({ element: element, top: element.scrollTop, left: element.scrollLeft }));
+  const widths = table.getColumns().map(column => ({ column: column, width: column.getWidth() }));
+  const page = table.options.pagination ? table.getPage() : false;
+  await table.replaceData(rows || []);
+  if (!activeAppTables.has(table)) return;
+  const targetPage = page && Math.min(page, table.getPageMax());
+  if (targetPage && table.getPage() !== targetPage) await table.setPage(targetPage);
+  widths.forEach(item => {
+    if (item.width > 0 && item.column.getWidth() !== item.width) item.column.setWidth(item.width);
+  });
+  scrollers.forEach(scroll => {
+    if (!scroll.element.isConnected) return;
+    scroll.element.scrollTop = scroll.top;
+    scroll.element.scrollLeft = scroll.left;
+  });
 }
 
 </script>

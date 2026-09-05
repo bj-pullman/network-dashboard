@@ -108,7 +108,7 @@ function getOutagesPageData_(
   cacheJson_(
     cacheKey,
     result,
-    300
+    60
   );
 
   return decorateOutagesPageDataForAccess_(
@@ -315,31 +315,14 @@ function readOutageRecords_(
 ) {
 
   const sheet =
-    SpreadsheetApp
-      .getActiveSpreadsheet()
-      .getSheetByName(
-        OUTAGES_SHEET_NAME
-      );
+    getReadSheet_(OUTAGES_SHEET_NAME);
 
-  if (
-    !sheet ||
-    sheet.getLastRow() < 2
-  ) {
+  if (!sheet) {
     return [];
   }
 
-  const headers =
-    sheet
-      .getRange(
-        1,
-        1,
-        1,
-        sheet.getLastColumn()
-      )
-      .getDisplayValues()[0]
-      .map(value =>
-        String(value || '').trim()
-      );
+  const allValues = readSheetDisplayBatch_(sheet);
+  const headers = (allValues[0] || []).map(value => String(value || '').trim());
 
   const indexes =
     mapHeaders_(
@@ -349,15 +332,7 @@ function readOutageRecords_(
   const outputHeaders =
     getOutageSheetHeaders_();
 
-  const values =
-    sheet
-      .getRange(
-        2,
-        1,
-        sheet.getLastRow() - 1,
-        sheet.getLastColumn()
-      )
-      .getDisplayValues();
+  const values = allValues.slice(1);
 
   const circuitMap =
     buildCircuitReferenceMap_(
@@ -422,15 +397,10 @@ function readOutageRecords_(
 function getInternetWanCircuitReferences_() {
 
   const sheet =
-    SpreadsheetApp
-      .getActiveSpreadsheet()
-      .getSheetByName(
-        'Internet WAN'
-      );
+    getReadSheet_('Internet WAN');
 
   if (
-    !sheet ||
-    sheet.getLastRow() < 2
+    !sheet
   ) {
     return [];
   }

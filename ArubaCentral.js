@@ -276,12 +276,8 @@ function syncArubaCentralToSheet() {
           : []
       );
 
-    apCount =
-      processArubaDeviceSync_(
-        'Access Points',
-        apData,
-        []
-      );
+    const swarms = apData.some(ap => ap.swarm_id) ? getArubaSwarmMap_(options) : {};
+    apCount = processArubaAccessPointSync_(apData, swarms);
 
   }
 
@@ -320,6 +316,8 @@ function processArubaDeviceSync_(
   centralDevices,
   stackData
 ) {
+
+  if (tabName === 'Access Points') return processArubaAccessPointSync_(centralDevices || [], {});
 
   if (
     !centralDevices ||
@@ -482,9 +480,8 @@ function processArubaDeviceSync_(
           .toLowerCase()
           .replace(/[^a-z0-9]/g, '');
 
-      if (key) {
-        stackMap[key] = stack;
-      }
+      if (key) stackMap[key] = stack;
+      if (stack.stack_id) stackMap[String(stack.stack_id)] = stack;
 
     });
 
@@ -545,6 +542,7 @@ function processArubaDeviceSync_(
         group.devices;
 
       const commander =
+        devList.find(device => normalizeArubaSwitchRole_(device.switch_role || device.role) === 'Commander' || device.is_commander === true) ||
         devList.find(device =>
           (
             device.ip_address &&
@@ -599,30 +597,21 @@ function processArubaDeviceSync_(
       let memberCount =
         devList.length;
 
-      if (stackMap[cleanKey]) {
-        memberCount =
-          stackMap[cleanKey].member_count ||
-          stackMap[cleanKey].stack_members_count ||
-          memberCount;
-      }
-
-      const stackInfoText =
-        memberCount > 1
-          ? 'Yes (' + memberCount + ' Members)'
-          : 'No';
-
-      const devRole =
-        memberCount > 1
-          ? 'Commander / Stack'
-          : 'Standalone';
+      const stack = stackMap[String(commander.stack_id || '')] || stackMap[cleanKey] || {};
+      memberCount = Math.max(memberCount, Number(stack.member_count || stack.stack_members_count || 0),
+        Array.isArray(stack.members) ? stack.members.length : 0,
+        Number(commander.member_count || commander.stack_members_count || 0));
+      const stackInfoText = memberCount > 1 ? 'Yes: ' + memberCount : 'No';
+      const devRole = commander.is_commander === true ? 'Commander' :
+        normalizeArubaSwitchRole_(commander.switch_role || commander.role);
 
       const devStatus =
         devList.some(device =>
           device.status === 'Up' ||
           device.state === 'Up'
         )
-          ? 'Up'
-          : 'Down';
+          ? 'Online'
+          : 'Offline';
 
       let devMode =
         'Monitor Mode';
@@ -938,4 +927,97 @@ function runNightlyDatabaseSync() {
   });
 
   return result;
+}
+
+function normalizeArubaSwitchRole_(value) {
+  const role = String(value || '').trim().toLowerCase().replace(/[_-]/g, ' ');
+  if (/^(commander(?: \/ stack)?|conductor|master|primary|active)$/.test(role)) return 'Commander';
+  if (/^(member|standby|secondary|backup|slave)$/.test(role)) return 'Member';
+  return '';
+}
+
+function normalizeArubaStackInfo_(value) {
+  const text = String(value || '').trim();
+  if (!text || /^(no|false|standalone)$/i.test(text)) return 'No';
+  const match = /^(?:yes\s*[:(]?\s*)?(\d+)(?:\s*members?\)?)?$/i.exec(text);
+  if (match) return Number(match[1]) > 1 ? 'Yes: ' + Number(match[1]) : 'No';
+  return '';
+}
+
+function getArubaSwarmMap_(options) {
+  const map = {};
+  // Optional bulk enrichment: never add per-AP RPCs or block inventory on failure.
+  try {
+    for (let offset = 0; ; offset += 1000) {
+      const response = UrlFetchApp.fetch(
+        'https://apigw-prod2.central.arubanetworks.com/monitoring/v1/swarms?limit=1000&offset=' + offset + '&fields=ip_address',
+        options);
+      if (response.getResponseCode() !== 200) break;
+      const payload = JSON.parse(response.getContentText());
+      const swarms = payload.swarms || payload.data || [];
+      if (!Array.isArray(swarms)) break;
+      swarms.forEach(swarm => { if (swarm.swarm_id) map[String(swarm.swarm_id)] = swarm; });
+      if (swarms.length < 1000) break;
+    }
+  } catch (error) {
+    console.warn('Optional Aruba swarm enrichment unavailable; AP inventory sync continues.');
+  }
+  return map;
+}
+
+function formatArubaVirtualController_(ap, swarm) {
+  swarm = swarm || {};
+  const name = String(swarm.name || ap.swarm_name || ap.controller_name || '').trim();
+  const candidate = String(swarm.ip_address || ap.virtual_controller_ip || ap.controller_ip || '').trim();
+  const ip = ['0.0.0.0', '127.0.0.1', '::'].includes(candidate) ? '' : candidate;
+  return [name ? 'Name: ' + name : '', ip ? 'IP: ' + ip : ''].filter(Boolean).join(' | ');
+}
+
+function processArubaAccessPointSync_(devices, swarms) {
+  if (!devices.length) return 0;
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Access Points');
+  if (!sheet) return 0;
+  const schema = getNetworkDashboardSchema_()['Access Points'];
+  ensureSchemaHeaderRow_(sheet, 'Access Points', schema.headers, schema.headers, 1, 1, true);
+  const values = sheet.getDataRange().getValues();
+  const headers = values[0].map(value => String(value || '').trim());
+  const serialIndex = headers.indexOf('Serial Number');
+  const macIndex = headers.indexOf('MAC Address');
+  const labelIndex = headers.indexOf('Device Label');
+  const normalized = value => String(value || '').trim().toLowerCase();
+  devices.forEach(ap => {
+    const serial = ap.serial || ap.serial_number || '';
+    const mac = ap.macaddr || ap.mac_address || '';
+    const name = ap.name || ap.hostname || ap.device_name || '';
+    let rowIndex = values.findIndex((row, index) => index > 0 &&
+      (serial && normalized(row[serialIndex]) === normalized(serial) ||
+       mac && normalized(row[macIndex]) === normalized(mac)));
+    if (rowIndex < 0 && name) {
+      rowIndex = values.findIndex((row, index) => index > 0 && !row[serialIndex] && !row[macIndex] &&
+        normalized(row[labelIndex]) === normalized(name));
+    }
+    const fields = {
+      'Status': normalizeControlledOption_('infrastructureStatus', ap.status || ap.state || 'Unknown', 'Status', false),
+      'Device Label': name,
+      'Model': ap.model || '',
+      'IP Address': ap.ip_address || ap.ip || '',
+      'Serial Number': serial,
+      'MAC Address': mac,
+      'Active Clients': ap.client_count == null ? '' : ap.client_count,
+      'Campus': ap.group_name || ap.ap_group || '',
+      'Virtual Controller': formatArubaVirtualController_(ap, swarms[String(ap.swarm_id || '')]),
+      'Last Sync': new Date()
+    };
+    if (rowIndex > 0) {
+      Object.keys(fields).forEach(header => {
+        const column = headers.indexOf(header);
+        if (column >= 0) sheet.getRange(rowIndex + 1, column + 1).setValue(fields[header]);
+      });
+    } else {
+      const row = headers.map(header => Object.prototype.hasOwnProperty.call(fields, header) ? fields[header] : '');
+      sheet.appendRow(row);
+      values.push(row);
+    }
+  });
+  return devices.length;
 }

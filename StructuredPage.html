@@ -4,31 +4,10 @@
  * STRUCTURED PAGE
  *******************************************************/
 
-function renderStructuredPage(data) {
+const STRUCTURED_PAGE_DEFINITIONS = {};
 
+function renderStructuredSections_(data) {
   currentStructuredData = data;
-
-  setPageHeader(
-    data.label,
-    'Infrastructure reference and operational information'
-  );
-
-
-  document.getElementById(
-    'pageActions'
-  ).innerHTML = `
-
-    <button
-      class="btn btn-sm btn-light border"
-      onclick="refreshCurrentPage(this)"
-    >
-      <i class="fa-solid fa-rotate me-2"></i>
-      Refresh
-    </button>
-
-  `;
-
-
   const content =
     document.getElementById(
       'pageContent'
@@ -440,6 +419,7 @@ function buildStructuredTableSection(
   requestAnimationFrame(
     function() {
 
+      if (!tableHost.isConnected) return;
       const table =
         createStructuredTabulator(
         tableHost,
@@ -447,11 +427,18 @@ function buildStructuredTableSection(
         permission
       );
 
-      buildStructuredColumnMenu(
-        table,
-        section,
-        columnMenu
-      );
+      structuredTables[section.key] = table;
+      input.addEventListener('input', function() {
+        const query = input.value.trim().toLowerCase();
+        if (!query) { table.clearFilter(); return; }
+        table.setFilter(row => (section.columns || []).some(column =>
+          String(row[column.field] || '').toLowerCase().includes(query)));
+      });
+      table.on('dataFiltered', function(filters, rows) {
+        count.textContent = rows.length + ' records';
+      });
+      table.on('tableBuilt', function() { buildStructuredColumnMenu(table, section, columnMenu); });
+
 
       bindColumnMenuRefresh_(
         columnMenu.id,
@@ -485,9 +472,13 @@ function createStructuredTabulator(
   /*
    * Internal fields used by real sheet columns.
    */
+  const definition = STRUCTURED_PAGE_DEFINITIONS[currentStructuredData.pageKey];
+  const sectionDefinition = definition && definition[section.key];
+  const configuredTitles = sectionDefinition ? sectionDefinition.defaultColumns : section.defaultColumnTitles || [];
+  const configuredFields = (section.columns || []).filter(column => configuredTitles.includes(column.title)).map(column => column.field);
   const defaults =
     new Set(
-      section.defaultColumns || []
+      configuredFields
     );
 
 
@@ -499,7 +490,7 @@ function createStructuredTabulator(
    */
   const defaultTitles =
     new Set(
-      section.defaultColumnTitles || []
+      configuredTitles
     );
 
 
@@ -607,118 +598,7 @@ function createStructuredTabulator(
       };
 
 
-      /*
-       * SITE
-       */
-      if (
-        normalized === 'site'
-      ) {
-
-        column.width =
-          190;
-
-        column.minWidth =
-          190;
-
-        column.maxWidth =
-          190;
-
-        column.resizable =
-          false;
-
-        column.responsive =
-          0;
-
-      }
-
-
-      /*
-       * LOCATION / SERVER LOCATION
-       */
-      if (
-        normalized === 'location' ||
-        normalized === 'server location'
-      ) {
-
-        column.minWidth =
-          170;
-
-        column.responsive =
-          2;
-
-      }
-
-
-      /*
-       * IP ADDRESS
-       */
-      if (
-        normalized === 'ip' ||
-        normalized === 'ip address'
-      ) {
-
-        column.width =
-          200;
-
-        column.minWidth =
-          200;
-
-        column.maxWidth =
-          200;
-
-        column.resizable =
-          false;
-
-        column.responsive =
-          0;
-
-      }
-
-
-      /*
-       * USERNAME
-       */
-      if (
-        isUsernameHeaderClient(
-          header
-        )
-      ) {
-
-        column.width =
-          210;
-
-        column.minWidth =
-          210;
-
-        column.maxWidth =
-          210;
-
-        column.resizable =
-          false;
-
-        column.responsive =
-          1;
-
-      }
-
-
-      /*
-       * NOTES
-       */
-      if (
-        normalized.includes(
-          'note'
-        )
-      ) {
-
-        column.minWidth =
-          170;
-
-        column.responsive =
-          3;
-
-      }
-
+      Object.assign(column, sectionDefinition && sectionDefinition.columns[header] || {});
 
       /*
        * STATUS
@@ -813,15 +693,16 @@ function createStructuredTabulator(
   );
 
 
-  columns =
-    applyColumnOrderPreference_(
-      columns,
-      columnPreferences
-    );
+  const defaultOrder = configuredTitles.map(title => {
+    const column = columns.find(item => item.title === title);
+    return column && column.field;
+  }).filter(Boolean);
+  columns = applyColumnOrderPreference_(columns, { order: defaultOrder });
+  columns = applyColumnOrderPreference_(columns, columnPreferences);
 
 
   const table =
-    new Tabulator(
+    createAppTable_(
       host,
       {
 
@@ -1033,6 +914,7 @@ function buildStructuredColumnMenu(
     clearAll
   );
 
+  controls.appendChild(createColumnResetButton_(preferenceKey));
   menu.appendChild(
     controls
   );
@@ -2651,6 +2533,25 @@ function saveStructuredRecord() {
         'save structured record: ' + pageKey
       );
     });
+}
+
+
+async function updateStructuredTables_(data) {
+  currentStructuredData = data;
+  await Promise.all((data.sections || []).filter(section => section.type === 'table').map(async section => {
+    const table = structuredTables[section.key];
+    if (!table) return;
+    await replaceTableRows_(table, section.rows);
+    const host = document.getElementById('structuredTable_' + section.key);
+    const count = host && host.parentElement.querySelector('.record-count');
+    if (count) count.textContent = table.getDataCount('active') + ' records';
+  }));
+}
+
+function renderReferencePageActions_() {
+  document.getElementById('pageActions').innerHTML =
+    '<button class="btn btn-sm btn-light border" onclick="refreshCurrentPage(this)">' +
+    '<i class="fa-solid fa-rotate me-2"></i>Refresh</button>';
 }
 
 </script>

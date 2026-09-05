@@ -1,0 +1,185 @@
+<script>
+let currentServerView = 'active';
+
+RECORD_PAGE_DEFINITIONS.servers = {
+  defaultColumns: ["Server Name","Status","IP Address","Type","Location"],
+  requiredColumns: ["Server Name"],
+  columns: {
+    "Server Name": { minWidth: 120 },
+    "IP Address": { minWidth: 115 },
+    "Status": { minWidth: 100 },
+    "Notes": { minWidth: 130 }
+  },
+  buildColumns: function(data) {
+    return buildRecordColumns_(data, RECORD_PAGE_DEFINITIONS.servers);
+  },
+  header: function(data) {
+    setPageHeader(data.label, data.serverViews.active + ' active - ' + data.serverViews.offline + ' offline');
+  },
+  actions: function(data) {
+    renderRecordActions_(data);
+  },
+  onOpen: function() { currentServerView = 'active'; },
+  toolbar: renderServerViewToolbar_,
+  recordCount: function(data) { return data.serverViews.active; },
+  matchesRow: function(row) { return currentServerView === 'all' || row._serverView === currentServerView; },
+  updateSummary: updateServerViewCounts_
+};
+
+function renderServersPage(data) {
+  renderRecordTable_(data, RECORD_PAGE_DEFINITIONS.servers);
+}
+
+function setServerView(
+  view
+) {
+
+  if (
+    ![
+      'active',
+      'offline',
+      'all'
+    ].includes(view)
+  ) {
+
+    return;
+
+  }
+
+
+  currentServerView =
+    view;
+
+
+  const activeButton =
+    document.getElementById(
+      'serverViewActive'
+    );
+
+
+  const offlineButton =
+    document.getElementById(
+      'serverViewOffline'
+    );
+
+
+  const allButton =
+    document.getElementById(
+      'serverViewAll'
+    );
+
+
+  [
+    activeButton,
+    offlineButton,
+    allButton
+  ].forEach(
+    button => {
+
+      if (!button) {
+        return;
+      }
+
+
+    button.classList.remove(
+      'btn-brand'
+      );
+
+
+      button.classList.add(
+        'btn-light',
+        'border'
+      );
+
+    }
+  );
+
+
+  const selectedButton =
+    view === 'active'
+      ? activeButton
+      : view === 'offline'
+        ? offlineButton
+        : allButton;
+
+
+  if (selectedButton) {
+
+    selectedButton.classList.remove(
+      'btn-light',
+      'border'
+    );
+
+
+    selectedButton.classList.add(
+      'btn-brand'
+    );
+
+  }
+
+
+  applyTableSearch();
+}
+
+function renderServerViewToolbar_(data) {
+  return `
+
+        <div
+          class="btn-group btn-group-sm me-2"
+          role="group"
+          aria-label="Server view"
+        >
+
+          <button
+            id="serverViewActive"
+            type="button"
+            class="btn btn-brand"
+            onclick="setServerView('active')"
+          >
+            <i class="fa-solid fa-circle-check me-1"></i>
+            Active
+            <span class="ms-1">
+              ${data.serverViews.active}
+            </span>
+          </button>
+
+
+          <button
+            id="serverViewOffline"
+            type="button"
+            class="btn btn-light border"
+            onclick="setServerView('offline')"
+          >
+            <i class="fa-solid fa-circle-xmark me-1"></i>
+            Offline
+            <span class="ms-1">
+              ${data.serverViews.offline}
+            </span>
+          </button>
+
+
+          <button
+            id="serverViewAll"
+            type="button"
+            class="btn btn-light border"
+            onclick="setServerView('all')"
+          >
+            All
+            <span class="ms-1">
+              ${data.serverViews.all}
+            </span>
+          </button>
+
+        </div>
+
+      `;
+}
+
+function updateServerViewCounts_(data) {
+  ['active', 'offline', 'all'].forEach(view => {
+    const button = document.getElementById('serverView' + view[0].toUpperCase() + view.slice(1));
+    const count = button && button.querySelector('span');
+    if (count) count.textContent = data.serverViews[view];
+  });
+}
+</script>

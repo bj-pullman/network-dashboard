@@ -1191,223 +1191,63 @@ function updateSettingsBrandPreview_() {
 }
 
 
-function saveSettingsForm(
-  button
-) {
-
-  if (settingsSaveInProgress) {
-    return;
+async function saveSettingsForm(button) {
+  if (settingsSaveInProgress) return;
+  settingsSaveInProgress = true;
+  let actionButton;
+  try {
+    const settings = collectSettingsFormValues_();
+    actionButton = setActionWorking(button, 'Saving...');
+    showAppWorkingModal({ title: 'Saving Settings...', message: 'Applying your configuration' });
+    const data = await scriptRunPromise_('saveAppSettings', runner => runner.saveAppSettings(settings));
+    clearClientPageCache_();
+    if (data.bootstrap) {
+      applyBootstrapShell(data.bootstrap);
+    } else {
+      appBootstrap.config = data.config;
+      applyBranding(data.config);
+    }
+    setClientCache('settings', data, { source: 'settings-save' });
+    if (currentPageKey === 'settings') {
+      currentPageData = data;
+      renderSettingsPage(data);
+    }
+    showToast('Settings saved.');
+  } catch (error) {
+    handleFailure(error, 'save settings');
+  } finally {
+    settingsSaveInProgress = false;
+    restoreAction(actionButton);
+    hideAppWorkingModal();
   }
-
-  settingsSaveInProgress =
-    true;
-
-  const settings =
-    collectSettingsFormValues_();
-
-  const actionButton =
-    setActionWorking(
-      button,
-      'Saving...'
-    );
-
-  showAppWorkingModal({
-    title: 'Saving Settings...',
-    message: 'Applying your configuration'
-  });
-
-  runAfterNextPaint_(function() {
-
-    scriptRunPromise_(
-      'saveAppSettings',
-      runner =>
-        runner.saveAppSettings(
-          settings
-        )
-    )
-      .then(function(data) {
-
-        currentPageData =
-          data;
-
-        clearClientPageCache_();
-
-        updateAppWorkingModal({
-          state: 'success',
-          title: 'Settings Saved',
-          message: data.moduleStateChanged
-            ? 'Refreshing enabled modules...'
-            : 'Applying saved configuration'
-        });
-
-        if (
-          data.bootstrap
-        ) {
-
-          applyBootstrapShell(
-            data.bootstrap
-          );
-
-        } else {
-
-          appBootstrap.config =
-            data.config;
-
-          applyBranding(
-            data.config
-          );
-
-        }
-
-        setActionSuccess(
-          actionButton,
-          'Saved'
-        );
-
-        showToast(
-          'Settings saved.'
-        );
-
-        setTimeout(
-          function() {
-            renderSettingsPage(
-              data
-            );
-            setClientCache(
-              'settings',
-              data,
-              {
-                source: 'settings-save'
-              }
-            );
-            scheduleOperationalPrefetch_();
-            settingsSaveInProgress =
-              false;
-            hideAppWorkingModal();
-          },
-          data.moduleStateChanged
-            ? 650
-            : 450
-        );
-
-      })
-      .catch(function(error) {
-        settingsSaveInProgress =
-          false;
-
-        updateAppWorkingModal({
-          state: 'error',
-          title: 'Settings Save Failed',
-          message: 'Review the issue and try again.',
-          error: error,
-          retry: function() {
-            hideAppWorkingModal();
-            saveSettingsForm(
-              button
-            );
-          }
-        });
-
-        setActionError(
-          actionButton,
-          'Save Failed'
-        );
-        handleFailure(
-          error,
-          'save settings'
-        );
-      });
-
-  });
 }
 
-
-function saveIntegrationEnabled(
-  id,
-  enabled,
-  input
-) {
-
+async function saveIntegrationEnabled(id, enabled, input) {
   if (input) {
-    input.disabled =
-      true;
-    input.setAttribute(
-      'aria-busy',
-      'true'
-    );
+    input.disabled = true;
+    input.setAttribute('aria-busy', 'true');
   }
-
-  scriptRunPromise_(
-    'saveIntegrationConfig:' + id,
-    runner =>
-      runner.saveIntegrationConfig(
-        id,
-        {
-          enabled: enabled,
-          settings: {}
-        }
-      )
-  )
-    .then(function(data) {
-
-      currentPageData =
-        data;
-
-      clearClientPageCache_();
-
-      if (data.bootstrap) {
-        applyBootstrapShell(
-          data.bootstrap
-        );
-      }
-
-      renderSettingsPage(
-        data
-      );
-
-      setClientCache(
-        'settings',
-        data,
-        {
-          source: 'integration-config'
-        }
-      );
-
-      scheduleOperationalPrefetch_();
-
-      showToast(
-        'Integration setting saved.'
-      );
-
-      if (input) {
-        input.disabled =
-          false;
-        input.removeAttribute(
-          'aria-busy'
-        );
-      }
-
-    })
-    .catch(function(error) {
-
-      if (input) {
-        input.checked =
-          !enabled;
-        input.disabled =
-          false;
-        input.removeAttribute(
-          'aria-busy'
-        );
-      }
-
-      handleFailure(
-        error,
-        'save integration setting: ' + id
-      );
-
-    });
+  try {
+    const data = await scriptRunPromise_('saveIntegrationConfig:' + id,
+      runner => runner.saveIntegrationConfig(id, { enabled: enabled, settings: {} }));
+    clearClientPageCache_();
+    if (data.bootstrap) applyBootstrapShell(data.bootstrap);
+    setClientCache('settings', data, { source: 'integration-config' });
+    if (currentPageKey === 'settings') {
+      currentPageData = data;
+      renderSettingsPage(data);
+    }
+    showToast('Integration setting saved.');
+  } catch (error) {
+    if (input) input.checked = !enabled;
+    handleFailure(error, 'save integration setting: ' + id);
+  } finally {
+    if (input) {
+      input.disabled = false;
+      input.removeAttribute('aria-busy');
+    }
+  }
 }
-
 
 function updateSettingsIntegrationFromResult_(
   result,

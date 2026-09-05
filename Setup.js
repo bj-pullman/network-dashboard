@@ -47,52 +47,25 @@ function getNetworkDashboardSchema_() {
         'Role',
         'Management Mode',
         'Stack Info',
-        'Port Capacity (Active)'
+        'Port Capacity (Active)',
+        'Campus'
       ],
       frozenRows: 1,
       tabColor: '#2563eb'
     },
 
     'Access Points': {
+      retiredHeaders: ["Type","Uptime","Port Capacity","Port Capacity (Active)","Stack Info","Location","Role"],
       type: 'operational',
       category: 'Infrastructure',
-      headers: [
-        'Status',
-        'Device Label',
-        'Model',
-        'Type',
-        'IP Address',
-        'Serial Number',
-        'MAC Address',
-        'Role',
-        'Management Mode',
-        'Stack Info',
-        'Port Capacity (Active)',
-        'Uptime',
-        'Active Clients',
-        'Campus',
-        'Location',
-        'Notes',
-        'Last Sync'
-      ],
-      requiredHeaders: [
-        'Status',
-        'Device Label',
-        'Model',
-        'Type',
-        'IP Address',
-        'Serial Number',
-        'MAC Address',
-        'Role',
-        'Management Mode',
-        'Stack Info',
-        'Port Capacity (Active)'
-      ],
+      headers: ["Status","Device Label","Model","IP Address","Serial Number","MAC Address","Management Mode","Active Clients","Campus","Virtual Controller","Notes","Last Sync"],
+      requiredHeaders: ["Status","Device Label","Model","IP Address","Serial Number","MAC Address","Management Mode","Active Clients","Campus","Virtual Controller","Notes","Last Sync"],
       frozenRows: 1,
       tabColor: '#2563eb'
     },
 
     'Servers': {
+      retiredHeaders: ["Reason"],
       type: 'operational',
       category: 'Infrastructure',
       headers: [
@@ -117,6 +90,7 @@ function getNetworkDashboardSchema_() {
     },
 
     'Offline Servers': {
+      retiredHeaders: ["Reason"],
       type: 'operational',
       category: 'Infrastructure',
       headers: [
@@ -126,7 +100,6 @@ function getNetworkDashboardSchema_() {
         'Status',
         'Location',
         'Offline Since',
-        'Reason',
         'Notes'
       ],
       requiredHeaders: [
@@ -140,24 +113,12 @@ function getNetworkDashboardSchema_() {
     },
 
     'IP Route Tables': {
+      retiredHeaders: ["Type","SubType","Metric","Dist","Distance"],
+      headerAliases: {"Destination":"Network / CIDR","VLAN":"VLAN ID","Notes":"Purpose / Notes"},
       type: 'operational',
       category: 'Infrastructure',
-      headers: [
-        'Destination',
-        'Gateway',
-        'VLAN',
-        'Type',
-        'SubType',
-        'Metric',
-        'Dist',
-        'Notes'
-      ],
-      requiredHeaders: [
-        'Destination',
-        'Gateway',
-        'VLAN',
-        'Type'
-      ],
+      headers: ["Campus / Location","VLAN ID","VLAN Name","Network / CIDR","Gateway","DHCP Scope / Pool","Purpose / Notes"],
+      requiredHeaders: ["Campus / Location","VLAN ID","VLAN Name","Network / CIDR","Gateway","DHCP Scope / Pool","Purpose / Notes"],
       frozenRows: 1,
       tabColor: '#2563eb'
     },
@@ -222,48 +183,23 @@ function getNetworkDashboardSchema_() {
     },
 
     'Security Cameras': {
+      retiredHeaders: ["Type","Category"],
       type: 'operational',
       category: 'Physical Systems',
       frozenRows: 1,
       tabColor: '#7c3aed',
       migration:
         'unifySecurityCameras',
-      headers: [
-        'Location',
-        'Asset / System',
-        'Category',
-        'Type',
-        'IP Address',
-        'Username',
-        'Password',
-        'Server Location',
-        'Notes'
-      ],
-      requiredHeaders: [
-        'Location',
-        'Category',
-        'IP Address'
-      ]
+      headers: ["Location","Asset / System","IP Address","Username","Password","Server Location","Notes"],
+      requiredHeaders: ["Location","Asset / System","IP Address","Username","Password","Server Location","Notes"]
     },
 
     'Intercom Bell System': {
+      headerAliases: {"Network / CIDR":"Subnet","Netmask":"Subnet Mask","Default Gateway":"Gateway","Usable Range":"Usable IP Range"},
       type: 'operational',
       category: 'Physical Systems',
-      headers: [
-        'Location',
-        'IP Address',
-        'VLAN Name',
-        'VLAN ID',
-        'Username',
-        'Password',
-        'Notes'
-      ],
-      requiredHeaders: [
-        'Location',
-        'IP Address',
-        'VLAN Name',
-        'VLAN ID'
-      ],
+      headers: ["Location","IP Address","VLAN Name","VLAN ID","Username","Password","Subnet","Gateway","Subnet Mask","Port","Usable IP Range","Notes"],
+      requiredHeaders: ["Location","IP Address","VLAN Name","VLAN ID","Username","Password","Subnet","Gateway","Subnet Mask","Port","Usable IP Range","Notes"],
       frozenRows: 1,
       tabColor: '#7c3aed'
     },
@@ -322,7 +258,8 @@ function getNetworkDashboardSchema_() {
             'Bridge IP',
             'Bridge Mac',
             'Bus Type',
-            'Notes'
+            'Notes',
+            'DVR Type'
           ]
         }
       ],
@@ -506,7 +443,7 @@ function getNetworkDashboardSchema_() {
         {
           row: 23,
           values: [
-            'P1 Critical',
+            'P1',
             'Immediate',
             'Until restored',
             'Major outage or critical business process unavailable.',
@@ -516,7 +453,7 @@ function getNetworkDashboardSchema_() {
         {
           row: 24,
           values: [
-            'P2 High',
+            'P2',
             'Same business day',
             '1-2 business days',
             'Significant impact to a team, site or important service.',
@@ -526,7 +463,7 @@ function getNetworkDashboardSchema_() {
         {
           row: 25,
           values: [
-            'P3 Normal',
+            'P3',
             '1 business day',
             '3-5 business days',
             'Standard request or single-user issue.',
@@ -536,7 +473,7 @@ function getNetworkDashboardSchema_() {
         {
           row: 26,
           values: [
-            'P4 Low',
+            'P4',
             '2 business days',
             'As scheduled',
             'Low-impact request, documentation or planned work.',
@@ -889,18 +826,6 @@ function getDashboardMetricDefinitions_() {
       notes: 'WAN circuits with Status = Standby.'
     },
     {
-      key: 'internet_wan.maintenance',
-      label: 'Maintenance Circuits',
-      sort: 56,
-      formula:
-        dashboardCountIfFormula_(
-          'Internet WAN',
-          'Status',
-          'Maintenance'
-        ),
-      notes: 'WAN circuits with Status = Maintenance.'
-    },
-    {
       key: 'internet_wan.sites',
       label: 'WAN Sites',
       sort: 57,
@@ -1238,6 +1163,7 @@ function setupNetworkDashboard(options) {
   );
 
 
+  clearAppDataCaches_();
   result.validation =
     validateNetworkDashboard({
       silent: true
@@ -1479,6 +1405,8 @@ function setupSchemaSheet_(
   );
 
 
+  applySchemaRefinements_(sheet, sheetName, definition, result);
+
   if (definition.seedCells) {
     seedBlankCells_(
       sheet,
@@ -1519,7 +1447,7 @@ function setupSchemaSheet_(
             rangeDefinition.requiredHeaders || rangeDefinition.headers,
             rangeDefinition.row,
             rangeDefinition.column || 1,
-            created
+            created || sheetName === 'Bus Cameras'
           );
 
         result.sheets.headersConfigured
@@ -2201,54 +2129,15 @@ function migrateLegacySecurityCamerasIfNeeded_(
   const ss =
     sheet.getParent();
 
-  let backupName =
-    migratedRows.length
-      ? getExistingLegacyBackupSheetName_(
-          ss,
-          sheetName
-        )
-      : '';
-
-  let backupCreated =
-    false;
-
-  if (
-    migratedRows.length &&
-    !backupName
-  ) {
-
-    backupName =
-      getUniqueSheetName_(
-        ss,
-        sheetName +
-        ' Legacy Backup'
-      );
-
-    try {
-
-      sheet
-        .copyTo(ss)
-        .setName(
-          backupName
-        );
-
-      backupCreated =
-        true;
-
-    } catch (error) {
-
-      result.warnings.push(
-        sheetName +
-        ' uses the old multi-section layout. Automatic migration was skipped because a backup sheet could not be created: ' +
-        error.message
-      );
-
-      return;
-
-    }
-
+  const backupName = getUniqueSheetName_(ss, sheetName + ' Legacy Backup');
+  let backupCreated = false;
+  try {
+    // Always back up this exact source, not a possibly outdated earlier migration.
+    sheet.copyTo(ss).setName(backupName);
+    backupCreated = true;
+  } catch (error) {
+    throw new Error('Security Cameras migration stopped because its backup could not be created.');
   }
-
 
   sheet.clear();
 
@@ -2310,7 +2199,7 @@ function isCanonicalSecurityCameraSheet_(
         1,
         1,
         1,
-        definition.headers.length
+        Math.max(sheet.getLastColumn(), definition.headers.length)
       )
       .getDisplayValues()[0]
       .map(value =>
@@ -2526,7 +2415,7 @@ function appendLegacyCameraSectionRows_(
     if (
       !location &&
       !ipAddress &&
-      !type &&
+      !(section.software && type) &&
       !username &&
       !password &&
       !serverLocation &&
@@ -2538,9 +2427,7 @@ function appendLegacyCameraSectionRows_(
 
     output.push([
       location,
-      '',
-      section.category,
-      type,
+      section.software ? type : '',
       ipAddress,
       username,
       password,
@@ -2629,7 +2516,7 @@ function ensureSchemaHeaderRow_(
         row,
         column,
         1,
-        canonicalHeaders.length
+        appendMissing ? Math.max(canonicalHeaders.length, sheet.getLastColumn() - column + 1) : canonicalHeaders.length
       )
       .getDisplayValues()[0]
       .map(value =>
@@ -4306,4 +4193,37 @@ function getSetupNextSteps_() {
     'Add users and permissions.',
     'Deploy or open the Apps Script web application.'
   ];
+}
+
+function applySchemaRefinements_(sheet, sheetName, definition, result) {
+  const headerRow = sheetName === 'Bus Cameras' ? 7 : 1;
+  if (definition.headers || sheetName === 'Bus Cameras') {
+    const headers = sheet.getRange(headerRow, 1, 1, Math.max(1, sheet.getLastColumn()))
+      .getDisplayValues()[0].map(value => String(value || '').trim());
+    const aliases = definition.headerAliases || {};
+    const retired = definition.retiredHeaders || [];
+    headers.forEach((header, index) => {
+      if (!header || /^Legacy: /i.test(header)) return;
+      const target = aliases[header];
+      const canonical = (definition.headers || []).find(name => name.toLowerCase() === header.toLowerCase());
+      let next = header;
+      if (target) next = headers.includes(target) ? 'Legacy: ' + header : target;
+      else if (retired.includes(header)) next = 'Legacy: ' + header;
+      else if (canonical) next = canonical !== header && headers.includes(canonical) ? 'Legacy: ' + header : canonical;
+      if (next !== header) {
+        sheet.getRange(headerRow, index + 1).setValue(next);
+        headers[index] = next;
+        result.migrations.push({ sheet: sheetName, from: header, to: next });
+      }
+    });
+  }
+  // Older installs validated the priority column beyond its section boundary.
+  if (sheetName === 'Department Workflow') {
+    sheet.getRange(22, 1, sheet.getMaxRows() - 21, 1).clearDataValidations();
+    const priorities = sheet.getRange(23, 1, 7, 1).getValues();
+    priorities.forEach((row, index) => {
+      const match = /^P([1-4])\s+(Critical|High|Normal|Low)$/i.exec(String(row[0] || '').trim());
+      if (match) sheet.getRange(23 + index, 1).setValue('P' + match[1]);
+    });
+  }
 }

@@ -1,0 +1,24 @@
+<script>
+RECORD_PAGE_DEFINITIONS.routes = {
+  defaultColumns: ["Campus / Location","VLAN ID","VLAN Name","Network / CIDR","Gateway"],
+  requiredColumns: ["Network / CIDR"],
+  columns: {
+    "Network / CIDR": { minWidth: 120 },
+    "VLAN ID": { minWidth: 70 },
+    "Notes": { minWidth: 130 }
+  },
+  buildColumns: function(data) {
+    return buildRecordColumns_(data, RECORD_PAGE_DEFINITIONS.routes);
+  },
+  header: function(data) {
+    setPageHeader(data.label, data.totalCount + ' records');
+  },
+  actions: function(data) {
+    renderRecordActions_(data);
+  }
+};
+
+function renderRoutesPage(data) {
+  renderRecordTable_(data, RECORD_PAGE_DEFINITIONS.routes);
+}
+</script>

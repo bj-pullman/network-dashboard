@@ -15,7 +15,9 @@ Network Dashboard is separated into four layers:
 
 The web app uses one lightweight shell. Page data is fetched on demand and cached in the browser so navigation can render cached pages immediately while fresh data refreshes in the background.
 
-Dashboard metrics and summary tables are formula-driven in the `Dashboard` sheet. The Dashboard web page reads only that sheet, while setup owns the formulas that reference operational sheets.
+Page renderers are included in the shell and routed by page key. Startup does not prefetch operational datasets. Compatible background refreshes replace table rows in place. See [PERFORMANCE.md](PERFORMANCE.md) for architecture, measurements, instrumentation and local regression checks.
+
+Dashboard metrics and summary tables are formula-driven in the `Dashboard` sheet, while setup owns the formulas that reference operational sheets. Outage and monitor widgets also use the local Outages, Internet WAN and UptimeRobot datasets.
 
 The core application should not require source edits for a new organization.
 
@@ -56,7 +58,7 @@ Validation checks enabled-module sheets, headers, header order, Dashboard formul
 
 ## Modules
 
-Core modules are always enabled: Dashboard, Switches, Access Points, Servers, IP Route Tables, Internet / WAN and Security Cameras. System administration pages remain enabled for Department Workflow, User Management and Settings.
+Core modules are always enabled: Dashboard, Switches, Access Points, Servers, VLANs & Routing, Internet / WAN and Security Cameras. System administration pages remain enabled for Department Workflow, User Management and Settings.
 
 Optional modules are disabled by default and can be enabled in Settings: Bus Cameras, Intercom Bell System and Backup Schedule. Enabling a module provisions its canonical sheet and protections. Disabling a module hides navigation, blocks server-side page access, removes dashboard calculations where applicable and preserves existing sheet data.
 
@@ -102,18 +104,13 @@ Operational data rows remain editable. Google Sheets owners can intentionally re
 - `Status`
 - `Device Label`
 - `Model`
-- `Type`
 - `IP Address`
 - `Serial Number`
 - `MAC Address`
-- `Role`
 - `Management Mode`
-- `Stack Info`
-- `Port Capacity (Active)`
-- `Uptime`
 - `Active Clients`
 - `Campus`
-- `Location`
+- `Virtual Controller`
 - `Notes`
 - `Last Sync`
 
@@ -137,19 +134,17 @@ Operational data rows remain editable. Google Sheets owners can intentionally re
 - `Status`
 - `Location`
 - `Offline Since`
-- `Reason`
 - `Notes`
 
 `IP Route Tables`
 
-- `Destination`
+- `Campus / Location`
+- `VLAN ID`
+- `VLAN Name`
+- `Network / CIDR`
 - `Gateway`
-- `VLAN`
-- `Type`
-- `SubType`
-- `Metric`
-- `Dist`
-- `Notes`
+- `DHCP Scope / Pool`
+- `Purpose / Notes`
 
 `Internet WAN`
 
@@ -209,8 +204,6 @@ Operational data rows remain editable. Google Sheets owners can intentionally re
 
 - `Location`
 - `Asset / System`
-- `Category`
-- `Type`
 - `IP Address`
 - `Username`
 - `Password`
@@ -225,12 +218,17 @@ Operational data rows remain editable. Google Sheets owners can intentionally re
 - `VLAN ID`
 - `Username`
 - `Password`
+- `Subnet`
+- `Gateway`
+- `Subnet Mask`
+- `Port`
+- `Usable IP Range`
 - `Notes`
 
 `Bus Cameras`
 
 - Metadata labels rows 1-5: `System`, `Vendor`, `Portal URL`, `Support Contact`, `Notes`
-- Bus Inventory row 7: `Bus Name/Number`, `DVR IP`, `Bridge IP`, `Bridge Mac`, `Bus Type`, `Notes`
+- Bus Inventory row 7: `Bus Name/Number`, `DVR IP`, `Bridge IP`, `Bridge Mac`, `Bus Type`, `Notes`, `DVR Type`
 
 `Backup Schedule`
 
@@ -521,6 +519,14 @@ Use `seedNetworkDashboardTestData()` to seed fictional data, `clearNetworkDashbo
 
 Application version: `1.0.0`
 
-Schema version: `1`
+Schema version: `2`
 
 These are stored in App Settings and returned by setup, validation and About.
+
+## Schema 2 Cleanup
+
+See [REGRESSION_FIXES.md](REGRESSION_FIXES.md) for the save lifecycle fix, revised defaults, Aruba field mapping, tests, and migration details.
+
+Run `setupNetworkDashboard()` once after deploying these sources. Retired columns are retained in place under `Legacy: ...` headers and hidden from managed views. VLANs & Routing still uses the `IP Route Tables` sheet. Server ThreatDown and Wazuh fields are visible only when their integration is enabled. Wazuh is a visibility-only placeholder with no API configuration.
+
+WAN status choices are Active, Standby, and Disabled. Existing manual Maintenance values are retained in the sheet but displayed as unspecified; choose a supported status when editing those circuits. Normal UptimeRobot health and outage processing are unchanged.
