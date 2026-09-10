@@ -1,0 +1,11 @@
+node_modules/**
+tests/**
+test-results/**
+package.json
+package-lock.json
+**/*.md
+.git/**
+.codex/**
+.agents/**
+TempSeed.gs
+DevSeed.js

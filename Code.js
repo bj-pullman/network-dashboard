@@ -139,6 +139,33 @@ function onOpen() {
 }
 
 
+function onEdit(event) {
+
+  try {
+    const range =
+      event && event.range;
+
+    if (
+      !range ||
+      range.getSheet().getName() !==
+        NETWORK_DASHBOARD_SETTINGS_SHEET
+    ) {
+      return;
+    }
+
+    AppConfig.invalidate_();
+    invalidateModuleCache_();
+    clearAppDataCaches_();
+
+  } catch (error) {
+    console.warn(
+      'Could not invalidate settings caches after an App Settings edit: ' +
+      error.message
+    );
+  }
+}
+
+
 function isNetworkDashboardDevSeedAvailable_() {
 
   return typeof seedNetworkDashboardTestData === 'function' &&
@@ -264,16 +291,29 @@ function resetNetworkDashboardDevEnvironmentFromMenu() {
 
 function validateNetworkDashboardFromMenu() {
 
-  return validateNetworkDashboard();
+  const result =
+    validateNetworkDashboard({
+      silent: true
+    });
+
+  SpreadsheetApp
+    .getUi()
+    .alert(
+      formatValidationSummary_(result)
+    );
+
+  return result;
 }
 
 
 function openNetworkDashboardFromMenu() {
 
   const url =
-    AppConfig.get(
-      'app.web_app_url'
-    );
+    String(
+      AppConfig.getFresh(
+        'app.web_app_url'
+      ) || ''
+    ).trim();
 
   const ui =
     SpreadsheetApp.getUi();
@@ -283,6 +323,16 @@ function openNetworkDashboardFromMenu() {
 
     ui.alert(
       'Network Dashboard web app URL is not configured. Deploy the Apps Script web app, then save the deployment URL in Settings or App Settings key app.web_app_url.'
+    );
+
+    return;
+  }
+
+
+  if (!isAppsScriptWebAppUrl_(url)) {
+
+    ui.alert(
+      'The configured Network Dashboard web app URL is not a valid Apps Script /exec deployment URL. Deploy the Apps Script project as a web app, copy its /exec URL, and save it as App Settings key app.web_app_url.'
     );
 
     return;

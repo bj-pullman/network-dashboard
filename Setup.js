@@ -1137,6 +1137,34 @@ function setupNetworkDashboard(options) {
       );
     });
 
+  const completeSchema =
+    getNetworkDashboardSchema_();
+
+  Object.keys(completeSchema)
+    .filter(sheetName =>
+      !schema[sheetName] &&
+      ss.getSheetByName(sheetName)
+    )
+    .forEach(sheetName => {
+
+      const sheet =
+        ss.getSheetByName(sheetName);
+
+      removeObsoleteManagedProtections_(
+        sheet,
+        sheetName,
+        completeSchema[sheetName]
+      );
+
+      protectManagedHeaderRanges_(
+        sheet,
+        sheetName,
+        completeSchema[sheetName],
+        result
+      );
+
+    });
+
   ensureDashboardFormulaLayer_(
     ss,
     result
@@ -1144,6 +1172,13 @@ function setupNetworkDashboard(options) {
 
 
   AppConfig.seedMissing_();
+
+  protectAppSettingsRanges_(
+    ss.getSheetByName(
+      NETWORK_DASHBOARD_SETTINGS_SHEET
+    ),
+    result
+  );
 
   seedIntegrationDefinitions_();
 
@@ -1260,6 +1295,17 @@ function validateNetworkDashboard(options) {
       NETWORK_DASHBOARD_SCHEMA_VERSION,
     sheets: [],
     protections: [],
+    appSettingsProtections: [],
+    triggers: [],
+    versions: {},
+    webAppDeployment: {
+      status: 'Not configured',
+      configured: false,
+      valid: false,
+      guidance:
+        'Deploy the Apps Script project as a web app and save its /exec URL as app.web_app_url.'
+    },
+    installationStatus: {},
     settings: [],
     integrations: [],
     scriptProperties: [],
@@ -1288,6 +1334,23 @@ function validateNetworkDashboard(options) {
       );
     });
 
+  const completeSchema =
+    getNetworkDashboardSchema_();
+
+  Object.keys(completeSchema)
+    .filter(sheetName =>
+      !schema[sheetName] &&
+      ss.getSheetByName(sheetName)
+    )
+    .forEach(sheetName => {
+      validateProtections_(
+        ss.getSheetByName(sheetName),
+        sheetName,
+        completeSchema[sheetName],
+        result
+      );
+    });
+
   validateInactiveAndObsoleteSheets_(
     ss,
     schema,
@@ -1297,9 +1360,20 @@ function validateNetworkDashboard(options) {
 
   validateSettings_(result);
 
+  validateAppSettingsProtections_(
+    ss.getSheetByName(
+      NETWORK_DASHBOARD_SETTINGS_SHEET
+    ),
+    result
+  );
+
   validateIntegrations_(result);
 
   validateBreakGlass_(result);
+
+  validateRequiredTriggers_(result);
+
+  summarizeInstallationStatus_(result);
 
 
   result.healthy =
@@ -2708,6 +2782,7 @@ function getManagedHeaderRangeDefinitions_(
   if (definition.headers) {
     ranges.push({
       key: 'headers',
+      category: 'header',
       row: 1,
       column: 1,
       rows: 1,
@@ -2722,6 +2797,7 @@ function getManagedHeaderRangeDefinitions_(
         definition.headerRanges
           .map(item => ({
             key: item.key,
+            category: 'header',
             row: item.row,
             column: item.column || 1,
             rows: 1,
@@ -2850,28 +2926,10 @@ function protectManagedHeaderRanges_(
         }
 
 
-        protection.setDescription(
+        configureManagedProtection_(
+          protection,
           description
         );
-
-        protection.setWarningOnly(false);
-
-        try {
-          if (protection.canDomainEdit()) {
-            protection.setDomainEdit(false);
-          }
-        } catch (error) {}
-
-        try {
-          const effectiveUser =
-            Session.getEffectiveUser();
-
-          if (effectiveUser) {
-            protection.addEditor(
-              effectiveUser
-            );
-          }
-        } catch (error) {}
 
         result.protections.protected
           .push({
@@ -2987,6 +3045,339 @@ function getManagedProtectionDescription_(
     sheetName,
     key
   ].join(' - ');
+}
+
+
+function configureManagedProtection_(
+  protection,
+  description
+) {
+
+  protection.setDescription(
+    description
+  );
+
+  protection.setWarningOnly(false);
+
+  let effectiveUser = null;
+  let effectiveEmail = '';
+
+  try {
+    effectiveUser =
+      Session.getEffectiveUser();
+
+    effectiveEmail =
+      effectiveUser &&
+      effectiveUser.getEmail
+        ? String(
+            effectiveUser.getEmail() || ''
+          ).toLowerCase()
+        : '';
+
+    if (effectiveUser) {
+      protection.addEditor(
+        effectiveUser
+      );
+    }
+  } catch (error) {}
+
+  try {
+    const otherEditors =
+      protection
+        .getEditors()
+        .filter(editor =>
+          !effectiveEmail ||
+          !editor.getEmail ||
+          String(editor.getEmail() || '')
+            .toLowerCase() !== effectiveEmail
+        );
+
+    if (otherEditors.length) {
+      protection.removeEditors(
+        otherEditors
+      );
+    }
+  } catch (error) {}
+
+  try {
+    if (protection.canDomainEdit()) {
+      protection.setDomainEdit(false);
+    }
+  } catch (error) {}
+}
+
+
+function isManagedProtectionEnforced_(
+  protection
+) {
+
+  try {
+    if (protection.isWarningOnly()) {
+      return false;
+    }
+  } catch (error) {
+    return false;
+  }
+
+  try {
+    if (protection.canDomainEdit()) {
+      return false;
+    }
+  } catch (error) {}
+
+  return true;
+}
+
+
+function getAppSettingsProtectionPrefix_() {
+
+  return 'Network Dashboard - App Settings - ';
+}
+
+
+function getAppSettingsProtectionDefinitions_(
+  sheet
+) {
+
+  if (!sheet) {
+    return [];
+  }
+
+  const width =
+    Math.max(
+      sheet.getLastColumn(),
+      getAppSettingsSheetHeaders_().length
+    );
+
+  const headers =
+    sheet
+      .getRange(1, 1, 1, width)
+      .getDisplayValues()[0]
+      .map(value =>
+        String(value || '').trim()
+      );
+
+  const maxRows =
+    Math.max(
+      sheet.getMaxRows(),
+      2
+    );
+
+  const definitions = [];
+
+  [
+    'Key',
+    'Type',
+    'Category',
+    'Label',
+    'Description',
+    'Updated At',
+    'Updated By'
+  ].forEach(header => {
+
+    const column =
+      headers.indexOf(header) + 1;
+
+    if (column > 0) {
+      definitions.push({
+        description:
+          getAppSettingsProtectionPrefix_() +
+          'Protected Metadata - ' +
+          header,
+        row: 2,
+        column: column,
+        rows: maxRows - 1,
+        columns: 1,
+        category: 'metadata',
+        key: header
+      });
+    }
+
+  });
+
+
+  const keyColumn =
+    headers.indexOf('Key') + 1;
+
+  const valueColumn =
+    headers.indexOf('Value') + 1;
+
+  if (
+    keyColumn > 0 &&
+    valueColumn > 0 &&
+    sheet.getLastRow() >= 2
+  ) {
+
+    const keys =
+      sheet
+        .getRange(
+          2,
+          keyColumn,
+          sheet.getLastRow() - 1,
+          1
+        )
+        .getDisplayValues();
+
+    const settings = {};
+
+    getAppSettingDefinitions_()
+      .forEach(definition => {
+        settings[definition.key] = definition;
+      });
+
+    keys.forEach((row, index) => {
+
+      const key =
+        String(row[0] || '').trim();
+
+      if (
+        key &&
+        settings[key] &&
+        !settings[key].editable
+      ) {
+        definitions.push({
+          description:
+            getAppSettingsProtectionPrefix_() +
+            'Protected Value - ' +
+            key,
+          row: index + 2,
+          column: valueColumn,
+          rows: 1,
+          columns: 1,
+          category: 'systemValue',
+          key: key
+        });
+      }
+
+    });
+  }
+
+
+  return definitions;
+}
+
+
+function protectAppSettingsRanges_(
+  sheet,
+  result
+) {
+
+  if (!sheet) {
+    result.protections.warnings.push(
+      'Could not protect App Settings fields because the sheet does not exist.'
+    );
+    return;
+  }
+
+  const definitions =
+    getAppSettingsProtectionDefinitions_(
+      sheet
+    );
+
+  const protections =
+    sheet.getProtections(
+      SpreadsheetApp.ProtectionType.RANGE
+    );
+
+  const expected = {};
+
+  definitions.forEach(definition => {
+
+    const range =
+      sheet.getRange(
+        definition.row,
+        definition.column,
+        definition.rows,
+        definition.columns
+      );
+
+    expected[definition.description] =
+      range.getA1Notation();
+
+    try {
+      let matching =
+        protections.filter(protection =>
+          protection.getDescription() ===
+            definition.description
+        );
+
+      let protection =
+        matching.find(item =>
+          item.getRange().getA1Notation() ===
+            range.getA1Notation()
+        );
+
+      matching
+        .filter(item => item !== protection)
+        .forEach(item => {
+          try {
+            item.remove();
+          } catch (error) {}
+        });
+
+      if (!protection) {
+        protection = range.protect();
+        result.protections.repaired.push({
+          sheet: NETWORK_DASHBOARD_SETTINGS_SHEET,
+          range: range.getA1Notation(),
+          category: definition.category
+        });
+      }
+
+      configureManagedProtection_(
+        protection,
+        definition.description
+      );
+
+      result.protections.protected.push({
+        sheet: NETWORK_DASHBOARD_SETTINGS_SHEET,
+        range: range.getA1Notation(),
+        description: definition.description,
+        category: definition.category,
+        key: definition.key
+      });
+
+    } catch (error) {
+      result.protections.warnings.push(
+        'Could not protect App Settings ' +
+        definition.key +
+        ': ' +
+        error.message
+      );
+    }
+
+  });
+
+
+  protections.forEach(protection => {
+
+    const description =
+      protection.getDescription();
+
+    if (
+      !description ||
+      description.indexOf(
+        getAppSettingsProtectionPrefix_()
+      ) !== 0
+    ) {
+      return;
+    }
+
+    const expectedRange =
+      expected[description];
+
+    if (
+      expectedRange &&
+      protection.getRange().getA1Notation() ===
+        expectedRange
+    ) {
+      return;
+    }
+
+    try {
+      protection.remove();
+    } catch (error) {}
+  });
 }
 
 
@@ -3814,13 +4205,17 @@ function validateProtections_(
           protection
             .getRange()
             .getA1Notation() ===
-            range.getA1Notation()
+            range.getA1Notation() &&
+          isManagedProtectionEnforced_(
+            protection
+          )
         );
 
       const status = {
         sheet: sheetName,
         range: range.getA1Notation(),
         description: description,
+        category: item.category || 'managed',
         protected: !!match
       };
 
@@ -3933,6 +4328,240 @@ function validateSettings_(result) {
       }
 
     });
+
+
+  const installedAppVersion =
+    String(values['app.version'] || '');
+
+  const installedSchemaVersion =
+    String(values['schema.version'] || '');
+
+  result.versions = {
+    application: {
+      expected: NETWORK_DASHBOARD_VERSION,
+      installed: installedAppVersion,
+      healthy:
+        installedAppVersion ===
+        NETWORK_DASHBOARD_VERSION
+    },
+    schema: {
+      expected: NETWORK_DASHBOARD_SCHEMA_VERSION,
+      installed: installedSchemaVersion,
+      healthy:
+        installedSchemaVersion ===
+        NETWORK_DASHBOARD_SCHEMA_VERSION
+    }
+  };
+
+  if (!result.versions.application.healthy) {
+    result.errors.push(
+      'Application version setting is not current. Run Setup / Initialize.'
+    );
+  }
+
+  if (!result.versions.schema.healthy) {
+    result.errors.push(
+      'Schema version setting is not current. Run Setup / Initialize.'
+    );
+  }
+
+
+  const webAppUrl =
+    String(
+      values['app.web_app_url'] || ''
+    ).trim();
+
+  const webAppUrlValid =
+    isAppsScriptWebAppUrl_(webAppUrl);
+
+  result.webAppDeployment = {
+    status:
+      !webAppUrl
+        ? 'Not configured'
+        : webAppUrlValid
+          ? 'Configured'
+          : 'Invalid URL',
+    configured: !!webAppUrl,
+    valid: webAppUrlValid,
+    guidance:
+      !webAppUrl
+        ? 'Deploy the Apps Script project as a web app and save its /exec URL as app.web_app_url.'
+        : webAppUrlValid
+          ? ''
+          : 'Replace app.web_app_url with the Apps Script web app deployment URL ending in /exec.'
+  };
+
+  if (result.webAppDeployment.guidance) {
+    result.warnings.push(
+      'Web App Deployment: ' +
+      result.webAppDeployment.status +
+      '. ' +
+      result.webAppDeployment.guidance
+    );
+  }
+}
+
+
+function validateAppSettingsProtections_(
+  sheet,
+  result
+) {
+
+  if (!sheet) {
+    return;
+  }
+
+  const protections =
+    sheet.getProtections(
+      SpreadsheetApp.ProtectionType.RANGE
+    );
+
+  getAppSettingsProtectionDefinitions_(sheet)
+    .forEach(definition => {
+
+      const range =
+        sheet.getRange(
+          definition.row,
+          definition.column,
+          definition.rows,
+          definition.columns
+        );
+
+      const protectedRange =
+        protections.some(protection =>
+          protection.getDescription() ===
+            definition.description &&
+          protection.getRange().getA1Notation() ===
+            range.getA1Notation() &&
+          isManagedProtectionEnforced_(
+            protection
+          )
+        );
+
+      result.appSettingsProtections.push({
+        category: definition.category,
+        key: definition.key,
+        range: range.getA1Notation(),
+        description: definition.description,
+        protected: protectedRange
+      });
+
+      if (!protectedRange) {
+        result.errors.push(
+          'Missing App Settings protection: ' +
+          definition.key +
+          ' (' +
+          range.getA1Notation() +
+          ')'
+        );
+      }
+
+    });
+}
+
+
+function validateRequiredTriggers_(result) {
+
+  const required = [
+    {
+      handler: 'maintainArubaCentralOAuthToken',
+      description:
+        'Daily Aruba Central OAuth token maintenance'
+    }
+  ];
+
+  const triggers =
+    ScriptApp.getProjectTriggers();
+
+  required.forEach(definition => {
+
+    const count =
+      triggers.filter(trigger =>
+        trigger.getHandlerFunction() ===
+          definition.handler
+      ).length;
+
+    result.triggers.push({
+      handler: definition.handler,
+      description: definition.description,
+      configured: count === 1,
+      count: count
+    });
+
+    if (count === 0) {
+      result.errors.push(
+        'Missing required trigger: ' +
+        definition.description +
+        '. Run Setup / Initialize.'
+      );
+    } else if (count > 1) {
+      result.errors.push(
+        'Duplicate required trigger: ' +
+        definition.description +
+        '. Run Setup / Initialize to repair it.'
+      );
+    }
+
+  });
+}
+
+
+function summarizeInstallationStatus_(result) {
+
+  result.installationStatus = {
+    sheetsAndSchema: {
+      healthy:
+        result.sheets.every(sheet =>
+          sheet.exists &&
+          sheet.missingHeaders.length === 0
+        ),
+      checked: result.sheets.length
+    },
+    headerProtections: {
+      healthy:
+        result.protections.some(item =>
+          item.category === 'header'
+        ) &&
+        result.protections
+          .filter(item =>
+            item.category === 'header'
+          )
+          .every(item =>
+            item.protected
+          ),
+      checked:
+        result.protections
+          .filter(item =>
+            item.category === 'header'
+          ).length
+    },
+    appSettingsProtections: {
+      healthy:
+        result.appSettingsProtections.length > 0 &&
+        result.appSettingsProtections.every(item =>
+          item.protected
+        ),
+      checked:
+        result.appSettingsProtections.length
+    },
+    requiredTriggers: {
+      healthy:
+        result.triggers.length > 0 &&
+        result.triggers.every(trigger =>
+          trigger.configured
+        ),
+      checked: result.triggers.length
+    },
+    versions: {
+      healthy:
+        result.versions.application.healthy &&
+        result.versions.schema.healthy,
+      application: result.versions.application,
+      schema: result.versions.schema
+    },
+    webAppDeployment:
+      result.webAppDeployment
+  };
 }
 
 
@@ -4027,7 +4656,7 @@ function formatSetupSummary_(result) {
     '',
     'Protections',
     result.protections.protected.length +
-      ' managed header ranges protected',
+      ' managed ranges protected',
     '',
     'Dashboard',
     result.dashboard &&
@@ -4089,7 +4718,20 @@ function formatValidationSummary_(result) {
     'Sheets checked: ' +
       result.sheets.length,
     'Header protections checked: ' +
-      result.protections.length,
+      result.protections
+        .filter(item =>
+          item.category === 'header'
+        ).length,
+    'App Settings protections checked: ' +
+      result.appSettingsProtections.length,
+    'Required triggers checked: ' +
+      result.triggers.length,
+    'Version health: ' +
+      (result.installationStatus.versions.healthy
+        ? 'Healthy'
+        : 'Needs attention'),
+    'Web App Deployment: ' +
+      result.webAppDeployment.status,
     'Unmanaged sheets: ' +
       (result.unmanagedSheets || []).length,
     '',
@@ -4193,7 +4835,9 @@ function getSetupNextSteps_() {
     'Optionally configure break-glass administrators in Script Properties.',
     'Add Script Properties for desired integrations.',
     'Add users and permissions.',
-    'Deploy or open the Apps Script web application.'
+    'Deploy the Apps Script project as a web app executing as the owner.',
+    'Save the deployment /exec URL as app.web_app_url.',
+    'Use Network Dashboard -> Open Dashboard to verify the deployment.'
   ];
 }
 

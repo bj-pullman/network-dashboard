@@ -6,5 +6,4 @@ DevSeed.js
 TempSeed.gs
 test-results/
 REGRESSION_FIXES.md
-.claspignore
 tests/*

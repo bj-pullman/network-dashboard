@@ -370,6 +370,30 @@ var AppConfig = (function() {
   }
 
 
+  function reload() {
+
+    invalidate_();
+
+    return getAll();
+  }
+
+
+  function getFresh(key) {
+
+    const values =
+      reload();
+
+    return Object.prototype
+      .hasOwnProperty
+      .call(
+        values,
+        key
+      )
+      ? values[key]
+      : '';
+  }
+
+
   function getBoolean(key) {
 
     const value =
@@ -955,7 +979,9 @@ var AppConfig = (function() {
 
   return {
     get: get,
+    getFresh: getFresh,
     getAll: getAll,
+    reload: reload,
     getBoolean: getBoolean,
     setMany: setMany,
     setSystemValue_: setSystemValue_,
@@ -965,6 +991,15 @@ var AppConfig = (function() {
   };
 
 })();
+
+
+function isAppsScriptWebAppUrl_(value) {
+
+  return /^https:\/\/script\.google\.com\/(?:(?:a\/macros\/[^/?#]+)|macros)\/s\/[^/?#]+\/exec\/?(?:[?#].*)?$/i
+    .test(
+      String(value || '').trim()
+    );
+}
 
 
 function getSettingsPageData_() {

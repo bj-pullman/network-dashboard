@@ -21,32 +21,137 @@ Dashboard metrics and summary tables are formula-driven in the `Dashboard` sheet
 
 The core application should not require source edits for a new organization.
 
-## Requirements
+## Installation model
 
-- A Google Sheet with this bound Apps Script project.
-- Apps Script V8 runtime.
-- Authorization for Spreadsheet, UrlFetch, Cache and Properties services when prompted.
-- Optional provider credentials stored in Apps Script Script Properties.
+The public Git repository is the canonical application source. Each organization owns a separate Google Sheet, bound Apps Script project, Script Properties, API credentials, operational data and web app deployment:
 
-## Installation
+```text
+Public Git repository
+  -> local clone on the organization's computer
+  -> clasp
+  -> organization-owned Apps Script project
+  -> organization-owned Google Sheet and data
+```
 
-1. Copy or create the template Google Sheet and bound Apps Script project.
-2. Open the spreadsheet.
-3. Authorize the script when prompted.
-4. Run `setupNetworkDashboard()` from Apps Script or use the custom spreadsheet menu: Network Dashboard -> Setup / Initialize.
-5. Configure the installation in the web app Settings page.
-6. Add users and permissions in User Management.
-7. Add integration credentials in Apps Script -> Project Settings -> Script Properties.
-8. Deploy the Apps Script web app.
-9. Save the deployed URL in Settings as `app.web_app_url`.
+Do not create customer-specific source copies such as `sheridan_production`, `user1_production` or `user2_production`. Installation-specific information belongs in the organization's Google resources, Script Properties, settings and ignored local `.clasp.json`, not in the canonical repository.
 
-Do not run `clasp push` to a production script until you have reviewed the changes and target script ID.
+### Prerequisites
+
+The installing administrator needs:
+
+- Git.
+- Node.js and npm.
+- The Apps Script CLI, `clasp`.
+- A Google account allowed to create/edit the Sheet, Apps Script project and web app deployment for the organization.
+
+Install clasp globally if it is not already installed, then authenticate with the installation owner's Google account:
+
+```powershell
+npm install -g @google/clasp
+clasp login
+```
+
+The application uses the Apps Script V8 runtime and requests authorization for services such as Spreadsheet, UrlFetch, Cache and Properties when needed. Optional integration credentials are stored only in Apps Script Script Properties.
+
+### Initial installation
+
+1. Create or choose a local installation directory. For example, in Windows PowerShell:
+
+   ```powershell
+   mkdir C:\automation\projects\network_dashboard
+   cd C:\automation\projects\network_dashboard
+   ```
+
+2. Clone the public repository into that directory. Cloning is preferred to manually creating a new Git repository:
+
+   ```powershell
+   git clone <PUBLIC_REPOSITORY_URL> .
+   ```
+
+3. Create a new blank Google Sheet. It may be completely empty.
+
+4. In the Sheet, select **Extensions -> Apps Script**. This creates the Sheet-bound Apps Script project.
+
+5. Rename the Apps Script project to an organization-specific name, such as `Example District Network Dashboard`.
+
+6. In Apps Script, select **Project Settings** and copy the **Script ID**. Use this field; do not try to parse an ID from the browser URL.
+
+7. In the root of the local clone, create `.clasp.json` with the organization's Script ID:
+
+   ```json
+   {
+     "scriptId": "PASTE_THE_ORGANIZATIONS_SCRIPT_ID_HERE",
+     "rootDir": ".",
+     "filePushOrder": [
+       "Config.js",
+       "App.js",
+       "Integrations.js",
+       "Setup.js",
+       "ArubaCentral.js",
+       "ThreatDown.js",
+       "Code.js"
+     ]
+   }
+   ```
+
+   This is safer than running `clasp clone` in the populated repository, because cloning the new blank Apps Script project could replace local application files. `.clasp.json` is installation-specific and is excluded by `.gitignore`; never commit it. Run `clasp status` and verify the target before the first push.
+
+8. Push only the Network Dashboard application source to the organization-owned Apps Script project:
+
+   ```powershell
+   clasp push
+   ```
+
+9. Return to Apps Script and verify that the Network Dashboard source files are present.
+
+10. Return to the Google Sheet and reload it so the **Network Dashboard** menu appears. Authorize the script when prompted.
+
+11. Select **Network Dashboard -> Setup / Initialize**. Setup creates the required sheets, schema, defaults, protections and maintenance trigger without resetting existing organization data.
+
+12. Complete configuration: organization and branding settings, users and permissions, and any integration credentials in **Apps Script -> Project Settings -> Script Properties**.
+
+Do not run `clasp push` until the target Script ID has been verified. In particular, do not reuse another organization's `.clasp.json`.
+
+### Deploy as a web app
+
+Deployment is a required installation step after initialization:
+
+1. In Apps Script, select **Deploy -> New deployment**.
+2. Select **Web app** as the deployment type.
+3. For **Execute as**, choose **Me** (the owner of this Network Dashboard installation).
+4. For **Who has access**, choose the appropriate organization/domain access option available in that Google Workspace environment.
+5. Deploy, complete authorization if prompted, and copy the deployed URL ending in `/exec`.
+6. Save that URL in Network Dashboard Settings as `app.web_app_url`.
+7. Return to the Sheet and verify **Network Dashboard -> Open Dashboard** opens the deployment.
+
+Executing as the owner lets the backend access its Sheet and configured integrations without requiring every dashboard user to have direct access to the underlying Sheet. Dashboard authorization rules still apply. Never hardcode an organization's deployment URL in source code.
+
+### Updating an existing installation
+
+The organization controls when it adopts a stable Network Dashboard release. In PowerShell, open its existing installation directory and run:
+
+```powershell
+git pull
+clasp status
+clasp push
+```
+
+`git pull` and `clasp push` replace application source only. They do not replace Sheet data, Script Properties, API credentials or setting values. After an update, run **Network Dashboard -> Setup / Initialize** when release notes require it; setup/migration logic must add or repair schema safely and preserve production rows and configuration.
+
+A future `update-network-dashboard.ps1` may combine target checks, `git pull`, tests/status checks and `clasp push`, allowing an administrator to run:
+
+```powershell
+cd C:\automation\projects\network_dashboard
+.\update-network-dashboard.ps1
+```
+
+That helper is intentionally not part of this pass. It must remain a thin, fail-safe wrapper around the same single-repository, separate-organization-deployment model.
 
 ## Setup
 
 `setupNetworkDashboard()` is the official installer. It is idempotent and safe to run again.
 
-Setup creates missing sheets for enabled modules, creates canonical headers, applies controlled dropdown validations, configures the Dashboard formula layer, freezes header rows, applies standard header formatting, protects managed header ranges, seeds `App Settings`, seeds `App Integrations`, seeds the first admin user when possible, records application/schema version metadata and reports integration Script Property status.
+Setup creates missing sheets for enabled modules, creates canonical headers, applies controlled dropdown validations, configures the Dashboard formula layer, freezes header rows, applies standard header formatting, protects managed header ranges and App Settings system fields, seeds `App Settings`, seeds `App Integrations`, seeds the first admin user when possible, records application/schema version metadata and reports integration Script Property status.
 
 Setup does not store secrets in Sheets, erase operational data, duplicate settings, duplicate integration definitions or duplicate managed header protections.
 
@@ -54,7 +159,7 @@ Setup does not store secrets in Sheets, erase operational data, duplicate settin
 
 Run `validateNetworkDashboard()` from Apps Script or use Network Dashboard -> Validate Installation in the spreadsheet menu.
 
-Validation checks enabled-module sheets, headers, header order, Dashboard formula rows, Dashboard summary formulas, Internet/WAN row shape, frozen rows, managed header protections, settings rows, integration definitions, enabled integration property completeness, application version, schema version and break-glass configuration. Disabled optional module sheets and obsolete legacy sheets are reported as unmanaged warnings without making the installation unhealthy. It returns structured results suitable for future UI display and never includes secret values.
+Validation reports required sheets/schema, header protections, App Settings protections, required triggers, application/schema versions and web app deployment separately. It also checks Dashboard formula rows, Dashboard summary formulas, Internet/WAN row shape, frozen rows, settings rows, integration definitions, enabled integration property completeness and break-glass configuration. A missing or malformed `app.web_app_url` is reported as `Not configured` or `Invalid URL` with deployment guidance, but does not make the underlying data/schema installation unhealthy. Disabled optional module sheets and obsolete legacy sheets are reported as unmanaged warnings without making the installation unhealthy. Validation performs structural URL checking only; it does not make a network request or expose secret values.
 
 ## Modules
 
@@ -69,6 +174,8 @@ Every application-managed sheet has a managed header protection range such as:
 `Network Dashboard - Managed Headers - Switches - headers`
 
 Operational data rows remain editable. Google Sheets owners can intentionally remove protections; the goal is strong prevention of accidental header edits, deletion, renaming and schema corruption.
+
+On `App Settings`, the `Key`, `Type`, `Category`, `Label`, `Description`, `Updated At` and `Updated By` columns are protected below the header. `Value` remains directly editable only for definitions marked `editable: true`; system values such as `app.version`, `schema.version` and `dashboard.widgets` receive their own managed protections. Setup recognizes its protections by descriptions beginning with `Network Dashboard -`, repairs stale/missing managed ranges idempotently and leaves unrelated organization-created protections alone. The web app executes as the owner and can continue to update managed cells programmatically.
 
 ## Canonical Sheets
 
@@ -474,35 +581,24 @@ Department Workflow is a generic product feature for documenting support groups,
 
 ## Deployment
 
-Deploy from Apps Script:
-
-1. Open Apps Script.
-2. Deploy -> New deployment.
-3. Select Web app.
-4. Choose execution/access settings appropriate for the organization.
-5. Deploy and authorize.
-6. Copy the deployment URL.
-7. Save it in Settings as `app.web_app_url`.
-
-The spreadsheet menu item Network Dashboard -> Open Dashboard uses `app.web_app_url`. It does not hard-code a deployment URL.
+Follow [Deploy as a web app](#deploy-as-a-web-app) during initial installation and whenever a new deployment is required. The spreadsheet menu item **Network Dashboard -> Open Dashboard** performs a fresh settings read and uses `app.web_app_url`; it does not hardcode a deployment URL. Both standard Apps Script `/exec` URLs and Workspace domain-scoped `/exec` URLs are accepted.
 
 ## Development with clasp
 
-This repository is configured for clasp. Review `.clasp.json` before pushing to confirm the script ID and target project.
+This repository is configured for clasp. Each installation supplies its own ignored `.clasp.json`. Review it before pushing to confirm the Script ID and target project.
 
 Useful commands:
 
 ```bash
 clasp status
-clasp pull
 clasp push
 ```
 
-Do not commit secrets. Do not push to production from this template-development repository unless that is explicitly intended.
+Do not use `clasp pull` as the installation binding step: a blank remote project can overwrite the populated clone. Do not commit secrets or `.clasp.json`. Do not push until the organization-specific target is confirmed.
 
 ## Local DevSeed
 
-`DevSeed.js` is a local-only development helper for filling a test spreadsheet with fictional rows. It is intentionally listed in `.gitignore`, but it remains a normal Apps Script source file locally so it can be included in local `clasp` QA when that is intentional.
+`DevSeed.js` is a local-only development helper for filling a test spreadsheet with fictional rows. It is intentionally listed in both `.gitignore` and `.claspignore`, keeping developer seed/reset code out of the public source and organization deployments. A developer who intentionally needs it in an isolated QA script can use a separate local clasp ignore configuration.
 
 Use `seedNetworkDashboardTestData()` to seed fictional data, `clearNetworkDashboardTestData()` to remove seed-owned rows, and `resetNetworkDashboardDevEnvironment("RESET")` to reset a local development spreadsheet. DevSeed includes fictional Internet/WAN circuits using documentation-safe public IP ranges, placeholder APSCN device names, blank UptimeRobot monitor IDs and never seeds real credentials.
 
