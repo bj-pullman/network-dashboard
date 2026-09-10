@@ -106,28 +106,28 @@ function onOpen() {
       'setupNetworkDashboard'
     )
     .addItem(
+      'Update / Repair',
+      'updateNetworkDashboard'
+    )
+    .addItem(
       'Validate Installation',
       'validateNetworkDashboardFromMenu'
     )
     .addItem(
       'Open Dashboard',
       'openNetworkDashboardFromMenu'
+    )
+    .addSubMenu(
+      ui.createMenu('Protection')
+        .addItem(
+          'Disable Protection (15 Minutes)',
+          'showDisableNetworkDashboardProtectionDialog'
+        )
+        .addItem(
+          'Enable Protection',
+          'enableNetworkDashboardProtection'
+        )
     );
-
-  if (
-    isNetworkDashboardDevSeedAvailable_()
-  ) {
-    menu
-      .addSeparator()
-      .addItem(
-        'Seed Test Data',
-        'seedNetworkDashboardTestDataFromMenu'
-      )
-      .addItem(
-        'Reset Development Environment',
-        'resetNetworkDashboardDevEnvironmentFromMenu'
-      );
-  }
 
   menu
     .addSeparator()

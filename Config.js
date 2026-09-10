@@ -1,5 +1,5 @@
 var NETWORK_DASHBOARD_VERSION = '1.0.0';
-var NETWORK_DASHBOARD_SCHEMA_VERSION = '2';
+var NETWORK_DASHBOARD_SCHEMA_VERSION = '4';
 var NETWORK_DASHBOARD_APP_NAME = 'Network Dashboard';
 var NETWORK_DASHBOARD_SETTINGS_SHEET = 'App Settings';
 var NETWORK_DASHBOARD_BREAK_GLASS_ADMINS_PROPERTY =
@@ -850,7 +850,10 @@ var AppConfig = (function() {
 
     invalidate_();
 
-    return getAll();
+    return Object.assign(
+      defaults_(),
+      readSheetValues_()
+    );
   }
 
 
@@ -894,17 +897,98 @@ var AppConfig = (function() {
 
       });
 
-    setSystemValue_(
-      'app.version',
-      NETWORK_DASHBOARD_VERSION,
-      'setup'
-    );
+    return getAll();
+  }
 
-    setSystemValue_(
-      'schema.version',
-      NETWORK_DASHBOARD_SCHEMA_VERSION,
-      'setup'
-    );
+
+  function reconcileDefinitions_(
+    updatedBy,
+    deferVersionValues
+  ) {
+
+    const sheet =
+      ensureSheet_();
+
+    const rows =
+      rowMap_(sheet);
+
+    const now =
+      new Date();
+
+    getAppSettingDefinitions_()
+      .forEach(definition => {
+
+        const existingRow =
+          rows[definition.key];
+
+        if (!existingRow) {
+          const initialValue =
+            deferVersionValues &&
+            (
+              definition.key === 'app.version' ||
+              definition.key === 'schema.version'
+            )
+              ? ''
+              : definition.defaultValue;
+
+          upsert_(
+            definition.key,
+            initialValue,
+            updatedBy || 'reconcile'
+          );
+          return;
+        }
+
+        const desiredMetadata = [
+          definition.type,
+          definition.category,
+          definition.label,
+          definition.description || ''
+        ];
+
+        const currentMetadata =
+          sheet
+            .getRange(
+              existingRow,
+              3,
+              1,
+              desiredMetadata.length
+            )
+            .getDisplayValues()[0]
+            .map(value =>
+              String(value || '')
+            );
+
+        const metadataChanged =
+          desiredMetadata.some(
+            (value, index) =>
+              String(value || '') !==
+              currentMetadata[index]
+          );
+
+        if (!metadataChanged) {
+          return;
+        }
+
+        sheet
+          .getRange(
+            existingRow,
+            3,
+            1,
+            6
+          )
+          .setValues([[
+            definition.type,
+            definition.category,
+            definition.label,
+            definition.description || '',
+            now,
+            updatedBy || 'reconcile'
+          ]]);
+
+      });
+
+    invalidate_();
 
     return getAll();
   }
@@ -986,6 +1070,7 @@ var AppConfig = (function() {
     setMany: setMany,
     setSystemValue_: setSystemValue_,
     seedMissing_: seedMissing_,
+    reconcileDefinitions_: reconcileDefinitions_,
     invalidate_: invalidate_,
     getClientConfig_: getClientConfig_
   };

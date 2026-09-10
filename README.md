@@ -136,7 +136,7 @@ clasp status
 clasp push
 ```
 
-`git pull` and `clasp push` replace application source only. They do not replace Sheet data, Script Properties, API credentials or setting values. After an update, run **Network Dashboard -> Setup / Initialize** when release notes require it; setup/migration logic must add or repair schema safely and preserve production rows and configuration.
+`git pull` and `clasp push` replace application source only. They do not replace Sheet data, Script Properties, API credentials or setting values. After every source update, run **Network Dashboard -> Update / Repair**. It detects the installed versions, runs only required versioned migrations, reconciles missing/application-controlled structure, restores protections, clears caches and validates the installation. No other post-update action is required unless release notes explicitly say otherwise.
 
 A future `update-network-dashboard.ps1` may combine target checks, `git pull`, tests/status checks and `clasp push`, allowing an administrator to run:
 
@@ -155,11 +155,23 @@ Setup creates missing sheets for enabled modules, creates canonical headers, app
 
 Setup does not store secrets in Sheets, erase operational data, duplicate settings, duplicate integration definitions or duplicate managed header protections.
 
+## Update / Repair
+
+`updateNetworkDashboard()` is the normal post-`clasp push` action and is available as **Network Dashboard -> Update / Repair**. Setup and Update/Repair share the same additive reconciliation engine, but the separate production action makes operator intent and reporting clear.
+
+Update/Repair reads the installed application/schema versions before changing metadata. Schema migrations run as an explicit sequential chain (for example, `2 -> 3`, then `3 -> 4`) and are not rerun once the installed schema is current. Missing sheets, headers, settings and integration definitions are added without replacing existing rows or organization-owned values. App Settings metadata may be refreshed from source definitions while each existing `Value` is preserved. Application/schema version settings are written only after reconciliation and protection restoration succeed.
+
+The Dashboard formula sheet is application-controlled and may be regenerated. Populated operational sheets are not cleared or rebuilt. A migration that genuinely restructures populated data must first create and verify a timestamped sheet named like `Network Dashboard Backup - <Sheet> - <timestamp>`; backup sheets are not deleted automatically.
+
+## Production menu
+
+The spreadsheet menu contains Setup/Initialize, Update/Repair, Validate Installation, Open Dashboard, Protection controls and About. Development seed/reset helpers are never included in the production menu, even if a developer has locally pushed `DevSeed.js` to an isolated test project.
+
 ## Validation
 
 Run `validateNetworkDashboard()` from Apps Script or use Network Dashboard -> Validate Installation in the spreadsheet menu.
 
-Validation reports required sheets/schema, header protections, App Settings protections, required triggers, application/schema versions and web app deployment separately. It also checks Dashboard formula rows, Dashboard summary formulas, Internet/WAN row shape, frozen rows, settings rows, integration definitions, enabled integration property completeness and break-glass configuration. A missing or malformed `app.web_app_url` is reported as `Not configured` or `Invalid URL` with deployment guidance, but does not make the underlying data/schema installation unhealthy. Disabled optional module sheets and obsolete legacy sheets are reported as unmanaged warnings without making the installation unhealthy. Validation performs structural URL checking only; it does not make a network request or expose secret values.
+Validation reports required sheets/schema, header protections, App Settings protections, required triggers, application/schema versions, protection state and web app deployment separately. It verifies managed protections are enforced, are not warning-only and do not allow domain editing. An active 15-minute maintenance window is reported as `Temporarily Disabled` with its restoration time instead of as schema corruption. If the window has expired, validation attempts immediate restoration and reports a failure as unhealthy. It also checks Dashboard formula rows, Dashboard summary formulas, Internet/WAN row shape, frozen rows, settings rows, integration definitions, enabled integration property completeness and break-glass configuration. A missing or malformed `app.web_app_url` is reported as `Not configured` or `Invalid URL` with deployment guidance, but does not make the underlying data/schema installation unhealthy. Validation performs structural URL checking only; it does not make a network request or expose secret values.
 
 ## Modules
 
@@ -173,9 +185,15 @@ Every application-managed sheet has a managed header protection range such as:
 
 `Network Dashboard - Managed Headers - Switches - headers`
 
-Operational data rows remain editable. Google Sheets owners can intentionally remove protections; the goal is strong prevention of accidental header edits, deletion, renaming and schema corruption.
+Operational data rows remain editable. Managed header protections block ordinary editors from changing/clearing headers or deleting rows/columns that intersect protected structure. Setup does not whitelist the user who ran it. Google Sheets itself always retains platform-level control for the file owner, so an owner can still alter or remove protections through Google Sheets administration; the application does not attempt to bypass that ownership rule.
 
-On `App Settings`, the `Key`, `Type`, `Category`, `Label`, `Description`, `Updated At` and `Updated By` columns are protected below the header. `Value` remains directly editable only for definitions marked `editable: true`; system values such as `app.version`, `schema.version` and `dashboard.widgets` receive their own managed protections. Setup recognizes its protections by descriptions beginning with `Network Dashboard -`, repairs stale/missing managed ranges idempotently and leaves unrelated organization-created protections alone. The web app executes as the owner and can continue to update managed cells programmatically.
+On `App Settings`, the `Key`, `Type`, `Category`, `Label`, `Description`, `Updated At` and `Updated By` columns are protected below the header. `Value` remains directly editable only for definitions marked `editable: true`; system values such as `app.version`, `schema.version` and `dashboard.widgets` receive their own managed protections. Setup recognizes its protections by descriptions beginning with `Network Dashboard -`, repairs stale/missing managed ranges idempotently and leaves unrelated organization-created protections alone. The web app executes as the owner and can continue to update managed cells programmatically without granting human editors access to protected ranges.
+
+### Temporary protection maintenance
+
+Use **Network Dashboard -> Protection -> Disable Protection (15 Minutes)** only for intentional structural maintenance. A confirmation dialog explains the risk before any change. Confirming removes only protections whose descriptions identify them as Network Dashboard-managed, records the expiration in Script Properties and installs one one-time restoration trigger. Disabling again replaces the existing trigger and extends the window rather than accumulating triggers.
+
+Use **Protection -> Enable Protection** to relock immediately. Setup/Initialize and Update/Repair also cancel any temporary window and finish with protections enabled. Automatic/manual restoration reconciles current schema protections idempotently and does not modify organization-created protections.
 
 ## Canonical Sheets
 
@@ -612,20 +630,22 @@ Use `seedNetworkDashboardTestData()` to seed fictional data, `clearNetworkDashbo
 - ThreatDown sync returns disabled or not configured: enable it in Settings and verify all ThreatDown Script Properties.
 - UptimeRobot health does not refresh: verify `UPTIMEROBOT_API_KEY`, enable the integration, test the connection and confirm mapped monitor IDs exist in UptimeRobot.
 - Header edits fail: this is expected for managed header ranges. Edit data rows, not protected headers.
-- Validation reports missing protections: run `setupNetworkDashboard()` to repair safe managed protections.
+- Validation reports missing protections: use **Protection -> Enable Protection** or **Update / Repair**.
 
 ## Versioning
 
 Application version: `1.0.0`
 
-Schema version: `2`
+Schema version: `4`
 
 These are stored in App Settings and returned by setup, validation and About.
 
-## Schema 2 Cleanup
+## Schema migration history
 
 See [REGRESSION_FIXES.md](REGRESSION_FIXES.md) for the save lifecycle fix, revised defaults, Aruba field mapping, tests, and migration details.
 
-Run `setupNetworkDashboard()` once after deploying these sources. Retired columns are retained in place under `Legacy: ...` headers and hidden from managed views. VLANs & Routing still uses the `IP Route Tables` sheet. Server ThreatDown and Wazuh fields are visible only when their integration is enabled. Wazuh is a visibility-only placeholder with no API configuration.
+Schema `2 -> 3` performs the earlier additive header refinements and converts legacy Internet/WAN download/upload bandwidth fields in place, creating a verified backup before changing a populated legacy sheet. Schema `3 -> 4` converts the old multi-section Security Cameras layout only when detected, again requiring a verified timestamped backup before rebuilding that specific sheet. Once `schema.version` is `4`, those historical migrations are not rerun.
+
+Retired columns are retained in place under `Legacy: ...` headers and hidden from managed views. VLANs & Routing still uses the `IP Route Tables` sheet. Server ThreatDown and Wazuh fields are visible only when their integration is enabled. Wazuh is a visibility-only placeholder with no API configuration.
 
 WAN status choices are Active, Standby, and Disabled. Existing manual Maintenance values are retained in the sheet but displayed as unspecified; choose a supported status when editing those circuits. Normal UptimeRobot health and outage processing are unchanged.

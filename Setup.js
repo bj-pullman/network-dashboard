@@ -1110,7 +1110,409 @@ function getColumnLetter_(
 }
 
 
+var NETWORK_DASHBOARD_PROTECTION_DISABLED_UNTIL_PROPERTY =
+  'NETWORK_DASHBOARD_PROTECTION_DISABLED_UNTIL';
+var NETWORK_DASHBOARD_PROTECTION_REENABLE_TRIGGER_PROPERTY =
+  'NETWORK_DASHBOARD_PROTECTION_REENABLE_TRIGGER_ID';
+var NETWORK_DASHBOARD_PROTECTION_RESTORE_HANDLER =
+  'restoreNetworkDashboardProtections';
+var NETWORK_DASHBOARD_PROTECTION_DISABLE_MINUTES = 15;
+
+
+function isNetworkDashboardManagedProtection_(
+  protection
+) {
+
+  const description =
+    String(
+      protection.getDescription() || ''
+    );
+
+  return description.indexOf(
+    'Network Dashboard - '
+  ) === 0;
+}
+
+
+function removeNetworkDashboardManagedProtections_() {
+
+  const ss =
+    SpreadsheetApp.getActiveSpreadsheet();
+
+  let removed = 0;
+
+  ss.getSheets().forEach(sheet => {
+    [
+      SpreadsheetApp.ProtectionType.RANGE,
+      SpreadsheetApp.ProtectionType.SHEET
+    ].forEach(type => {
+      sheet
+        .getProtections(type)
+        .filter(
+          isNetworkDashboardManagedProtection_
+        )
+        .forEach(protection => {
+          protection.remove();
+          removed++;
+        });
+    });
+  });
+
+  return removed;
+}
+
+
+function removeProtectionRestoreTriggers_() {
+
+  let removed = 0;
+
+  ScriptApp.getProjectTriggers()
+    .filter(trigger =>
+      trigger.getHandlerFunction() ===
+        NETWORK_DASHBOARD_PROTECTION_RESTORE_HANDLER
+    )
+    .forEach(trigger => {
+      ScriptApp.deleteTrigger(trigger);
+      removed++;
+    });
+
+  return removed;
+}
+
+
+function clearProtectionDisableState_() {
+
+  const properties =
+    PropertiesService
+      .getScriptProperties();
+
+  properties.deleteProperty(
+    NETWORK_DASHBOARD_PROTECTION_DISABLED_UNTIL_PROPERTY
+  );
+  properties.deleteProperty(
+    NETWORK_DASHBOARD_PROTECTION_REENABLE_TRIGGER_PROPERTY
+  );
+
+  removeProtectionRestoreTriggers_();
+}
+
+
+function getNetworkDashboardProtectionState_() {
+
+  const properties =
+    PropertiesService
+      .getScriptProperties();
+
+  const disabledUntilValue =
+    properties.getProperty(
+      NETWORK_DASHBOARD_PROTECTION_DISABLED_UNTIL_PROPERTY
+    );
+
+  const disabledUntil =
+    Number(disabledUntilValue || 0);
+
+  const now =
+    Date.now();
+
+  const restoreTriggerCount =
+    ScriptApp.getProjectTriggers()
+      .filter(trigger =>
+        trigger.getHandlerFunction() ===
+          NETWORK_DASHBOARD_PROTECTION_RESTORE_HANDLER
+      ).length;
+
+  const staleRestoreTrigger =
+    !disabledUntil &&
+    restoreTriggerCount > 0;
+
+  return {
+    status:
+      disabledUntil > now
+        ? 'Temporarily Disabled'
+        : disabledUntil
+          ? 'Expired - restoration required'
+          : staleRestoreTrigger
+            ? 'Repair required - stale restoration trigger'
+            : 'Enabled',
+    temporarilyDisabled:
+      disabledUntil > now,
+    expired:
+      !!disabledUntil &&
+      disabledUntil <= now,
+    staleRestoreTrigger:
+      staleRestoreTrigger,
+    disabledUntil:
+      disabledUntil || 0,
+    restoresAt:
+      disabledUntil
+        ? new Date(disabledUntil).toISOString()
+        : '',
+    restoreTriggerCount:
+      restoreTriggerCount
+  };
+}
+
+
+function showDisableNetworkDashboardProtectionDialog() {
+
+  const html =
+    HtmlService
+      .createHtmlOutput(
+        '<div style="font-family:Arial,sans-serif;padding:16px;line-height:1.45;">' +
+        '<h2 style="margin:0 0 12px;">Temporarily disable Network Dashboard protections?</h2>' +
+        '<p>Protected headers and system-managed ranges will become editable for 15 minutes. Use this only when intentionally modifying Network Dashboard structure.</p>' +
+        '<p><strong>Protections will automatically be restored.</strong></p>' +
+        '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px;">' +
+        '<button onclick="google.script.host.close()">Cancel</button>' +
+        '<button id="disable" style="background:#b91c1c;color:white;border:0;border-radius:4px;padding:8px 12px;" onclick="this.disabled=true;google.script.run.withSuccessHandler(function(){google.script.host.close();}).withFailureHandler(function(error){document.getElementById(\'error\').textContent=error.message;this.disabled=false;}.bind(this)).disableNetworkDashboardProtectionConfirmed();">Disable Protection</button>' +
+        '</div><p id="error" style="color:#b91c1c;"></p></div>'
+      )
+      .setWidth(520)
+      .setHeight(285);
+
+  SpreadsheetApp
+    .getUi()
+    .showModalDialog(
+      html,
+      'Network Dashboard Protection'
+    );
+}
+
+
+function disableNetworkDashboardProtectionConfirmed() {
+
+  const properties =
+    PropertiesService
+      .getScriptProperties();
+
+  removeProtectionRestoreTriggers_();
+
+  const disabledUntil =
+    Date.now() +
+    NETWORK_DASHBOARD_PROTECTION_DISABLE_MINUTES *
+      60 * 1000;
+
+  const removed =
+    removeNetworkDashboardManagedProtections_();
+
+  try {
+    const trigger =
+      ScriptApp
+        .newTrigger(
+          NETWORK_DASHBOARD_PROTECTION_RESTORE_HANDLER
+        )
+        .timeBased()
+        .at(
+          new Date(disabledUntil)
+        )
+        .create();
+
+    properties.setProperty(
+      NETWORK_DASHBOARD_PROTECTION_DISABLED_UNTIL_PROPERTY,
+      String(disabledUntil)
+    );
+    properties.setProperty(
+      NETWORK_DASHBOARD_PROTECTION_REENABLE_TRIGGER_PROPERTY,
+      trigger.getUniqueId()
+    );
+
+  } catch (error) {
+    restoreNetworkDashboardProtections({
+      silent: true,
+      reason: 'disable-failed'
+    });
+    throw error;
+  }
+
+  showNetworkDashboardToast_(
+    'Network Dashboard protections are disabled for 15 minutes.',
+    8
+  );
+
+  return {
+    status: 'Temporarily Disabled',
+    removed: removed,
+    restoresAt:
+      new Date(disabledUntil).toISOString()
+  };
+}
+
+
+function reconcileAllNetworkDashboardProtections_() {
+
+  const ss =
+    SpreadsheetApp.getActiveSpreadsheet();
+
+  const result =
+    createSetupResult_();
+
+  const schema =
+    getNetworkDashboardSchema_();
+
+  Object.keys(schema)
+    .forEach(sheetName => {
+      const sheet =
+        ss.getSheetByName(sheetName);
+      if (!sheet) {
+        return;
+      }
+      removeObsoleteManagedProtections_(
+        sheet,
+        sheetName,
+        schema[sheetName]
+      );
+      protectManagedHeaderRanges_(
+        sheet,
+        sheetName,
+        schema[sheetName],
+        result
+      );
+    });
+
+  protectAppSettingsRanges_(
+    ss.getSheetByName(
+      NETWORK_DASHBOARD_SETTINGS_SHEET
+    ),
+    result
+  );
+
+  return result;
+}
+
+
+function validateReconciledNetworkDashboardProtections_() {
+
+  const ss =
+    SpreadsheetApp.getActiveSpreadsheet();
+
+  const result = {
+    protections: [],
+    appSettingsProtections: [],
+    errors: [],
+    protectionStatus: {
+      temporarilyDisabled: false
+    }
+  };
+
+  const schema =
+    getNetworkDashboardSchema_();
+
+  Object.keys(schema)
+    .forEach(sheetName => {
+      const sheet =
+        ss.getSheetByName(sheetName);
+      if (sheet) {
+        validateProtections_(
+          sheet,
+          sheetName,
+          schema[sheetName],
+          result
+        );
+      }
+    });
+
+  validateAppSettingsProtections_(
+    ss.getSheetByName(
+      NETWORK_DASHBOARD_SETTINGS_SHEET
+    ),
+    result
+  );
+
+  return result;
+}
+
+
+function restoreNetworkDashboardProtections(
+  options
+) {
+
+  options =
+    options || {};
+
+  const result =
+    reconcileAllNetworkDashboardProtections_();
+
+  const validation =
+    validateReconciledNetworkDashboardProtections_();
+
+  if (validation.errors.length) {
+    throw new Error(
+      'Network Dashboard protections could not be fully enforced: ' +
+      validation.errors.join(' ')
+    );
+  }
+
+  clearProtectionDisableState_();
+
+  const state =
+    getNetworkDashboardProtectionState_();
+
+  if (!options.silent) {
+    showNetworkDashboardToast_(
+      'Network Dashboard protections are enabled.',
+      8
+    );
+  }
+
+  return {
+    status: state.status,
+    protectedRanges:
+      result.protections.protected.length,
+    warnings:
+      result.protections.warnings
+  };
+}
+
+
+function enableNetworkDashboardProtection() {
+
+  return restoreNetworkDashboardProtections({
+    silent: false,
+    reason: 'manual'
+  });
+}
+
+
 function setupNetworkDashboard(options) {
+
+  try {
+    return reconcileNetworkDashboard_(
+      'setup',
+      options
+    );
+  } catch (error) {
+    showNetworkDashboardToast_(
+      'Setup / Initialize failed: ' +
+      error.message,
+      10
+    );
+    throw error;
+  }
+}
+
+
+function updateNetworkDashboard(options) {
+
+  try {
+    return reconcileNetworkDashboard_(
+      'update',
+      options
+    );
+  } catch (error) {
+    showNetworkDashboardToast_(
+      'Update / Repair failed: ' +
+      error.message,
+      10
+    );
+    throw error;
+  }
+}
+
+
+function reconcileNetworkDashboard_(
+  mode,
+  options
+) {
 
   options =
     options || {};
@@ -1121,10 +1523,23 @@ function setupNetworkDashboard(options) {
   const ss =
     SpreadsheetApp.getActiveSpreadsheet();
 
+  const installedVersions =
+    getInstalledNetworkDashboardVersions_(ss);
+
+  result.mode = mode;
+  result.installedVersions =
+    installedVersions;
+
   invalidateModuleCache_();
 
   const schema =
     getActiveNetworkDashboardSchema_();
+
+  runRequiredSchemaMigrations_(
+    ss,
+    installedVersions.schema,
+    result
+  );
 
 
   Object.keys(schema)
@@ -1171,7 +1586,12 @@ function setupNetworkDashboard(options) {
   );
 
 
-  AppConfig.seedMissing_();
+  AppConfig.reconcileDefinitions_(
+    mode === 'update'
+      ? 'update/repair'
+      : 'setup',
+    true
+  );
 
   protectAppSettingsRanges_(
     ss.getSheetByName(
@@ -1187,16 +1607,27 @@ function setupNetworkDashboard(options) {
   seedInitialAdminUser_(result);
 
 
+  result.protectionRestore =
+    restoreNetworkDashboardProtections({
+      silent: true,
+      reason: mode
+    });
+
+
   AppConfig.setSystemValue_(
     'app.version',
     NETWORK_DASHBOARD_VERSION,
-    'setup'
+    mode === 'update'
+      ? 'update/repair'
+      : 'setup'
   );
 
   AppConfig.setSystemValue_(
     'schema.version',
     NETWORK_DASHBOARD_SCHEMA_VERSION,
-    'setup'
+    mode === 'update'
+      ? 'update/repair'
+      : 'setup'
   );
 
 
@@ -1215,14 +1646,18 @@ function setupNetworkDashboard(options) {
 
   if (!options.silent) {
     showNetworkDashboardToast_(
-      buildSetupToastMessage_(result),
+      buildReconciliationToastMessage_(
+        result
+      ),
       8
     );
   }
 
 
   console.log(
-    'Network Dashboard setup result: ' +
+    'Network Dashboard ' +
+    mode +
+    ' reconciliation result: ' +
     JSON.stringify(
       result,
       null,
@@ -1282,6 +1717,50 @@ function ensureEnabledOptionalModuleSheets_() {
 }
 
 
+function prepareProtectionValidationState_(
+  result
+) {
+
+  let state =
+    getNetworkDashboardProtectionState_();
+
+  if (
+    state.expired ||
+    state.staleRestoreTrigger
+  ) {
+    try {
+    restoreNetworkDashboardProtections({
+        silent: true,
+        reason: 'expired-validation'
+      });
+      state =
+        getNetworkDashboardProtectionState_();
+      state.status =
+        'Enabled (automatic state repair completed)';
+    } catch (error) {
+      state.status =
+        'Broken - automatic restoration failed';
+      result.errors.push(
+        'Protection disable period expired, but protections could not be restored: ' +
+        error.message
+      );
+    }
+  }
+
+  if (
+    state.temporarilyDisabled &&
+    state.restoreTriggerCount !== 1
+  ) {
+    result.errors.push(
+      'Protections are temporarily disabled, but exactly one automatic restoration trigger was not found.'
+    );
+  }
+
+  result.protectionStatus =
+    state;
+}
+
+
 function validateNetworkDashboard(options) {
 
   options =
@@ -1306,6 +1785,9 @@ function validateNetworkDashboard(options) {
         'Deploy the Apps Script project as a web app and save its /exec URL as app.web_app_url.'
     },
     installationStatus: {},
+    protectionStatus: {
+      status: 'Unknown'
+    },
     settings: [],
     integrations: [],
     scriptProperties: [],
@@ -1317,6 +1799,10 @@ function validateNetworkDashboard(options) {
 
   const ss =
     SpreadsheetApp.getActiveSpreadsheet();
+
+  prepareProtectionValidationState_(
+    result
+  );
 
   invalidateModuleCache_();
 
@@ -1472,16 +1958,6 @@ function setupSchemaSheet_(
     } catch (error) {}
   }
 
-
-  runSchemaMigrationIfNeeded_(
-    sheet,
-    sheetName,
-    definition,
-    result
-  );
-
-
-  applySchemaRefinements_(sheet, sheetName, definition, result);
 
   if (definition.seedCells) {
     seedBlankCells_(
@@ -1880,38 +2356,213 @@ function ensureDashboardFormulaLayer_(
 }
 
 
-function runSchemaMigrationIfNeeded_(
-  sheet,
-  sheetName,
-  definition,
+function getInstalledNetworkDashboardVersions_(ss) {
+
+  const sheet =
+    ss.getSheetByName(
+      NETWORK_DASHBOARD_SETTINGS_SHEET
+    );
+
+  const versions = {
+    application: '',
+    schema: '0'
+  };
+
+  if (
+    !sheet ||
+    sheet.getLastRow() < 2
+  ) {
+    return versions;
+  }
+
+  const values =
+    sheet.getDataRange().getDisplayValues();
+
+  const headers =
+    (values[0] || []).map(value =>
+      String(value || '').trim()
+    );
+
+  const keyIndex =
+    headers.indexOf('Key');
+
+  const valueIndex =
+    headers.indexOf('Value');
+
+  if (
+    keyIndex < 0 ||
+    valueIndex < 0
+  ) {
+    return versions;
+  }
+
+  values.slice(1).forEach(row => {
+    const key =
+      String(row[keyIndex] || '').trim();
+    if (key === 'app.version') {
+      versions.application =
+        String(row[valueIndex] || '').trim();
+    } else if (key === 'schema.version') {
+      versions.schema =
+        String(row[valueIndex] || '0').trim() || '0';
+    }
+  });
+
+  return versions;
+}
+
+
+function getNetworkDashboardSchemaMigrations_() {
+
+  return [
+    {
+      from: 0,
+      to: 1,
+      run: function() {}
+    },
+    {
+      from: 1,
+      to: 2,
+      run: function() {}
+    },
+    {
+      from: 2,
+      to: 3,
+      run: migrateSchema2To3_
+    },
+    {
+      from: 3,
+      to: 4,
+      run: migrateSchema3To4_
+    }
+  ];
+}
+
+
+function runRequiredSchemaMigrations_(
+  ss,
+  installedVersion,
   result
 ) {
 
-  if (
-    definition.migration ===
-    'internetWanBandwidth'
-  ) {
-    migrateInternetWanBandwidthIfNeeded_(
-      sheet,
-      sheetName,
-      definition,
+  let version =
+    Number.parseInt(
+      String(installedVersion || '0'),
+      10
+    );
+
+  if (!Number.isFinite(version)) {
+    version = 0;
+  }
+
+  const current =
+    Number.parseInt(
+      NETWORK_DASHBOARD_SCHEMA_VERSION,
+      10
+    );
+
+  if (version > current) {
+    throw new Error(
+      'Installed schema version ' +
+      version +
+      ' is newer than this source supports (' +
+      current +
+      '). Update the source before running repair.'
+    );
+  }
+
+  const migrations =
+    getNetworkDashboardSchemaMigrations_();
+
+  while (version < current) {
+    const migration =
+      migrations.find(item =>
+        item.from === version
+      );
+
+    if (!migration) {
+      throw new Error(
+        'No schema migration is available from version ' +
+        version +
+        '.'
+      );
+    }
+
+    migration.run(
+      ss,
       result
     );
+
+    result.migrations.push({
+      fromVersion: migration.from,
+      toVersion: migration.to,
+      message:
+        'Schema migration ' +
+        migration.from +
+        ' -> ' +
+        migration.to +
+        ' completed.'
+    });
+
+    version = migration.to;
+  }
+}
+
+
+function migrateSchema2To3_(
+  ss,
+  result
+) {
+
+  const schema =
+    getNetworkDashboardSchema_();
+
+  Object.keys(schema)
+    .forEach(sheetName => {
+      const sheet =
+        ss.getSheetByName(sheetName);
+      if (sheet) {
+        applySchemaRefinements_(
+          sheet,
+          sheetName,
+          schema[sheetName],
+          result
+        );
+      }
+    });
+
+  const internetWan =
+    ss.getSheetByName('Internet WAN');
+
+  if (internetWan) {
+    migrateInternetWanBandwidthIfNeeded_(
+      internetWan,
+      'Internet WAN',
+      schema['Internet WAN'],
+      result
+    );
+  }
+}
+
+
+function migrateSchema3To4_(
+  ss,
+  result
+) {
+
+  const sheet =
+    ss.getSheetByName('Security Cameras');
+
+  if (!sheet) {
     return;
   }
-
-  if (
-    definition.migration !==
-    'unifySecurityCameras'
-  ) {
-    return;
-  }
-
 
   migrateLegacySecurityCamerasIfNeeded_(
     sheet,
-    sheetName,
-    definition,
+    'Security Cameras',
+    getNetworkDashboardSchema_()[
+      'Security Cameras'
+    ],
     result
   );
 }
@@ -1971,22 +2622,6 @@ function migrateInternetWanBandwidthIfNeeded_(
     return;
   }
 
-  const canonicalHeaders =
-    definition.headers || [];
-
-  const extraHeaders =
-    headers.filter(header =>
-      header &&
-      !canonicalHeaders.includes(header) &&
-      header !== 'Download Bandwidth' &&
-      header !== 'Upload Bandwidth'
-    );
-
-  const nextHeaders =
-    canonicalHeaders.concat(
-      extraHeaders
-    );
-
   const values =
     sheet
       .getRange(
@@ -1997,58 +2632,82 @@ function migrateInternetWanBandwidthIfNeeded_(
       )
       .getDisplayValues();
 
-  const nextValues =
-    [nextHeaders];
-
-  values
-    .slice(1)
-    .forEach(row => {
-
-      const rowObject = {};
-
-      headers.forEach((header, index) => {
-        if (header) {
-          rowObject[header] =
-            row[index];
-        }
-      });
-
-      if (
-        !String(rowObject.Bandwidth || '').trim()
-      ) {
-        rowObject.Bandwidth =
-          mergeInternetWanLegacyBandwidth_(
-            downloadIndex >= 0
-              ? row[downloadIndex]
-              : '',
-            uploadIndex >= 0
-              ? row[uploadIndex]
-              : ''
-          );
-      }
-
-      nextValues.push(
-        nextHeaders.map(header =>
-          rowObject[header] !== undefined
-            ? rowObject[header]
-            : ''
+  const backupName =
+    lastRow > 1
+      ? createMigrationBackup_(
+          sheet,
+          sheetName
         )
+      : '';
+
+  let targetBandwidthIndex =
+    bandwidthIndex;
+
+  if (targetBandwidthIndex < 0) {
+    targetBandwidthIndex =
+      downloadIndex >= 0
+        ? downloadIndex
+        : uploadIndex;
+
+    sheet
+      .getRange(
+        1,
+        targetBandwidthIndex + 1
+      )
+      .setValue('Bandwidth');
+  }
+
+  values.slice(1).forEach((row, index) => {
+    const current =
+      String(
+        row[targetBandwidthIndex] || ''
+      ).trim();
+
+    if (current) {
+      return;
+    }
+
+    const merged =
+      mergeInternetWanLegacyBandwidth_(
+        downloadIndex >= 0
+          ? row[downloadIndex]
+          : '',
+        uploadIndex >= 0
+          ? row[uploadIndex]
+          : ''
       );
 
-    });
+    if (merged) {
+      sheet
+        .getRange(
+          index + 2,
+          targetBandwidthIndex + 1
+        )
+        .setValue(merged);
+    }
+  });
 
-  sheet.clearContents();
+  if (
+    downloadIndex >= 0 &&
+    downloadIndex !== targetBandwidthIndex
+  ) {
+    sheet
+      .getRange(1, downloadIndex + 1)
+      .setValue(
+        'Legacy: Download Bandwidth'
+      );
+  }
 
-  sheet
-    .getRange(
-      1,
-      1,
-      nextValues.length,
-      nextHeaders.length
-    )
-    .setValues(
-      nextValues
-    );
+  if (
+    uploadIndex >= 0 &&
+    uploadIndex !== targetBandwidthIndex
+  ) {
+    sheet
+      .getRange(1, uploadIndex + 1)
+      .setValue(
+        'Legacy: Upload Bandwidth'
+      );
+  }
 
   if (
     result &&
@@ -2057,7 +2716,8 @@ function migrateInternetWanBandwidthIfNeeded_(
     result.migrations.push({
       sheet: sheetName,
       message:
-        'Migrated Download/Upload Bandwidth columns to canonical Bandwidth.'
+        'Migrated Download/Upload Bandwidth in place without rebuilding rows.',
+      backupSheet: backupName
     });
   }
 }
@@ -2155,6 +2815,45 @@ function normalizeInternetWanLegacyBandwidthKey_(
 }
 
 
+function createMigrationBackup_(
+  sheet,
+  sheetName
+) {
+
+  const ss =
+    sheet.getParent();
+
+  const backupName =
+    getUniqueSheetName_(
+      ss,
+      'Network Dashboard Backup - ' +
+      sheetName
+    );
+
+  try {
+    const backup =
+      sheet.copyTo(ss);
+
+    backup.setName(backupName);
+
+    if (!ss.getSheetByName(backupName)) {
+      throw new Error(
+        'The copied backup sheet could not be verified.'
+      );
+    }
+
+    return backupName;
+
+  } catch (error) {
+    throw new Error(
+      sheetName +
+      ' migration stopped because its backup could not be created and verified: ' +
+      error.message
+    );
+  }
+}
+
+
 function migrateLegacySecurityCamerasIfNeeded_(
   sheet,
   sheetName,
@@ -2202,18 +2901,11 @@ function migrateLegacySecurityCamerasIfNeeded_(
     );
 
 
-  const ss =
-    sheet.getParent();
-
-  const backupName = getUniqueSheetName_(ss, sheetName + ' Legacy Backup');
-  let backupCreated = false;
-  try {
-    // Always back up this exact source, not a possibly outdated earlier migration.
-    sheet.copyTo(ss).setName(backupName);
-    backupCreated = true;
-  } catch (error) {
-    throw new Error('Security Cameras migration stopped because its backup could not be created.');
-  }
+  const backupName =
+    createMigrationBackup_(
+      sheet,
+      sheetName
+    );
 
   sheet.clear();
 
@@ -2250,9 +2942,7 @@ function migrateLegacySecurityCamerasIfNeeded_(
     message:
       'Migrated old multi-section Security Cameras layout to one canonical table.',
     backupSheet:
-      backupCreated
-        ? backupName
-        : '',
+      backupName,
     rowsMigrated:
       migratedRows.length
   });
@@ -3059,42 +3749,13 @@ function configureManagedProtection_(
 
   protection.setWarningOnly(false);
 
-  let effectiveUser = null;
-  let effectiveEmail = '';
-
   try {
-    effectiveUser =
-      Session.getEffectiveUser();
+    const editors =
+      protection.getEditors();
 
-    effectiveEmail =
-      effectiveUser &&
-      effectiveUser.getEmail
-        ? String(
-            effectiveUser.getEmail() || ''
-          ).toLowerCase()
-        : '';
-
-    if (effectiveUser) {
-      protection.addEditor(
-        effectiveUser
-      );
-    }
-  } catch (error) {}
-
-  try {
-    const otherEditors =
-      protection
-        .getEditors()
-        .filter(editor =>
-          !effectiveEmail ||
-          !editor.getEmail ||
-          String(editor.getEmail() || '')
-            .toLowerCase() !== effectiveEmail
-        );
-
-    if (otherEditors.length) {
+    if (editors.length) {
       protection.removeEditors(
-        otherEditors
+        editors
       );
     }
   } catch (error) {}
@@ -4221,7 +4882,11 @@ function validateProtections_(
 
       result.protections.push(status);
 
-      if (!match) {
+      if (
+        !match &&
+        !result.protectionStatus
+          .temporarilyDisabled
+      ) {
         result.errors.push(
           'Missing managed header protection: ' +
           sheetName +
@@ -4446,7 +5111,11 @@ function validateAppSettingsProtections_(
         protected: protectedRange
       });
 
-      if (!protectedRange) {
+      if (
+        !protectedRange &&
+        !result.protectionStatus
+          .temporarilyDisabled
+      ) {
         result.errors.push(
           'Missing App Settings protection: ' +
           definition.key +
@@ -4519,16 +5188,20 @@ function summarizeInstallationStatus_(result) {
     },
     headerProtections: {
       healthy:
-        result.protections.some(item =>
-          item.category === 'header'
-        ) &&
-        result.protections
-          .filter(item =>
+        result.protectionStatus
+          .temporarilyDisabled ||
+        (
+          result.protections.some(item =>
             item.category === 'header'
-          )
-          .every(item =>
-            item.protected
-          ),
+          ) &&
+          result.protections
+            .filter(item =>
+              item.category === 'header'
+            )
+            .every(item =>
+              item.protected
+            )
+        ),
       checked:
         result.protections
           .filter(item =>
@@ -4537,9 +5210,13 @@ function summarizeInstallationStatus_(result) {
     },
     appSettingsProtections: {
       healthy:
-        result.appSettingsProtections.length > 0 &&
-        result.appSettingsProtections.every(item =>
-          item.protected
+        result.protectionStatus
+          .temporarilyDisabled ||
+        (
+          result.appSettingsProtections.length > 0 &&
+          result.appSettingsProtections.every(item =>
+            item.protected
+          )
         ),
       checked:
         result.appSettingsProtections.length
@@ -4560,7 +5237,9 @@ function summarizeInstallationStatus_(result) {
       schema: result.versions.schema
     },
     webAppDeployment:
-      result.webAppDeployment
+      result.webAppDeployment,
+    protectionStatus:
+      result.protectionStatus
   };
 }
 
@@ -4672,8 +5351,9 @@ function formatSetupSummary_(result) {
       result.migrations.length
       ? result.migrations
           .map(item =>
-            item.sheet +
-            ': ' +
+            (item.sheet
+              ? item.sheet + ': '
+              : '') +
             item.message
           )
           .join('\n')
@@ -4726,6 +5406,12 @@ function formatValidationSummary_(result) {
       result.appSettingsProtections.length,
     'Required triggers checked: ' +
       result.triggers.length,
+    'Protection Status: ' +
+      result.protectionStatus.status,
+    result.protectionStatus.restoresAt
+      ? 'Restores At: ' +
+          result.protectionStatus.restoresAt
+      : '',
     'Version health: ' +
       (result.installationStatus.versions.healthy
         ? 'Healthy'
@@ -4760,7 +5446,7 @@ function formatValidationSummary_(result) {
 }
 
 
-function buildSetupToastMessage_(result) {
+function buildReconciliationToastMessage_(result) {
 
   const validation =
     result.validation || {};
@@ -4771,7 +5457,9 @@ function buildSetupToastMessage_(result) {
       : getNetworkDashboardSheetNames_().length;
 
   return [
-    'Setup complete',
+    result.mode === 'update'
+      ? 'Update / Repair complete'
+      : 'Setup / Initialize complete',
     sheetCount + ' sheets validated',
     'Schema ' + NETWORK_DASHBOARD_SCHEMA_VERSION,
     result.healthy ? 'Healthy' : 'Needs attention'
