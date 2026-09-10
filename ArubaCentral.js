@@ -79,11 +79,105 @@ function getArubaCentralToken_() {
   }
 
 
+  const responseDetail =
+    getArubaCentralOAuthErrorDetail_(
+      response.getContentText()
+    );
+
   throw new Error(
     'Aruba Central refresh token failed (HTTP ' +
     resCode +
-    '). Check ARUBA_CLIENT_ID, ARUBA_CLIENT_SECRET, and ARUBA_REFRESH_TOKEN.'
+    ').' +
+    (responseDetail ? ' Aruba response: ' + responseDetail + '.' : '') +
+    ' Check ARUBA_CLIENT_ID, ARUBA_CLIENT_SECRET, and ARUBA_REFRESH_TOKEN.'
   );
+}
+
+
+function getArubaCentralOAuthErrorDetail_(responseBody) {
+
+  const text =
+    String(responseBody || '').trim();
+
+  if (!text) return '';
+
+  try {
+    const json = JSON.parse(text);
+    const safe = {};
+
+    ['error', 'error_description', 'error_code', 'message'].forEach(key => {
+      if (json[key] !== undefined && json[key] !== null) {
+        safe[key] = redactArubaCentralOAuthErrorText_(json[key]);
+      }
+    });
+
+    return Object.keys(safe).length ? JSON.stringify(safe) : '';
+  } catch (error) {
+    // Plain-text gateway errors are useful, but redact credential-like values.
+    return redactArubaCentralOAuthErrorText_(text);
+  }
+}
+
+
+function redactArubaCentralOAuthErrorText_(value) {
+  return String(value || '')
+    .replace(/(access_token|refresh_token|client_secret)\s*[=:]\s*[^\s,&]+/gi, '$1=[REDACTED]')
+    .slice(0, 500);
+}
+
+
+function maintainArubaCentralOAuthToken() {
+
+  const status = getIntegrationStatusById_('aruba_central');
+
+  if (!status.enabled) {
+    return { status: 'skipped', reason: 'disabled' };
+  }
+
+  if (!status.configurationComplete) {
+    return { status: 'skipped', reason: 'not_configured' };
+  }
+
+  // This intentionally performs only the existing OAuth refresh exchange.
+  getArubaCentralToken_();
+  return { status: 'success' };
+}
+
+
+function setupArubaCentralOAuthMaintenanceTrigger_() {
+
+  const handler = 'maintainArubaCentralOAuthToken';
+  const triggers = ScriptApp.getProjectTriggers()
+    .filter(trigger => trigger.getHandlerFunction() === handler);
+
+  // Repair an old duplicate state while retaining one valid daily trigger.
+  triggers.slice(1).forEach(trigger => ScriptApp.deleteTrigger(trigger));
+
+  if (triggers.length) return false;
+
+  ScriptApp.newTrigger(handler)
+    .timeBased()
+    .everyDays(1)
+    .atHour(3)
+    .create();
+
+  return true;
+}
+
+
+function removeArubaCentralOAuthMaintenanceTriggers_() {
+
+  const handler = 'maintainArubaCentralOAuthToken';
+  let removed = 0;
+
+  ScriptApp.getProjectTriggers()
+    .filter(trigger => trigger.getHandlerFunction() === handler)
+    .forEach(trigger => {
+      ScriptApp.deleteTrigger(trigger);
+      removed++;
+    });
+
+  return removed;
 }
 
 
@@ -227,7 +321,13 @@ function syncArubaCentralToSheet() {
         ip_address:
           invDev.ip_address || '',
         status:
-          invDev.status || 'Up',
+          invDev.status || '',
+        state:
+          invDev.state || '',
+        site:
+          invDev.site || invDev.site_name || invDev.siteName || '',
+        group_name:
+          invDev.group_name || invDev.device_group_name || '',
         device_type:
           'Edge'
       });
@@ -426,6 +526,9 @@ function processArubaDeviceSync_(
   const portIdx =
     headers.indexOf('Port Capacity (Active)');
 
+  const campusIdx =
+    headers.indexOf('Campus');
+
   const lastSyncIdx =
     headers.indexOf('Last Sync');
 
@@ -606,12 +709,15 @@ function processArubaDeviceSync_(
         normalizeArubaSwitchRole_(commander.switch_role || commander.role);
 
       const devStatus =
-        devList.some(device =>
-          device.status === 'Up' ||
-          device.state === 'Up'
-        )
-          ? 'Online'
-          : 'Offline';
+        normalizeArubaCentralDeviceListStatus_(
+          devList,
+          group.name
+        );
+
+      const devCampus =
+        getArubaCentralSite_(commander) ||
+        devList.map(getArubaCentralSite_).find(Boolean) ||
+        getArubaCentralSite_(stack);
 
       let devMode =
         'Monitor Mode';
@@ -804,6 +910,15 @@ function processArubaDeviceSync_(
             .setValue(now);
         }
 
+        if (campusIdx !== -1) {
+          sheet
+            .getRange(
+              matched.rowIndex,
+              campusIdx + 1
+            )
+            .setValue(devCampus);
+        }
+
         matchedCount++;
 
       } else {
@@ -825,6 +940,7 @@ function processArubaDeviceSync_(
             if (header === 'Management Mode') return devMode;
             if (header === 'Stack Info') return stackInfoText;
             if (header === 'Port Capacity (Active)') return portText;
+            if (header === 'Campus') return devCampus;
             if (header === 'Last Sync') return now;
             return '';
 
@@ -944,6 +1060,44 @@ function normalizeArubaStackInfo_(value) {
   return '';
 }
 
+function getArubaCentralSite_(device) {
+  device = device || {};
+  return String(device.site || device.site_name || device.siteName || '').trim();
+}
+
+function getArubaCentralDeviceStatusValues_(device) {
+  device = device || {};
+  return [
+    device.status,
+    device.state,
+    device.device_status,
+    device.connection_status,
+    device.connectivity_status
+  ].filter(value => value !== undefined && value !== null && String(value).trim() !== '');
+}
+
+function normalizeArubaCentralDeviceListStatus_(devices, deviceLabel) {
+  const online = ['up', 'online', 'connected'];
+  const offline = ['down', 'offline', 'disconnected'];
+  const values = [];
+
+  (devices || []).forEach(device => {
+    getArubaCentralDeviceStatusValues_(device).forEach(value => {
+      values.push(String(value).trim());
+    });
+  });
+
+  if (values.some(value => online.includes(value.toLowerCase()))) return 'Online';
+  if (values.some(value => offline.includes(value.toLowerCase()))) return 'Offline';
+
+  console.warn(JSON.stringify({
+    message: 'Unknown Aruba Central switch status',
+    device: String(deviceLabel || ''),
+    reportedValues: Array.from(new Set(values)).slice(0, 10)
+  }));
+  return 'Unknown';
+}
+
 function getArubaSwarmMap_(options) {
   const map = {};
   // Optional bulk enrichment: never add per-AP RPCs or block inventory on failure.
@@ -1004,7 +1158,7 @@ function processArubaAccessPointSync_(devices, swarms) {
       'Serial Number': serial,
       'MAC Address': mac,
       'Active Clients': ap.client_count == null ? '' : ap.client_count,
-      'Campus': ap.group_name || ap.ap_group || '',
+      'Campus': getArubaCentralSite_(ap),
       'Virtual Controller': formatArubaVirtualController_(ap, swarms[String(ap.swarm_id || '')]),
       'Last Sync': new Date()
     };

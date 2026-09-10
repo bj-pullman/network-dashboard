@@ -425,6 +425,9 @@ Aruba Central is available and preserves the existing functional API behavior:
 - Access point inventory sync with v1/v2 endpoint fallback.
 - Running configuration lookup by serial number.
 - Refresh token rotation back into Script Properties when Aruba returns a new refresh token.
+- Daily token-only OAuth maintenance installed idempotently by `setupNetworkDashboard()`.
+- Central Site mapping to the existing Campus field for switches and access points.
+- Case-insensitive switch status normalization with diagnostics for unknown reported states.
 
 Required Aruba Script Properties:
 

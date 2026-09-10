@@ -1147,6 +1147,8 @@ function setupNetworkDashboard(options) {
 
   seedIntegrationDefinitions_();
 
+  setupArubaCentralOAuthMaintenanceTrigger_();
+
   seedInitialAdminUser_(result);
 
 

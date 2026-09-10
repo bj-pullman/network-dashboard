@@ -236,6 +236,9 @@ function resetNetworkDashboardDevEnvironmentFromMenu() {
     const result =
       runNetworkDashboardDevReset();
 
+    // A reset removes the integration state the maintenance job depends on.
+    removeArubaCentralOAuthMaintenanceTriggers_();
+
     SpreadsheetApp
       .getActive()
       .toast(
