@@ -181,19 +181,66 @@ Optional modules are disabled by default and can be enabled in Settings: Bus Cam
 
 ## Header Protection
 
+Network Dashboard automatically protects application-managed headers, structural fields and system-controlled settings. These protections are created during **Setup / Initialize**, restored during **Update / Repair**, and can be manually reconciled through **Network Dashboard -> Protection -> Enable Protection**.
+
 Every application-managed sheet has a managed header protection range such as:
 
 `Network Dashboard - Managed Headers - Switches - headers`
 
-Operational data rows remain editable. Managed header protections block ordinary editors from changing/clearing headers or deleting rows/columns that intersect protected structure. Setup does not whitelist the user who ran it. Google Sheets itself always retains platform-level control for the file owner, so an owner can still alter or remove protections through Google Sheets administration; the application does not attempt to bypass that ownership rule.
+Operational data rows remain editable. For normal Google Sheets editors, managed protections prevent protected headers and system-controlled fields from being changed, cleared or otherwise modified while leaving intended data-entry fields available for normal use.
 
-On `App Settings`, the `Key`, `Type`, `Category`, `Label`, `Description`, `Updated At` and `Updated By` columns are protected below the header. `Value` remains directly editable only for definitions marked `editable: true`; system values such as `app.version`, `schema.version` and `dashboard.widgets` receive their own managed protections. Setup recognizes its protections by descriptions beginning with `Network Dashboard -`, repairs stale/missing managed ranges idempotently and leaves unrelated organization-created protections alone. The web app executes as the owner and can continue to update managed cells programmatically without granting human editors access to protected ranges.
+### Spreadsheet Owner Exception
 
-### Temporary protection maintenance
+Google Sheets always grants the **owner of the spreadsheet** ultimate control over the file. As a result, the spreadsheet owner can edit protected ranges and can modify or remove protections even when Network Dashboard protections are enabled.
 
-Use **Network Dashboard -> Protection -> Disable Protection (15 Minutes)** only for intentional structural maintenance. A confirmation dialog explains the risk before any change. Confirming removes only protections whose descriptions identify them as Network Dashboard-managed, records the expiration in Script Properties and installs one one-time restoration trigger. Disabling again replaces the existing trigger and extends the window rather than accumulating triggers.
+This is a Google Sheets platform behavior and cannot be overridden by Network Dashboard.
 
-Use **Protection -> Enable Protection** to relock immediately. Setup/Initialize and Update/Repair also cancel any temporary window and finish with protections enabled. Automatic/manual restoration reconciles current schema protections idempotently and does not modify organization-created protections.
+Therefore:
+
+* **Spreadsheet owner:** Retains Google-level authority to edit or remove protected ranges.
+* **Other spreadsheet editors:** Network Dashboard-managed protections are enforced and prevent modification of protected structure.
+* **Dashboard users:** Access to Network Dashboard pages and actions is controlled separately through Network Dashboard RBAC and does not depend on Google Sheet editing permissions.
+
+Network Dashboard does not explicitly whitelist the administrator who runs Setup / Initialize. If that administrator is also the Google Sheet owner, their ability to edit protected ranges comes from Google's ownership model rather than from Network Dashboard permissions.
+
+The recommended practice is to treat **Network Dashboard -> Protection -> Disable Protection (15 Minutes)** as the intentional maintenance workflow even when working as the spreadsheet owner. This provides a clear operational distinction between normal use and deliberate structural maintenance.
+
+### App Settings Protection
+
+On `App Settings`, the `Key`, `Type`, `Category`, `Label`, `Description`, `Updated At` and `Updated By` columns are protected below the header.
+
+`Value` remains directly editable only for definitions marked `editable: true`. System-controlled values such as `app.version`, `schema.version` and `dashboard.widgets` receive their own managed protections.
+
+Network Dashboard recognizes its protections by descriptions beginning with `Network Dashboard -`, repairs stale or missing managed ranges idempotently, and leaves unrelated organization-created protections untouched.
+
+The web app executes as the deployment owner and can continue to update managed cells programmatically without granting human spreadsheet editors access to protected ranges.
+
+### Temporary Protection Maintenance
+
+Use **Network Dashboard -> Protection -> Disable Protection (15 Minutes)** only for intentional structural maintenance.
+
+A confirmation dialog explains the risk before any change. Confirming removes only Network Dashboard-managed protections, records the expiration in Script Properties and installs a one-time restoration trigger.
+
+Disabling protection again during an active maintenance window replaces the existing restoration trigger and extends the window rather than accumulating duplicate triggers.
+
+Use **Network Dashboard -> Protection -> Enable Protection** to restore protections immediately.
+
+**Setup / Initialize** and **Update / Repair** also cancel any temporary maintenance window and finish with Network Dashboard protections enabled. Automatic and manual restoration reconcile the current schema protections idempotently and do not modify organization-created protections.
+
+### Network Dashboard Permissions vs. Google Sheet Permissions
+
+Google Sheet permissions and Network Dashboard application permissions are separate security layers.
+
+Giving someone **Editor** access to the underlying Google Sheet does not automatically give that person access to Network Dashboard pages or administrative functionality. Network Dashboard independently evaluates the user through `App Users`, roles, default permissions and per-page permissions.
+
+Likewise, granting a user access to Network Dashboard does not require granting that user Editor access to the underlying Google Sheet when the web app is deployed to **Execute as: Me**.
+
+This separation is intentional:
+
+`Google Sheets protections` protect the underlying data and application-managed structure.
+
+`Network Dashboard RBAC` controls which application pages, data and actions a dashboard user is authorized to access.
+
 
 ## Canonical Sheets
 
