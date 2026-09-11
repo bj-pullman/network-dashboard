@@ -1526,6 +1526,9 @@ function reconcileNetworkDashboard_(
   const installedVersions =
     getInstalledNetworkDashboardVersions_(ss);
 
+  let applicationVersionCommitted =
+    false;
+
   result.mode = mode;
   result.installedVersions =
     installedVersions;
@@ -1615,14 +1618,6 @@ function reconcileNetworkDashboard_(
 
 
   AppConfig.setSystemValue_(
-    'app.version',
-    NETWORK_DASHBOARD_VERSION,
-    mode === 'update'
-      ? 'update/repair'
-      : 'setup'
-  );
-
-  AppConfig.setSystemValue_(
     'schema.version',
     NETWORK_DASHBOARD_SCHEMA_VERSION,
     mode === 'update'
@@ -1630,12 +1625,44 @@ function reconcileNetworkDashboard_(
       : 'setup'
   );
 
-
   clearAppDataCaches_();
-  result.validation =
-    validateNetworkDashboard({
-      silent: true
-    });
+
+  try {
+    AppConfig.setSystemValue_(
+      'app.version',
+      NETWORK_DASHBOARD_VERSION,
+      mode === 'update'
+        ? 'update/repair'
+        : 'setup'
+    );
+    applicationVersionCommitted = true;
+
+    clearAppDataCaches_();
+    result.validation =
+      validateNetworkDashboard({
+        silent: true
+      });
+  } catch (error) {
+    if (applicationVersionCommitted) {
+      try {
+        AppConfig.setSystemValue_(
+          'app.version',
+          installedVersions.application,
+          'rollback-after-failed-' + mode
+        );
+        clearAppDataCaches_();
+      } catch (rollbackError) {
+        console.log(
+          'Could not restore the previously installed application version after a failed reconciliation: ' +
+          rollbackError.message
+        );
+      }
+    }
+    throw error;
+  }
+
+  result.installedVersionsAfter =
+    getInstalledNetworkDashboardVersions_(ss);
 
   result.healthy =
     result.validation.healthy;
@@ -1798,7 +1825,11 @@ function validateNetworkDashboard(options) {
     scriptProperties: [],
     unmanagedSheets: [],
     warnings: [],
-    errors: []
+    errors: [],
+    criticalIssues: [],
+    actionRequired: [],
+    advisories: [],
+    recommendedActions: []
   };
 
 
@@ -1866,11 +1897,13 @@ function validateNetworkDashboard(options) {
 
   validateRequiredTriggers_(result);
 
+  finalizeValidationSeverity_(result);
+
   summarizeInstallationStatus_(result);
 
 
   result.healthy =
-    result.errors.length === 0;
+    result.criticalIssues.length === 0;
 
   if (!options.silent) {
     showNetworkDashboardToast_(
@@ -1891,6 +1924,77 @@ function validateNetworkDashboard(options) {
 
 
   return result;
+}
+
+
+function ensureValidationSeverityArrays_(result) {
+  result.criticalIssues = result.criticalIssues || [];
+  result.actionRequired = result.actionRequired || [];
+  result.advisories = result.advisories || [];
+  result.recommendedActions = result.recommendedActions || [];
+  result.errors = result.errors || [];
+  result.warnings = result.warnings || [];
+}
+
+
+function addValidationIssue_(result, severity, message, action) {
+  ensureValidationSeverityArrays_(result);
+  const target = severity === 'critical'
+    ? result.criticalIssues
+    : severity === 'action'
+      ? result.actionRequired
+      : result.advisories;
+
+  if (!target.includes(message)) target.push(message);
+  if (severity === 'critical' && !result.errors.includes(message)) {
+    result.errors.push(message);
+  }
+  if (severity === 'advisory' && !result.warnings.includes(message)) {
+    result.warnings.push(message);
+  }
+  if (action && !result.recommendedActions.includes(action)) {
+    result.recommendedActions.push(action);
+  }
+}
+
+
+function finalizeValidationSeverity_(result) {
+  ensureValidationSeverityArrays_(result);
+
+  result.errors.forEach(message => {
+    if (
+      result.criticalIssues.includes(message) ||
+      result.actionRequired.includes(message)
+    ) return;
+
+    const critical =
+      /required (sheet|header)|sheet .*does not exist|header row .*missing|newer than this source supports|formula layer|Missing Dashboard metric|Missing Dashboard summary formula/i
+        .test(message);
+
+    addValidationIssue_(
+      result,
+      critical ? 'critical' : 'action',
+      message,
+      critical
+        ? 'Run Network Dashboard -> Update / Repair. If the issue remains, review the reported Sheet structure before using the application.'
+        : 'Run Network Dashboard -> Update / Repair to reconcile the reported installation component.'
+    );
+  });
+
+  result.warnings.forEach(message => {
+    if (!result.advisories.includes(message)) {
+      addValidationIssue_(result, 'advisory', message, 'Review validation advisories and configure optional or recommended items as appropriate.');
+    }
+  });
+
+  result.applicationHealth = result.criticalIssues.length
+    ? 'Critical'
+    : 'Healthy';
+  result.configurationStatus = result.actionRequired.length
+    ? 'Needs Attention'
+    : result.advisories.length
+      ? 'Advisory'
+      : 'Healthy';
 }
 
 
@@ -3610,17 +3714,16 @@ function protectManagedHeaderRanges_(
 
         let matching =
           protections.filter(protection =>
-            protection.getDescription() ===
-            description
+            protection.getRange().getA1Notation() ===
+              range.getA1Notation() &&
+            String(protection.getDescription() || '')
+              .indexOf('Network Dashboard - Managed Headers') === 0
           );
 
         let protection =
           matching.find(itemProtection =>
-            itemProtection
-              .getRange()
-              .getA1Notation() ===
-            range.getA1Notation()
-          );
+            itemProtection.getDescription() === description
+          ) || matching[0];
 
 
         matching
@@ -3990,15 +4093,16 @@ function protectAppSettingsRanges_(
     try {
       let matching =
         protections.filter(protection =>
-          protection.getDescription() ===
-            definition.description
+          protection.getRange().getA1Notation() ===
+            range.getA1Notation() &&
+          String(protection.getDescription() || '')
+            .indexOf(getAppSettingsProtectionPrefix_()) === 0
         );
 
       let protection =
         matching.find(item =>
-          item.getRange().getA1Notation() ===
-            range.getA1Notation()
-        );
+          item.getDescription() === definition.description
+        ) || matching[0];
 
       matching
         .filter(item => item !== protection)
@@ -4951,8 +5055,6 @@ function validateProtections_(
 
       const match =
         protections.find(protection =>
-          protection.getDescription() ===
-            description &&
           protection
             .getRange()
             .getA1Notation() ===
@@ -4977,11 +5079,13 @@ function validateProtections_(
         !result.protectionStatus
           .temporarilyDisabled
       ) {
-        result.errors.push(
-          'Missing managed header protection: ' +
-          sheetName +
-          ' ' +
-          range.getA1Notation()
+        addValidationIssue_(
+          result,
+          'action',
+          sheetName + ' -> Managed headers [' +
+            range.getA1Notation() +
+            '] - Protection missing.',
+          'Run Network Dashboard -> Update / Repair to reconcile managed protections.'
         );
       }
 
@@ -5076,9 +5180,11 @@ function validateSettings_(result) {
       });
 
       if (!exists) {
-        result.errors.push(
-          'Missing setting: ' +
-          definition.key
+        addValidationIssue_(
+          result,
+          'action',
+          'App Settings -> ' + definition.key + ' - Setting missing.',
+          'Run Network Dashboard -> Update / Repair to create missing App Settings definitions.'
         );
       }
 
@@ -5091,10 +5197,24 @@ function validateSettings_(result) {
   const installedSchemaVersion =
     String(values['schema.version'] || '');
 
+  const installedSchemaNumber =
+    Number.parseInt(installedSchemaVersion || '0', 10);
+
+  const expectedSchemaNumber =
+    Number.parseInt(NETWORK_DASHBOARD_SCHEMA_VERSION, 10);
+
+  const schemaIsNewer =
+    Number.isFinite(installedSchemaNumber) &&
+    installedSchemaNumber > expectedSchemaNumber;
+
   result.versions = {
     application: {
       expected: NETWORK_DASHBOARD_VERSION,
       installed: installedAppVersion,
+      status:
+        installedAppVersion === NETWORK_DASHBOARD_VERSION
+          ? 'Current'
+          : 'Update required',
       healthy:
         installedAppVersion ===
         NETWORK_DASHBOARD_VERSION
@@ -5102,6 +5222,12 @@ function validateSettings_(result) {
     schema: {
       expected: NETWORK_DASHBOARD_SCHEMA_VERSION,
       installed: installedSchemaVersion,
+      status:
+        installedSchemaVersion === NETWORK_DASHBOARD_SCHEMA_VERSION
+          ? 'Current'
+          : schemaIsNewer
+            ? 'Source update required'
+            : 'Update required',
       healthy:
         installedSchemaVersion ===
         NETWORK_DASHBOARD_SCHEMA_VERSION
@@ -5109,14 +5235,29 @@ function validateSettings_(result) {
   };
 
   if (!result.versions.application.healthy) {
-    result.errors.push(
-      'Application version setting is not current. Run Setup / Initialize.'
+    addValidationIssue_(
+      result,
+      'action',
+      'Application Version - Installed: ' +
+        (installedAppVersion || 'Not installed') +
+        '; Expected: ' + NETWORK_DASHBOARD_VERSION +
+        '; Status: Update required.',
+      'Run Network Dashboard -> Update / Repair after deploying the current release.'
     );
   }
 
   if (!result.versions.schema.healthy) {
-    result.errors.push(
-      'Schema version setting is not current. Run Setup / Initialize.'
+    addValidationIssue_(
+      result,
+      schemaIsNewer ? 'critical' : 'action',
+      'Schema Version - Installed: ' +
+        (installedSchemaVersion || 'Not installed') +
+        '; Expected: ' + NETWORK_DASHBOARD_SCHEMA_VERSION +
+        '; Status: ' +
+        (schemaIsNewer ? 'Source update required.' : 'Update required.'),
+      schemaIsNewer
+        ? 'Update the Network Dashboard source before running reconciliation; this source does not support the installed schema.'
+        : 'Run Network Dashboard -> Update / Repair to apply required schema reconciliation.'
     );
   }
 
@@ -5147,11 +5288,14 @@ function validateSettings_(result) {
   };
 
   if (result.webAppDeployment.guidance) {
-    result.warnings.push(
+    addValidationIssue_(
+      result,
+      'advisory',
       'Web App Deployment: ' +
       result.webAppDeployment.status +
       '. ' +
-      result.webAppDeployment.guidance
+      result.webAppDeployment.guidance,
+      'Configure or correct app.web_app_url, then verify the existing production web app deployment.'
     );
   }
 }
@@ -5184,8 +5328,6 @@ function validateAppSettingsProtections_(
 
       const protectedRange =
         protections.some(protection =>
-          protection.getDescription() ===
-            definition.description &&
           protection.getRange().getA1Notation() ===
             range.getA1Notation() &&
           isManagedProtectionEnforced_(
@@ -5206,12 +5348,13 @@ function validateAppSettingsProtections_(
         !result.protectionStatus
           .temporarilyDisabled
       ) {
-        result.errors.push(
-          'Missing App Settings protection: ' +
-          definition.key +
-          ' (' +
-          range.getA1Notation() +
-          ')'
+        addValidationIssue_(
+          result,
+          'action',
+          'App Settings -> ' + definition.key +
+            ' [' + range.getA1Notation() +
+            '] - Protection missing.',
+          'Run Network Dashboard -> Update / Repair to reconcile managed App Settings protections.'
         );
       }
 
@@ -5225,7 +5368,10 @@ function validateRequiredTriggers_(result) {
     {
       handler: 'maintainArubaCentralOAuthToken',
       description:
-        'Daily Aruba Central OAuth token maintenance'
+        'Daily Aruba Central OAuth token maintenance',
+      required:
+        typeof isArubaCentralOAuthMaintenanceRequired_ === 'function' &&
+        isArubaCentralOAuthMaintenanceRequired_()
     }
   ];
 
@@ -5243,21 +5389,37 @@ function validateRequiredTriggers_(result) {
     result.triggers.push({
       handler: definition.handler,
       description: definition.description,
-      configured: count === 1,
+      required: definition.required,
+      configured:
+        definition.required
+          ? count === 1
+          : true,
+      status:
+        definition.required
+          ? count === 1
+            ? 'Configured'
+            : count === 0
+              ? 'Missing'
+              : 'Duplicate'
+          : 'Not applicable',
       count: count
     });
 
-    if (count === 0) {
-      result.errors.push(
-        'Missing required trigger: ' +
-        definition.description +
-        '. Run Setup / Initialize.'
+    if (definition.required && count === 0) {
+      addValidationIssue_(
+        result,
+        'action',
+        'Required Trigger -> ' + definition.description +
+          ' - Missing.',
+        'Run Network Dashboard -> Update / Repair to create the required maintenance trigger.'
       );
-    } else if (count > 1) {
-      result.errors.push(
-        'Duplicate required trigger: ' +
-        definition.description +
-        '. Run Setup / Initialize to repair it.'
+    } else if (definition.required && count > 1) {
+      addValidationIssue_(
+        result,
+        'action',
+        'Required Trigger -> ' + definition.description +
+          ' - ' + count + ' copies found.',
+        'Run Network Dashboard -> Update / Repair to retain one maintenance trigger.'
       );
     }
 
@@ -5267,6 +5429,27 @@ function validateRequiredTriggers_(result) {
 
 function summarizeInstallationStatus_(result) {
 
+  const headerProtections =
+    result.protections.filter(item =>
+      item.category === 'header'
+    );
+
+  const requiredTriggers =
+    result.triggers.filter(trigger =>
+      trigger.required
+    );
+
+  const protectionsComplete =
+    headerProtections.every(item => item.protected) &&
+    result.appSettingsProtections.every(item => item.protected);
+
+  if (
+    !result.protectionStatus.temporarilyDisabled &&
+    !protectionsComplete
+  ) {
+    result.protectionStatus.status = 'Incomplete';
+  }
+
   result.installationStatus = {
     sheetsAndSchema: {
       healthy:
@@ -5274,29 +5457,27 @@ function summarizeInstallationStatus_(result) {
           sheet.exists &&
           sheet.missingHeaders.length === 0
         ),
-      checked: result.sheets.length
+      passed:
+        result.sheets.filter(sheet =>
+          sheet.exists &&
+          sheet.missingHeaders.length === 0
+        ).length,
+      expected: result.sheets.length
     },
     headerProtections: {
       healthy:
         result.protectionStatus
           .temporarilyDisabled ||
         (
-          result.protections.some(item =>
-            item.category === 'header'
-          ) &&
-          result.protections
-            .filter(item =>
-              item.category === 'header'
-            )
-            .every(item =>
-              item.protected
-            )
+          headerProtections.length > 0 &&
+          headerProtections.every(item =>
+            item.protected
+          )
         ),
-      checked:
-        result.protections
-          .filter(item =>
-            item.category === 'header'
-          ).length
+      passed:
+        headerProtections.filter(item => item.protected).length,
+      expected:
+        headerProtections.length
     },
     appSettingsProtections: {
       healthy:
@@ -5308,16 +5489,22 @@ function summarizeInstallationStatus_(result) {
             item.protected
           )
         ),
-      checked:
+      passed:
+        result.appSettingsProtections.filter(item => item.protected).length,
+      expected:
         result.appSettingsProtections.length
     },
     requiredTriggers: {
       healthy:
-        result.triggers.length > 0 &&
-        result.triggers.every(trigger =>
+        requiredTriggers.every(trigger =>
           trigger.configured
         ),
-      checked: result.triggers.length
+      passed:
+        requiredTriggers.filter(trigger => trigger.configured).length,
+      expected:
+        requiredTriggers.length,
+      items:
+        result.triggers
     },
     versions: {
       healthy:
@@ -5329,7 +5516,11 @@ function summarizeInstallationStatus_(result) {
     webAppDeployment:
       result.webAppDeployment,
     protectionStatus:
-      result.protectionStatus
+      result.protectionStatus,
+    applicationHealth:
+      result.applicationHealth,
+    configurationStatus:
+      result.configurationStatus
   };
 }
 
@@ -5457,9 +5648,11 @@ function formatSetupSummary_(result) {
       NETWORK_DASHBOARD_SCHEMA_VERSION,
     '',
     'Validation',
-    validation.healthy
-      ? 'Healthy'
-      : 'Needs attention',
+    'Application Health: ' +
+      (validation.applicationHealth ||
+        (validation.healthy ? 'Healthy' : 'Critical')),
+    'Installation Configuration: ' +
+      (validation.configurationStatus || 'Unknown'),
     '',
     'Next Steps',
     getSetupNextSteps_()
@@ -5475,39 +5668,61 @@ function formatSetupSummary_(result) {
 
 function formatValidationSummary_(result) {
 
+  const status =
+    result.installationStatus || {};
+
+  function counterLine_(label, value) {
+    value = value || {};
+    return label + ': ' +
+      Number(value.passed || 0) +
+      ' / ' +
+      Number(value.expected || 0);
+  }
+
   return [
     'NETWORK DASHBOARD VALIDATION',
     '',
-    'Application: ' +
-      result.applicationVersion,
-    'Schema: ' +
-      result.schemaVersion,
+    'APPLICATION VERSION',
+    'Installed: ' +
+      (result.versions.application.installed || 'Not installed'),
+    'Expected: ' +
+      result.versions.application.expected,
     'Status: ' +
-      (result.healthy ? 'Healthy' : 'Needs attention'),
+      result.versions.application.status,
     '',
-    'Sheets checked: ' +
-      result.sheets.length,
-    'Header protections checked: ' +
-      result.protections
-        .filter(item =>
-          item.category === 'header'
-        ).length,
-    'App Settings protections checked: ' +
-      result.appSettingsProtections.length,
-    'Required triggers checked: ' +
-      result.triggers.length,
+    'SCHEMA VERSION',
+    'Installed: ' +
+      (result.versions.schema.installed || 'Not installed'),
+    'Expected: ' +
+      result.versions.schema.expected,
+    'Status: ' +
+      result.versions.schema.status,
+    '',
+    'Application Health: ' +
+      result.applicationHealth,
+    'Installation Configuration: ' +
+      result.configurationStatus,
     'Protection Status: ' +
       result.protectionStatus.status,
     result.protectionStatus.restoresAt
       ? 'Restores At: ' +
           result.protectionStatus.restoresAt
       : '',
-    'Version health: ' +
-      (result.installationStatus.versions.healthy
-        ? 'Healthy'
-        : 'Needs attention'),
     'Web App Deployment: ' +
       result.webAppDeployment.status,
+    '',
+    'VALIDATION COUNTS',
+    counterLine_('Required Sheets', status.sheetsAndSchema),
+    counterLine_('Header Protections', status.headerProtections),
+    counterLine_('App Settings Protections', status.appSettingsProtections),
+    counterLine_('Required Triggers', status.requiredTriggers),
+    '',
+    'TRIGGERS',
+    result.triggers.length
+      ? result.triggers.map(trigger =>
+          trigger.description + ': ' + trigger.status
+        ).join('\n')
+      : 'None',
     '',
     'Documentation',
     'FAQ: ' + result.documentation.faq,
@@ -5516,26 +5731,27 @@ function formatValidationSummary_(result) {
     'Unmanaged sheets: ' +
       (result.unmanagedSheets || []).length,
     '',
-    'Errors',
-    result.errors.length
-      ? result.errors.join('\n')
+    'CRITICAL',
+    result.criticalIssues.length
+      ? result.criticalIssues.join('\n')
       : 'None',
     '',
-    'Warnings',
-    result.warnings.length
-      ? result.warnings.join('\n')
+    'ACTION REQUIRED',
+    result.actionRequired.length
+      ? result.actionRequired.join('\n')
       : 'None',
     '',
-    'Unmanaged Sheets',
-    result.unmanagedSheets &&
-      result.unmanagedSheets.length
-      ? result.unmanagedSheets
-          .map(item =>
-            item.sheet +
-            ': ' +
-            item.reason
-          )
-          .join('\n')
+    'ADVISORY',
+    result.advisories.length
+      ? result.advisories.join('\n')
+      : 'None',
+    '',
+    'RECOMMENDED ACTIONS',
+    result.recommendedActions.length
+      ? result.recommendedActions
+          .map((action, index) =>
+            (index + 1) + '. ' + action
+          ).join('\n')
       : 'None'
   ].join('\n');
 }
@@ -5553,43 +5769,37 @@ function buildReconciliationToastMessage_(result) {
 
   return [
     result.mode === 'update'
-      ? 'Update / Repair complete'
-      : 'Setup / Initialize complete',
-    sheetCount + ' sheets validated',
-    'Schema ' + NETWORK_DASHBOARD_SCHEMA_VERSION,
-    result.healthy ? 'Healthy' : 'Needs attention'
-  ].join(' - ');
+      ? 'Network Dashboard Update Complete'
+      : 'Network Dashboard Setup Complete',
+    'Application Version: ' + NETWORK_DASHBOARD_VERSION,
+    'Schema Version: ' + NETWORK_DASHBOARD_SCHEMA_VERSION,
+    sheetCount + ' sheets reconciled',
+    'Next: Validate Installation, open Dashboard, and verify affected functionality.'
+  ].join('\n');
 }
 
 
 function buildValidationToastMessage_(result) {
 
-  if (result.errors.length) {
+  if (result.criticalIssues.length) {
     return (
-      'Validation complete - ' +
-      result.errors.length +
-      ' error' +
-      (result.errors.length === 1 ? '' : 's') +
-      ' found'
+      'Validation complete - Application Health: Critical - ' +
+      result.criticalIssues.length +
+      ' critical issue' +
+      (result.criticalIssues.length === 1 ? '' : 's')
     );
   }
 
-
-  if (result.warnings.length) {
+  if (result.actionRequired.length) {
     return (
-      'Validation complete - ' +
-      result.warnings.length +
-      ' warning' +
-      (result.warnings.length === 1 ? '' : 's') +
-      ' found'
+      'Validation complete - Application Health: Healthy - Configuration needs attention (' +
+      result.actionRequired.length + ')'
     );
   }
 
-
-  return (
-    'Validation complete - Installation healthy - Schema ' +
-    NETWORK_DASHBOARD_SCHEMA_VERSION
-  );
+  return result.advisories.length
+    ? 'Validation complete - Application Health: Healthy - Advisories: ' + result.advisories.length
+    : 'Validation complete - Application Health: Healthy - Configuration: Healthy';
 }
 
 

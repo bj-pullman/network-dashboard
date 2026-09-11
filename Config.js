@@ -1,4 +1,4 @@
-var NETWORK_DASHBOARD_VERSION = '1.0.0';
+var NETWORK_DASHBOARD_VERSION = '1.0.1';
 var NETWORK_DASHBOARD_SCHEMA_VERSION = '4';
 var NETWORK_DASHBOARD_APP_NAME = 'Network Dashboard';
 var NETWORK_DASHBOARD_SETTINGS_SHEET = 'App Settings';
@@ -356,13 +356,6 @@ var AppConfig = (function() {
         defaults_(),
         readSheetValues_()
       );
-
-
-    values['app.version'] =
-      NETWORK_DASHBOARD_VERSION;
-
-    values['schema.version'] =
-      NETWORK_DASHBOARD_SCHEMA_VERSION;
 
 
     try {
@@ -1043,8 +1036,12 @@ var AppConfig = (function() {
         NETWORK_DASHBOARD_APP_NAME,
       applicationVersion:
         NETWORK_DASHBOARD_VERSION,
+      installedApplicationVersion:
+        values['app.version'] || '',
       schemaVersion:
         NETWORK_DASHBOARD_SCHEMA_VERSION,
+      installedSchemaVersion:
+        values['schema.version'] || '',
       webAppUrl:
         values['app.web_app_url'] || '',
       organization: {

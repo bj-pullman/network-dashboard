@@ -1683,9 +1683,11 @@ function runSettingsValidation(
       );
 
       showToast(
-        result.healthy
-          ? 'Installation is healthy.'
-          : 'Validation found issues.'
+        result.applicationHealth === 'Critical'
+          ? 'Validation found critical application issues.'
+          : result.configurationStatus === 'Needs Attention'
+            ? 'Application is healthy; installation configuration needs attention.'
+            : 'Application is healthy.'
       );
 
     })
@@ -1714,34 +1716,53 @@ function runSettingsValidation(
 
 function formatClientValidationResult(result) {
 
+  const versions = result.versions || { application: {}, schema: {} };
+  const status = result.installationStatus || {};
+  const counter = (label, item) => {
+    item = item || {};
+    return label + ': ' + Number(item.passed || 0) + ' / ' + Number(item.expected || 0);
+  };
+
   return [
-    'Application: ' + result.applicationVersion,
-    'Schema: ' + result.schemaVersion,
-    'Status: ' + (result.healthy ? 'Healthy' : 'Needs attention'),
+    'APPLICATION VERSION',
+    'Installed: ' + (versions.application.installed || 'Not installed'),
+    'Expected: ' + (versions.application.expected || ''),
+    'Status: ' + (versions.application.status || ''),
     '',
-    'Sheets checked: ' + (result.sheets || []).length,
-    'Protections checked: ' + (result.protections || []).length,
-    'Unmanaged sheets: ' + (result.unmanagedSheets || []).length,
+    'SCHEMA VERSION',
+    'Installed: ' + (versions.schema.installed || 'Not installed'),
+    'Expected: ' + (versions.schema.expected || ''),
+    'Status: ' + (versions.schema.status || ''),
     '',
-    'Errors:',
-    result.errors && result.errors.length
-      ? result.errors.join('\n')
+    'Application Health: ' + (result.applicationHealth || ''),
+    'Installation Configuration: ' + (result.configurationStatus || ''),
+    'Protection Status: ' + (result.protectionStatus && result.protectionStatus.status || ''),
+    'Web App Deployment: ' + (result.webAppDeployment && result.webAppDeployment.status || ''),
+    '',
+    'VALIDATION COUNTS',
+    counter('Required Sheets', status.sheetsAndSchema),
+    counter('Header Protections', status.headerProtections),
+    counter('App Settings Protections', status.appSettingsProtections),
+    counter('Required Triggers', status.requiredTriggers),
+    '',
+    'CRITICAL',
+    result.criticalIssues && result.criticalIssues.length
+      ? result.criticalIssues.join('\n')
       : 'None',
     '',
-    'Warnings:',
-    result.warnings && result.warnings.length
-      ? result.warnings.join('\n')
+    'ACTION REQUIRED',
+    result.actionRequired && result.actionRequired.length
+      ? result.actionRequired.join('\n')
       : 'None',
     '',
-    'Unmanaged Sheets:',
-    result.unmanagedSheets && result.unmanagedSheets.length
-      ? result.unmanagedSheets
-          .map(item =>
-            item.sheet +
-            ': ' +
-            item.reason
-          )
-          .join('\n')
+    'ADVISORY',
+    result.advisories && result.advisories.length
+      ? result.advisories.join('\n')
+      : 'None',
+    '',
+    'RECOMMENDED ACTIONS',
+    result.recommendedActions && result.recommendedActions.length
+      ? result.recommendedActions.map((action, index) => (index + 1) + '. ' + action).join('\n')
       : 'None'
   ].join('\n');
 }

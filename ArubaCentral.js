@@ -150,6 +150,11 @@ function setupArubaCentralOAuthMaintenanceTrigger_() {
   const triggers = ScriptApp.getProjectTriggers()
     .filter(trigger => trigger.getHandlerFunction() === handler);
 
+  if (!isArubaCentralOAuthMaintenanceRequired_()) {
+    triggers.forEach(trigger => ScriptApp.deleteTrigger(trigger));
+    return false;
+  }
+
   // Repair an old duplicate state while retaining one valid daily trigger.
   triggers.slice(1).forEach(trigger => ScriptApp.deleteTrigger(trigger));
 
@@ -162,6 +167,17 @@ function setupArubaCentralOAuthMaintenanceTrigger_() {
     .create();
 
   return true;
+}
+
+
+function isArubaCentralOAuthMaintenanceRequired_() {
+
+  try {
+    const status = getIntegrationStatusById_('aruba_central');
+    return !!(status.enabled && status.configurationComplete);
+  } catch (error) {
+    return false;
+  }
 }
 
 

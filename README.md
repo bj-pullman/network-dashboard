@@ -1027,7 +1027,7 @@ Network Dashboard tracks application and schema versions independently.
 Current application version:
 
 ```text
-1.0.0
+1.0.1
 ```
 
 Current schema version:
@@ -1036,7 +1036,7 @@ Current schema version:
 4
 ```
 
-These values are stored in App Settings and reported through Setup, Update / Repair, Validation and About.
+The source release and schema constants define the expected versions. App Settings records the versions successfully installed by Setup or Update / Repair; Validation reports installed and expected values separately.
 
 Schema versions control data-structure migrations.
 

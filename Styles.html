@@ -441,6 +441,33 @@ textarea {
 }
 
 
+.page-heading {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+
+.page-header-controls {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  align-items: flex-end;
+
+  gap: 8px;
+
+  min-width: 0;
+  max-width: 100%;
+}
+
+
+.page-header-help {
+  display: flex;
+  justify-content: flex-end;
+
+  width: 100%;
+}
+
+
 .page-actions {
   display: flex;
   align-items: center;
@@ -449,6 +476,8 @@ textarea {
   flex-wrap: wrap;
 
   gap: 8px;
+
+  max-width: 100%;
 }
 
 
@@ -1292,8 +1321,8 @@ textarea {
     flex-direction: column;
   }
 
-  .page-actions {
-    justify-content: flex-start;
+  .page-header-controls {
+    width: 100%;
   }
 
 }
