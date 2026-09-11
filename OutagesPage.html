@@ -109,10 +109,14 @@ function renderOutagesPage(
   ).innerHTML = `
     <div class="outages-layout">
       <div class="outages-summary">
-        ${outageSummaryCard('Active Outages', data.summary.active, 'fa-triangle-exclamation')}
-        ${outageSummaryCard('Last 30 Days', data.summary.last30Days, 'fa-calendar-days')}
-        ${outageSummaryCard('30 Day Duration', data.summary.durationLast30Label, 'fa-clock')}
+        ${outageSummaryCard('Active Outages', data.summary.active, 'fa-triangle-exclamation', 'Genuinely active manual or provider-confirmed incidents.')}
+        ${outageSummaryCard('Started Last 30 Days', data.summary.last30Days, 'fa-calendar-days', 'Number of outages that started in the rolling last 30 days.')}
+        ${outageSummaryCard('30 Day Downtime', data.summary.durationLast30Label, 'fa-clock', 'Aggregate outage time across tracked circuits during the last 30 days.')}
       </div>
+
+      ${canAdminAction && data.summary.dataQualityCount
+        ? `<div class="alert alert-warning py-2" role="status"><i class="fa-solid fa-triangle-exclamation me-2"></i>${escapeHtml(data.summary.dataQualityCount)} outage record${data.summary.dataQualityCount === 1 ? '' : 's'} need review. Check invalid timestamps, lifecycle status, duration, or duplicate external IDs.</div>`
+        : ''}
 
       <div class="table-toolbar">
         <div class="table-toolbar-left">
@@ -210,11 +214,12 @@ function renderOutagesPage(
 function outageSummaryCard(
   label,
   value,
-  icon
+  icon,
+  helpText
 ) {
 
   return `
-    <div class="metric-card outage-metric">
+    <div class="metric-card outage-metric" ${helpText ? `title="${escapeAttribute(helpText)}"` : ''}>
       <div class="metric-icon">
         <i class="fa-solid ${icon}"></i>
       </div>
@@ -409,7 +414,7 @@ function getOutageColumns_(
       minWidth: 140
     }),
     applyVisible({
-      title: 'Started',
+      title: 'Start Time',
       field: 'Started',
       minWidth: 165,
       formatter: function(cell) {
@@ -421,12 +426,14 @@ function getOutageColumns_(
       }
     }),
     applyVisible({
-      title: 'Restored',
+      title: 'End Time',
       field: 'Restored',
       minWidth: 165,
       formatter: function(cell) {
         const value =
           cell.getValue();
+
+        const row = cell.getRow().getData();
 
         return value
           ? escapeHtml(
@@ -434,13 +441,26 @@ function getOutageColumns_(
                 value
               )
             )
-          : '<span class="outage-ongoing-text">Ongoing</span>';
+          : row._ongoing
+            ? '<span class="outage-ongoing-text">Ongoing</span>'
+            : '<span class="text-muted">Unavailable</span>';
       }
     }),
     applyVisible({
       title: 'Duration',
       field: 'Duration',
-      minWidth: 115
+      minWidth: 115,
+      formatter: function(cell) {
+        const row = cell.getRow().getData();
+        if (row._ongoing && Number(row._startedMs || 0)) {
+          return escapeHtml(
+            formatOutageDurationClient_(
+              Math.max(0, Math.round((Date.now() - Number(row._startedMs)) / 60000))
+            )
+          );
+        }
+        return escapeHtml(cell.getValue() || 'Unknown');
+      }
     }),
     applyVisible({
       title: 'Source',
@@ -1468,7 +1488,47 @@ function formatOutageDateDisplay_(
     return text;
   }
 
-  return date.toLocaleString();
+  const regional =
+    appBootstrap && appBootstrap.config && appBootstrap.config.regional || {};
+
+  const locale =
+    regional.dateFormat === 'dd/MM/yyyy'
+      ? 'en-GB'
+      : regional.dateFormat === 'yyyy-MM-dd'
+        ? 'en-CA'
+        : 'en-US';
+
+  const options = {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: regional.timeFormat === 'h:mm a'
+  };
+
+  if (regional.timezone) {
+    options.timeZone = regional.timezone;
+  }
+
+  try {
+    return new Intl.DateTimeFormat(locale, options).format(date);
+  } catch (error) {
+    return date.toISOString();
+  }
+}
+
+
+function formatOutageDurationClient_(minutes) {
+  minutes = Math.max(0, Math.round(Number(minutes || 0)));
+  const days = Math.floor(minutes / 1440);
+  const hours = Math.floor((minutes % 1440) / 60);
+  const mins = minutes % 60;
+  const parts = [];
+  if (days) parts.push(days + 'd');
+  if (hours) parts.push(hours + 'h');
+  if (mins || !parts.length) parts.push(mins + 'm');
+  return parts.join(' ');
 }
 
 
@@ -1521,9 +1581,9 @@ function refreshOutagesPageSummary_(data) {
   );
   const summary = document.querySelector('.outages-summary');
   if (summary) summary.innerHTML = `
-        ${outageSummaryCard('Active Outages', data.summary.active, 'fa-triangle-exclamation')}
-        ${outageSummaryCard('Last 30 Days', data.summary.last30Days, 'fa-calendar-days')}
-        ${outageSummaryCard('30 Day Duration', data.summary.durationLast30Label, 'fa-clock')}
+        ${outageSummaryCard('Active Outages', data.summary.active, 'fa-triangle-exclamation', 'Genuinely active manual or provider-confirmed incidents.')}
+        ${outageSummaryCard('Started Last 30 Days', data.summary.last30Days, 'fa-calendar-days', 'Number of outages that started in the rolling last 30 days.')}
+        ${outageSummaryCard('30 Day Downtime', data.summary.durationLast30Label, 'fa-clock', 'Aggregate outage time across tracked circuits during the last 30 days.')}
       `;
 }
 

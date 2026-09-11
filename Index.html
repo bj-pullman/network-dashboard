@@ -160,6 +160,23 @@
         class="page-actions"
       ></div>
 
+      <div class="dropdown help-menu-shell">
+        <button
+          id="globalHelpButton"
+          class="btn btn-sm btn-light border dropdown-toggle"
+          type="button"
+          data-bs-toggle="dropdown"
+          aria-expanded="false"
+        >
+          <i class="fa-regular fa-circle-question me-1"></i>
+          Help
+        </button>
+        <div
+          id="globalHelpMenu"
+          class="dropdown-menu dropdown-menu-end shadow"
+        ></div>
+      </div>
+
     </header>
 
 
@@ -185,6 +202,21 @@
 
 
 <div id="toastContainer"></div>
+
+<div class="modal fade" id="aboutModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <div class="modal-eyebrow">APPLICATION INFORMATION</div>
+          <h5 class="modal-title">About Network Dashboard</h5>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div id="aboutModalBody" class="modal-body"></div>
+    </div>
+  </div>
+</div>
 
 
 <!-- RECORD MODAL -->

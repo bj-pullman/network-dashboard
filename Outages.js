@@ -13,6 +13,9 @@ const OUTAGE_SYNC_LOOKBACK_DAYS =
 const OUTAGE_DASHBOARD_WINDOW_DAYS =
   30;
 
+const OUTAGE_STALE_ONGOING_WARNING_DAYS =
+  7;
+
 
 function getOutageSheetHeaders_() {
 
@@ -385,6 +388,18 @@ function readOutageRecords_(
 
   });
 
+  const externalIds = {};
+  rows.forEach(row => {
+    const externalId = String(row['External Event ID'] || '').trim();
+    if (!externalId) return;
+    if (externalIds[externalId]) {
+      addOutageDiagnostic_(row, 'Duplicate External Event ID.');
+      addOutageDiagnostic_(externalIds[externalId], 'Duplicate External Event ID.');
+    } else {
+      externalIds[externalId] = row;
+    }
+  });
+
   rows.sort((left, right) =>
     Number(right._startedMs || 0) -
     Number(left._startedMs || 0)
@@ -584,15 +599,37 @@ function hydrateOutageDisplayFields_(
 
   }
 
+  const startedText =
+    String(row.Started || '').trim();
+
+  const restoredText =
+    String(row.Restored || '').trim();
+
   const startedMs =
     parseOutageTimestampMs_(
-      row.Started
+      startedText
     );
 
   const restoredMs =
     parseOutageTimestampMs_(
-      row.Restored
+      restoredText
     );
+
+  row._diagnostics = [];
+
+  if (!startedText) {
+    addOutageDiagnostic_(row, 'Start Time is missing.');
+  } else if (!startedMs) {
+    addOutageDiagnostic_(row, 'Start Time is invalid.');
+  }
+
+  if (restoredText && !restoredMs) {
+    addOutageDiagnostic_(row, 'End Time is invalid.');
+  }
+
+  if (startedMs && restoredMs && restoredMs < startedMs) {
+    addOutageDiagnostic_(row, 'End Time is before Start Time.');
+  }
 
   row._startedMs =
     startedMs;
@@ -600,63 +637,131 @@ function hydrateOutageDisplayFields_(
   row._restoredMs =
     restoredMs;
 
-  row._ongoing =
-    !!startedMs &&
-    !restoredMs;
+  const sourceKey = normalizeSimpleKey_(row.Source);
+  const storedStatus = String(row.Status || '').trim();
+  const statusKey = normalizeSimpleKey_(storedStatus);
+  const hasInvalidEnd = !!restoredText && !restoredMs;
 
-  row.Status =
-    row._ongoing
+  if (sourceKey === 'uptimerobot') {
+    row._ongoing =
+      !!startedMs &&
+      !restoredText &&
+      statusKey === 'ongoing';
+
+    if (statusKey !== 'ongoing' && statusKey !== 'restored') {
+      addOutageDiagnostic_(row, 'UptimeRobot lifecycle status is missing or invalid.');
+    }
+
+    if (statusKey === 'restored' && !restoredMs) {
+      addOutageDiagnostic_(row, 'Resolved UptimeRobot incident is missing End Time.');
+    }
+
+    if (
+      row._ongoing &&
+      Date.now() - startedMs >
+        OUTAGE_STALE_ONGOING_WARNING_DAYS * 86400000
+    ) {
+      addOutageDiagnostic_(row, 'Old UptimeRobot incident is still marked ongoing; run sync to verify provider status.');
+    }
+
+    row.Status = statusKey === 'ongoing'
       ? 'Ongoing'
       : 'Restored';
+  } else {
+    row._ongoing =
+      !!startedMs &&
+      !restoredText &&
+      !hasInvalidEnd;
+    row.Status = row._ongoing ? 'Ongoing' : 'Restored';
+  }
+
+  const storedDurationText =
+    String(row['Duration Minutes'] || '').trim();
 
   const storedDuration =
-    Number(
-      row['Duration Minutes']
-    );
+    Number(storedDurationText);
 
   const calculatedDuration =
     calculateOutageDurationMinutes_(
       startedMs,
-      restoredMs || Date.now()
+      row._ongoing ? Date.now() : restoredMs
     );
 
-  const durationMinutes =
+  if (storedDurationText && (!Number.isFinite(storedDuration) || storedDuration < 0)) {
+    addOutageDiagnostic_(row, 'Stored duration is invalid or negative.');
+  }
+
+  if (
+    startedMs && restoredMs && restoredMs >= startedMs &&
+    Number.isFinite(storedDuration) && storedDuration > 0 &&
+    Math.abs(storedDuration - calculatedDuration) > 5
+  ) {
+    addOutageDiagnostic_(row, 'Stored duration disagrees with Start Time and End Time.');
+  }
+
+  let durationMinutes = '';
+
+  if (startedMs && restoredMs && restoredMs >= startedMs) {
+    durationMinutes = calculatedDuration;
+  } else if (row._ongoing) {
+    durationMinutes = calculatedDuration;
+  } else if (
+    sourceKey === 'uptimerobot' &&
+    statusKey === 'restored' &&
     Number.isFinite(storedDuration) &&
-    storedDuration > 0 &&
-    !row._ongoing
-      ? storedDuration
-      : calculatedDuration;
+    storedDuration >= 0
+  ) {
+    durationMinutes = storedDuration;
+  }
 
   row._durationMinutes =
     durationMinutes;
 
   row['Duration Minutes'] =
-    durationMinutes
+    durationMinutes !== ''
       ? String(
           Math.round(durationMinutes)
         )
       : '';
 
   row.Duration =
-    formatOutageDuration_(
-      durationMinutes
-    );
+    durationMinutes === ''
+      ? 'Unknown'
+      : formatOutageDuration_(durationMinutes);
 
   row._sourceKey =
-    normalizeSimpleKey_(
-      row.Source
+    sourceKey;
+
+  row._effectiveRestoredMs =
+    restoredMs ||
+    (
+      sourceKey === 'uptimerobot' &&
+      statusKey === 'restored' &&
+      startedMs &&
+      durationMinutes !== ''
+        ? startedMs + durationMinutes * 60000
+        : 0
     );
 
   return row;
 }
 
 
+function addOutageDiagnostic_(row, message) {
+  row._diagnostics = row._diagnostics || [];
+  if (!row._diagnostics.includes(message)) {
+    row._diagnostics.push(message);
+  }
+}
+
+
 function buildOutageSummary_(
-  rows
+  rows,
+  nowMs
 ) {
 
   const now =
-    Date.now();
+    Number(nowMs || Date.now());
 
   const windowStart =
     now -
@@ -672,14 +777,22 @@ function buildOutageSummary_(
     active: 0,
     last30Days: 0,
     durationLast30Minutes: 0,
-    durationLast30Label: '0m'
+    durationLast30Label: '0m',
+    dataQualityCount: 0
   };
+
+  const maxWindowMinutes =
+    OUTAGE_DASHBOARD_WINDOW_DAYS * 24 * 60;
 
   (rows || [])
     .forEach(row => {
 
       if (row._ongoing) {
         summary.active++;
+      }
+
+      if (row._diagnostics && row._diagnostics.length) {
+        summary.dataQualityCount++;
       }
 
       const startedMs =
@@ -689,9 +802,17 @@ function buildOutageSummary_(
         return;
       }
 
-      const restoredMs =
-        Number(row._restoredMs || 0) ||
-        now;
+      if (startedMs >= windowStart && startedMs <= now) {
+        summary.last30Days++;
+      }
+
+      const restoredMs = row._ongoing
+        ? now
+        : Number(row._effectiveRestoredMs || row._restoredMs || 0);
+
+      if (!restoredMs) {
+        return;
+      }
 
       if (
         restoredMs < windowStart ||
@@ -699,8 +820,6 @@ function buildOutageSummary_(
       ) {
         return;
       }
-
-      summary.last30Days++;
 
       const overlapStart =
         Math.max(
@@ -714,10 +833,16 @@ function buildOutageSummary_(
           now
         );
 
-      summary.durationLast30Minutes +=
+      const overlapMinutes =
         calculateOutageDurationMinutes_(
           overlapStart,
           overlapEnd
+        );
+
+      summary.durationLast30Minutes +=
+        Math.min(
+          Math.max(overlapMinutes, 0),
+          maxWindowMinutes
         );
 
     });
@@ -1144,20 +1269,38 @@ function reconcileUptimeRobotOutageRecords_(
     fetched: 0,
     created: 0,
     updated: 0,
-    unchanged: 0
+    unchanged: 0,
+    skipped: 0,
+    diagnostics: []
   };
 
   (incidents || [])
     .forEach(incident => {
 
+      const providerIncident =
+        normalizeUptimeRobotIncident_(
+          incident
+        );
+
       const normalized =
         normalizeUptimeRobotOutageRecord_(
           incident,
           circuitMap,
-          syncedAt
+          syncedAt,
+          providerIncident
         );
 
       if (!normalized) {
+        result.skipped++;
+        result.diagnostics.push({
+          providerIncidentId:
+            providerIncident.providerIncidentId || '',
+          monitorId:
+            providerIncident.monitorId || '',
+          message:
+            providerIncident.diagnostic ||
+            'Incident does not map to a tracked Internet/WAN circuit.'
+        });
         return;
       }
 
@@ -1248,22 +1391,19 @@ function reconcileUptimeRobotOutageRecords_(
 function normalizeUptimeRobotOutageRecord_(
   incident,
   circuitMap,
-  syncedAt
+  syncedAt,
+  providerIncident
 ) {
 
-  incident =
-    incident || {};
+  const provider =
+    providerIncident ||
+    normalizeUptimeRobotIncident_(incident);
 
-  const monitorId =
-    String(
-      incident.monitorId ||
-      incident.monitor_id ||
-      (
-        incident.monitor &&
-        incident.monitor.id
-      ) ||
-      ''
-    ).trim();
+  if (!provider.valid) {
+    return null;
+  }
+
+  const monitorId = provider.monitorId;
 
   if (!monitorId) {
     return null;
@@ -1278,41 +1418,12 @@ function normalizeUptimeRobotOutageRecord_(
     return null;
   }
 
-  const incidentId =
-    String(
-      incident.id ||
-      incident.incidentId ||
-      ''
-    ).trim();
+  incident = incident || {};
 
-  const started =
-    normalizeUptimeRobotIncidentTimestamp_(
-      incident.startedAt ||
-      incident.started_at ||
-      incident.startTime ||
-      incident.start_time
-    );
-
-  if (!started) {
-    return null;
-  }
-
-  const restored =
-    normalizeUptimeRobotIncidentTimestamp_(
-      incident.resolvedAt ||
-      incident.resolved_at ||
-      incident.restoredAt ||
-      incident.restored_at ||
-      incident.endedAt ||
-      incident.ended_at
-    );
-
-  const durationMinutes =
-    normalizeUptimeRobotIncidentDurationMinutes_(
-      incident.duration,
-      started,
-      restored
-    );
+  const incidentId = provider.providerIncidentId;
+  const started = provider.startedAt;
+  const restored = provider.restoredAt;
+  const durationMinutes = provider.durationMinutes;
 
   const externalId =
     'uptimerobot:' +
@@ -1323,7 +1434,7 @@ function normalizeUptimeRobotOutageRecord_(
 
   const reason =
     String(
-      incident.reason ||
+      provider.reason ||
       incident.cause ||
       ''
     ).trim();
@@ -1366,9 +1477,9 @@ function normalizeUptimeRobotOutageRecord_(
         ? 'UptimeRobot incident ' + incidentId
         : 'UptimeRobot incident',
     Status:
-      restored
-        ? 'Restored'
-        : 'Ongoing',
+      provider.isOngoing
+        ? 'Ongoing'
+        : 'Restored',
     'Entered By':
       OUTAGE_SOURCE_UPTIMEROBOT,
     'Created At':
@@ -1377,6 +1488,112 @@ function normalizeUptimeRobotOutageRecord_(
       syncedAt,
     'External Event ID':
       externalId
+  };
+}
+
+
+function normalizeUptimeRobotIncident_(incident) {
+
+  incident = incident || {};
+
+  const monitorId = String(
+    incident.monitorId ||
+    incident.monitor_id ||
+    (incident.monitor && incident.monitor.id) ||
+    ''
+  ).trim();
+
+  const providerIncidentId = String(
+    incident.id || incident.incidentId || incident.incident_id || ''
+  ).trim();
+
+  const startedAt = normalizeUptimeRobotIncidentTimestamp_(
+    incident.startedAt || incident.started_at ||
+    incident.startTime || incident.start_time ||
+    incident.incidentStartTime || incident.incident_start_time
+  );
+
+  const rawRestoredAt =
+    incident.resolvedAt || incident.resolved_at ||
+    incident.restoredAt || incident.restored_at ||
+    incident.endedAt || incident.ended_at ||
+    incident.endTime || incident.end_time ||
+    incident.incidentEndTime || incident.incident_end_time || '';
+
+  let restoredAt = normalizeUptimeRobotIncidentTimestamp_(rawRestoredAt);
+
+  const providerStatus = normalizeSimpleKey_(
+    incident.status || incident.lifecycleStatus || incident.lifecycle_status || ''
+  );
+
+  const resolvedStatuses = {
+    resolved: true, restored: true, closed: true,
+    completed: true, complete: true, up: true
+  };
+
+  const ongoingStatuses = {
+    ongoing: true, open: true, active: true,
+    down: true, started: true, unresolved: true
+  };
+
+  let isOngoing = !!ongoingStatuses[providerStatus];
+  let isResolved = !!resolvedStatuses[providerStatus];
+
+  if (!isOngoing && !isResolved && restoredAt) {
+    isResolved = true;
+  }
+
+  if (!providerStatus && !rawRestoredAt) {
+    isOngoing = true;
+  }
+
+  const durationMinutes = normalizeUptimeRobotIncidentDurationMinutes_(
+    incident.duration !== undefined
+      ? incident.duration
+      : (incident.durationSeconds !== undefined
+          ? incident.durationSeconds
+          : incident.duration_seconds),
+    startedAt,
+    restoredAt
+  );
+
+  if (isResolved && !restoredAt && startedAt && durationMinutes !== '') {
+    restoredAt = new Date(
+      parseOutageTimestampMs_(startedAt) + durationMinutes * 60000
+    ).toISOString();
+  }
+
+  if (isResolved) {
+    isOngoing = false;
+  } else if (isOngoing) {
+    restoredAt = '';
+  }
+
+  return {
+    valid: !!(monitorId && startedAt && (isOngoing || isResolved)),
+    monitorId: monitorId,
+    providerIncidentId: providerIncidentId,
+    providerStatus: providerStatus,
+    startedAt: startedAt,
+    restoredAt: restoredAt,
+    durationMinutes: restoredAt
+      ? calculateOutageDurationMinutes_(
+          parseOutageTimestampMs_(startedAt),
+          parseOutageTimestampMs_(restoredAt)
+        )
+      : durationMinutes,
+    isOngoing: isOngoing,
+    reason: String(incident.reason || '').trim(),
+    diagnostic:
+      !monitorId
+        ? 'UptimeRobot incident is missing monitor ID.'
+        : !startedAt
+          ? 'UptimeRobot incident has a missing or invalid start timestamp.'
+          : !isOngoing && !isResolved
+            ? 'UptimeRobot incident has an unrecognized or missing lifecycle status.'
+            : isResolved && !restoredAt
+              ? 'Resolved UptimeRobot incident has neither a valid end timestamp nor a usable duration.'
+              : ''
   };
 }
 
@@ -1624,16 +1841,21 @@ function normalizeUptimeRobotIncidentTimestamp_(
   }
 
   if (typeof value === 'number') {
-    return new Date(
+    const date = new Date(
       value > 100000000000
         ? value
         : value * 1000
-    ).toISOString();
+    );
+    return isNaN(date.getTime()) ? '' : date.toISOString();
   }
 
   if (typeof value === 'string') {
+    const text = value.trim();
+    if (/^\d+(?:\.\d+)?$/.test(text)) {
+      return normalizeUptimeRobotIncidentTimestamp_(Number(text));
+    }
     const date =
-      new Date(value);
+      new Date(text);
 
     if (
       !isNaN(
@@ -1643,7 +1865,7 @@ function normalizeUptimeRobotIncidentTimestamp_(
       return date.toISOString();
     }
 
-    return value.trim();
+    return '';
   }
 
   if (typeof value === 'object') {
@@ -1672,8 +1894,15 @@ function parseOutageTimestampMs_(
     return 0;
   }
 
-  const date =
-    new Date(text);
+  if (/^\d+(?:\.\d+)?$/.test(text)) {
+    const numeric = Number(text);
+    const numericTime = numeric > 100000000000
+      ? numeric
+      : numeric * 1000;
+    return Number.isFinite(numericTime) ? numericTime : 0;
+  }
+
+  const date = new Date(text);
 
   const time =
     date.getTime();
@@ -1810,6 +2039,10 @@ function invalidateOutageCaches_() {
 
     cache.remove(
       'app_dashboard'
+    );
+
+    cache.remove(
+      'outages.summary'
     );
   } catch (error) {}
 }

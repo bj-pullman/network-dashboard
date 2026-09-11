@@ -1784,6 +1784,11 @@ function validateNetworkDashboard(options) {
       guidance:
         'Deploy the Apps Script project as a web app and save its /exec URL as app.web_app_url.'
     },
+    documentation: {
+      faq: 'Not configured',
+      updateGuide: 'Not configured',
+      setupGuide: 'Not configured'
+    },
     installationStatus: {},
     protectionStatus: {
       status: 'Unknown'
@@ -1846,6 +1851,8 @@ function validateNetworkDashboard(options) {
 
   validateSettings_(result);
 
+  validateDocumentationSettings_(result);
+
   validateAppSettingsProtections_(
     ss.getSheetByName(
       NETWORK_DASHBOARD_SETTINGS_SHEET
@@ -1884,6 +1891,31 @@ function validateNetworkDashboard(options) {
 
 
   return result;
+}
+
+
+function validateDocumentationSettings_(result) {
+
+  const checks = [
+    ['faq', 'FAQ', 'documentation.faq_url'],
+    ['updateGuide', 'Update Guide', 'documentation.update_guide_url'],
+    ['setupGuide', 'Setup Guide', 'documentation.setup_guide_url']
+  ];
+
+  checks.forEach(item => {
+    const value = String(AppConfig.get(item[2]) || '').trim();
+    const configured = /^https?:\/\/[^\s]+$/i.test(value);
+    result.documentation[item[0]] = configured
+      ? 'Configured'
+      : 'Not configured';
+
+    if (!configured) {
+      result.warnings.push(
+        'Documentation: ' + item[1] +
+        ' is missing or does not contain a valid http/https URL.'
+      );
+    }
+  });
 }
 
 
@@ -4671,6 +4703,64 @@ function validateOutageRows_(
       );
     }
 
+    const durationText =
+      String(record['Duration Minutes'] || '').trim();
+
+    const durationMinutes =
+      Number(durationText);
+
+    if (
+      durationText &&
+      (!Number.isFinite(durationMinutes) || durationMinutes < 0)
+    ) {
+      result.warnings.push(
+        'Outages row ' + rowNumber +
+        ': Duration Minutes is invalid or negative.'
+      );
+    }
+
+    if (
+      !isNaN(startedMs) &&
+      !isNaN(restoredMs) &&
+      restoredMs >= startedMs &&
+      Number.isFinite(durationMinutes) &&
+      durationText
+    ) {
+      const calculatedMinutes =
+        Math.round((restoredMs - startedMs) / 60000);
+
+      if (Math.abs(calculatedMinutes - durationMinutes) > 5) {
+        result.warnings.push(
+          'Outages row ' + rowNumber +
+          ': stored duration disagrees with Start Time and End Time.'
+        );
+      }
+    }
+
+    if (
+      source === 'UptimeRobot' &&
+      status === 'Restored' &&
+      !String(record.Restored || '').trim()
+    ) {
+      result.warnings.push(
+        'Outages row ' + rowNumber +
+        ': resolved UptimeRobot incident is missing End Time.'
+      );
+    }
+
+    if (
+      source === 'UptimeRobot' &&
+      status === 'Ongoing' &&
+      !isNaN(startedMs) &&
+      Date.now() - startedMs >
+        OUTAGE_STALE_ONGOING_WARNING_DAYS * 86400000
+    ) {
+      result.warnings.push(
+        'Outages row ' + rowNumber +
+        ': old UptimeRobot incident is still marked ongoing; run sync to verify provider status.'
+      );
+    }
+
   });
 }
 
@@ -5418,6 +5508,11 @@ function formatValidationSummary_(result) {
         : 'Needs attention'),
     'Web App Deployment: ' +
       result.webAppDeployment.status,
+    '',
+    'Documentation',
+    'FAQ: ' + result.documentation.faq,
+    'Update Guide: ' + result.documentation.updateGuide,
+    'Setup Guide: ' + result.documentation.setupGuide,
     'Unmanaged sheets: ' +
       (result.unmanagedSheets || []).length,
     '',

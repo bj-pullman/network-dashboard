@@ -348,6 +348,80 @@ function applyBootstrapShell(
   buildNavigation(
     pages
   );
+
+  buildGlobalHelpMenu_();
+}
+
+
+function getSafeExternalUrl_(value) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  try {
+    const url = new URL(text);
+    return url.protocol === 'http:' || url.protocol === 'https:'
+      ? text
+      : '';
+  } catch (error) {
+    return '';
+  }
+}
+
+
+function helpExternalItem_(label, value) {
+  const url = getSafeExternalUrl_(value);
+  if (!url) {
+    return `<span class="dropdown-item help-menu-unavailable" title="This documentation link is not configured or is invalid.">${escapeHtml(label)} <small>(Unavailable)</small></span>`;
+  }
+  return `<a class="dropdown-item" href="${escapeAttribute(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)}</a>`;
+}
+
+
+function buildGlobalHelpMenu_() {
+  const menu = document.getElementById('globalHelpMenu');
+  if (!menu) return;
+  const config = appBootstrap && appBootstrap.config || {};
+  const docs = config.documentation || {};
+  const admin = !!(appBootstrap && appBootstrap.user && appBootstrap.user.admin);
+  menu.innerHTML = `
+    <div class="help-menu-heading">Help</div>
+    <div class="dropdown-divider"></div>
+    ${helpExternalItem_('Frequently Asked Questions', docs.faqUrl)}
+    ${admin ? helpExternalItem_('Update & Maintenance Guide', docs.updateGuideUrl) : ''}
+    ${admin ? helpExternalItem_('Setup & Deployment Guide', docs.setupGuideUrl) : ''}
+    ${admin ? '<div class="dropdown-divider"></div>' : ''}
+    <button class="dropdown-item" type="button" onclick="showNetworkDashboardAbout_()">About Network Dashboard</button>
+  `;
+}
+
+
+function aboutExternalValue_(label, value) {
+  const url = getSafeExternalUrl_(value);
+  return url
+    ? `<a href="${escapeAttribute(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)}</a>`
+    : '<span class="text-muted">Not configured</span>';
+}
+
+
+function showNetworkDashboardAbout_() {
+  const config = appBootstrap && appBootstrap.config || {};
+  const docs = config.documentation || {};
+  const organization = config.organization || {};
+  const admin = !!(appBootstrap && appBootstrap.user && appBootstrap.user.admin);
+  const body = document.getElementById('aboutModalBody');
+  if (!body) return;
+  body.innerHTML = `
+    <dl class="about-details">
+      <dt>Application Name</dt><dd>${escapeHtml(config.appName || 'Network Dashboard')}</dd>
+      <dt>Application Version</dt><dd>${escapeHtml(config.applicationVersion || '')}</dd>
+      <dt>Schema Version</dt><dd>${escapeHtml(config.schemaVersion || '')}</dd>
+      <dt>Organization Name</dt><dd>${escapeHtml(organization.name || 'Not configured')}</dd>
+      <dt>FAQ</dt><dd>${aboutExternalValue_('Open FAQ', docs.faqUrl)}</dd>
+      ${admin ? `<dt>Update Guide</dt><dd>${aboutExternalValue_('Open Update & Maintenance Guide', docs.updateGuideUrl)}</dd>` : ''}
+      ${admin ? `<dt>Setup Guide</dt><dd>${aboutExternalValue_('Open Setup & Deployment Guide', docs.setupGuideUrl)}</dd>` : ''}
+      <dt>GitHub Repository</dt><dd>${aboutExternalValue_('bj-pullman/network-dashboard', 'https://github.com/bj-pullman/network-dashboard')}</dd>
+    </dl>
+  `;
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('aboutModal')).show();
 }
 
 

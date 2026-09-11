@@ -107,6 +107,33 @@ function getAppSettingDefinitions_() {
       description: 'Short organization label used in compact UI.'
     },
     {
+      key: 'documentation.faq_url',
+      label: 'FAQ URL',
+      category: 'Documentation',
+      type: 'url',
+      defaultValue: 'https://docs.google.com/document/d/1k20gtCdNSTfL-NuCgxcw6e9mpcruPYiYMjKKh0Kx3SQ/edit?tab=t.g2vtj6cjnng9',
+      editable: true,
+      description: 'Frequently Asked Questions guide available to all authorized users.'
+    },
+    {
+      key: 'documentation.update_guide_url',
+      label: 'Update Guide URL',
+      category: 'Documentation',
+      type: 'url',
+      defaultValue: 'https://docs.google.com/document/d/1k20gtCdNSTfL-NuCgxcw6e9mpcruPYiYMjKKh0Kx3SQ/edit?pli=1&tab=t.dxyn2km9mw42',
+      editable: true,
+      description: 'Administrator Update & Maintenance Guide.'
+    },
+    {
+      key: 'documentation.setup_guide_url',
+      label: 'Setup Guide URL',
+      category: 'Documentation',
+      type: 'url',
+      defaultValue: 'https://docs.google.com/document/d/1k20gtCdNSTfL-NuCgxcw6e9mpcruPYiYMjKKh0Kx3SQ/edit?tab=t.0',
+      editable: true,
+      description: 'Administrator Setup & Deployment Guide.'
+    },
+    {
       key: 'branding.logo_url',
       label: 'Logo URL',
       category: 'Branding',
@@ -1025,6 +1052,14 @@ var AppConfig = (function() {
           values['organization.name'] || '',
         shortName:
           values['organization.short_name'] || ''
+      },
+      documentation: {
+        faqUrl:
+          values['documentation.faq_url'] || '',
+        updateGuideUrl:
+          values['documentation.update_guide_url'] || '',
+        setupGuideUrl:
+          values['documentation.setup_guide_url'] || ''
       },
       branding: {
         logoUrl:

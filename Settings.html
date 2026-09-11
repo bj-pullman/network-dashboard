@@ -78,6 +78,41 @@ function renderSettingsPage(data) {
       </section>
 
 
+      <section class="app-card settings-panel">
+
+        <div class="card-header-clean">
+          <div>
+            <h2 class="card-title-clean">Documentation</h2>
+            <div class="settings-card-subtitle">
+              Help links used throughout Network Dashboard.
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-grid">
+          ${settingsDocumentationField_(
+            'documentation.faq_url',
+            'Frequently Asked Questions',
+            'Open FAQ',
+            values
+          )}
+          ${settingsDocumentationField_(
+            'documentation.update_guide_url',
+            'Update & Maintenance Guide',
+            'Open Update Guide',
+            values
+          )}
+          ${settingsDocumentationField_(
+            'documentation.setup_guide_url',
+            'Setup & Deployment Guide',
+            'Open Setup Guide',
+            values
+          )}
+        </div>
+
+      </section>
+
+
       ${renderModuleSection(modules)}
 
 
@@ -423,6 +458,29 @@ function settingsUrlField(key, label, values, description) {
           : ''
       }
     </label>
+  `;
+}
+
+
+function settingsDocumentationField_(key, label, actionLabel, values) {
+  const value = String(values[key] || '').trim();
+  const url = getSafeExternalUrl_(value);
+  return `
+    <div class="settings-field settings-url-field">
+      <label>
+        <span>${escapeHtml(label)}</span>
+        <input
+          class="form-control"
+          type="url"
+          data-setting-key="${escapeAttribute(key)}"
+          value="${escapeAttribute(value)}"
+        >
+      </label>
+      ${url
+        ? `<a class="btn btn-sm btn-light border mt-2" href="${escapeAttribute(url)}" target="_blank" rel="noopener noreferrer"><i class="fa-solid fa-arrow-up-right-from-square me-2"></i>${escapeHtml(actionLabel)}</a>`
+        : `<button class="btn btn-sm btn-light border mt-2" type="button" disabled title="This documentation link is not configured or is invalid.">${escapeHtml(actionLabel)} unavailable</button>`
+      }
+    </div>
   `;
 }
 

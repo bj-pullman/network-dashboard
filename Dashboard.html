@@ -280,8 +280,8 @@ function renderDashboardWidgetBody_(
       return `
         <div class="row g-2">
           ${dashboardMiniMetric('Active Outages', value.active || 0)}
-          ${dashboardMiniMetric('Last 30 Days', value.last30Days || 0)}
-          ${dashboardMiniMetric('30 Day Duration', value.durationLast30Label || '0m')}
+          ${dashboardMiniMetric('Started Last 30 Days', value.last30Days || 0)}
+          ${dashboardMiniMetric('30 Day Downtime', value.durationLast30Label || '0m')}
           ${dashboardMiniMetric('Tracked Total', value.total || 0)}
         </div>
       `;

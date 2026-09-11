@@ -146,6 +146,7 @@ const APP_PAGE_CONFIG = {
       'Circuit Name',
       'Provider',
       'Started',
+      'Restored',
       'Duration',
       'Status'
     ]
@@ -4787,7 +4788,7 @@ function getDashboardWidgetRegistry_() {
     {
       id: 'outages.summary',
       display: 'WAN Outages',
-      description: 'Active outages, recent outage count and recent downtime duration.',
+      description: 'Active incidents, outages started in the last 30 days, and aggregate circuit downtime overlapping that window.',
       category: 'Monitoring',
       type: 'kpi_group',
       dataSource: 'Outages sheet',

@@ -365,6 +365,12 @@ function showNetworkDashboardAbout() {
   const config =
     AppConfig.getClientConfig_();
 
+  const documentation =
+    config.documentation || {};
+
+  const organization =
+    config.organization || {};
+
   SpreadsheetApp
     .getUi()
     .alert(
@@ -375,6 +381,17 @@ function showNetworkDashboardAbout() {
           NETWORK_DASHBOARD_VERSION,
         'Schema version: ' +
           NETWORK_DASHBOARD_SCHEMA_VERSION,
+        '',
+        'Organization: ' +
+          (organization.name || 'Not configured'),
+        'FAQ: ' +
+          (documentation.faqUrl || 'Not configured'),
+        'Update & Maintenance Guide: ' +
+          (documentation.updateGuideUrl || 'Not configured'),
+        'Setup & Deployment Guide: ' +
+          (documentation.setupGuideUrl || 'Not configured'),
+        'GitHub Repository:',
+        'https://github.com/bj-pullman/network-dashboard',
         '',
         'Break-glass Script Property:',
         NETWORK_DASHBOARD_BREAK_GLASS_ADMINS_PROPERTY
