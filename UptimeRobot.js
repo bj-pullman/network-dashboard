@@ -180,7 +180,6 @@ function syncUptimeRobotToSheet() {
       outageSyncWarning:
         outageSyncWarning,
       invalidatePages: [
-        'uptimeRobot',
         'internetWan',
         'outages',
         'dashboard'
@@ -353,96 +352,6 @@ function getUptimeRobotLocalMonitorSnapshot_(
   );
 
   return snapshot;
-}
-
-
-function getUptimeRobotPageData_(
-  forceRefresh
-) {
-
-  requirePagePermission_(
-    'uptimeRobot',
-    'view'
-  );
-
-  const cacheKey =
-    'app_page_uptimeRobot';
-
-  if (!forceRefresh) {
-    try {
-      const cached =
-        CacheService
-          .getScriptCache()
-          .get(
-            cacheKey
-          );
-
-      if (cached) {
-        return JSON.parse(
-          cached
-        );
-      }
-    } catch (error) {}
-  }
-
-  const snapshot =
-    getUptimeRobotLocalMonitorSnapshot_({
-      forceRefresh:
-        !!forceRefresh
-    });
-
-  const rows =
-    snapshot.monitors.map(
-      monitor =>
-        monitorToUptimeRobotPageRow_(
-          monitor
-        )
-    );
-
-  const result = {
-    pageKey: 'uptimeRobot',
-    type: 'uptimeRobot',
-    label: 'UptimeRobot',
-    sheetName:
-      UPTIMEROBOT_SHEET_NAME,
-    headers:
-      getUptimeRobotSheetHeaders_(),
-    rows:
-      rows,
-    totalCount:
-      rows.length,
-    defaultColumns: [
-      'Monitor Name',
-      'Monitor Type',
-      'Target',
-      'Health',
-      'Provider Status',
-      'Last Checked',
-      'Last Sync'
-    ],
-    controlledOptions: {
-      Health:
-        getControlledOptions_(
-          'uptimeRobotHealth'
-        )
-    },
-    permission:
-      getPagePermission_(
-        'uptimeRobot'
-      ),
-    integration:
-      snapshot,
-    summary:
-      snapshot.summary
-  };
-
-  cacheJson_(
-    cacheKey,
-    result,
-    UPTIMEROBOT_LOCAL_CACHE_SECONDS
-  );
-
-  return result;
 }
 
 
@@ -844,59 +753,6 @@ function monitorToUptimeRobotSheetRowObject_(
 }
 
 
-function monitorToUptimeRobotPageRow_(
-  monitor
-) {
-
-  return Object.assign(
-    {
-      'Monitor ID':
-        monitor.id || '',
-      'Monitor Name':
-        monitor.name || '',
-      'Monitor Type':
-        monitor.type || '',
-      Target:
-        monitor.target || '',
-      Health:
-        monitor.health || 'Unknown',
-      'Provider Status':
-        monitor.status || '',
-      'Last Checked':
-        monitor.lastChecked || '',
-      'Created At':
-        monitor.createdAt || '',
-      'Last Incident ID':
-        monitor.lastIncidentId || '',
-      'Current State Duration':
-        monitor.currentStateDuration || '',
-      Tags:
-        monitor.tags || '',
-      'Last Sync':
-        monitor.lastSync || ''
-    },
-    {
-      id:
-        monitor.id || '',
-      name:
-        monitor.name || '',
-      type:
-        monitor.type || '',
-      target:
-        monitor.target || '',
-      health:
-        monitor.health || 'Unknown',
-      status:
-        monitor.status || '',
-      lastChecked:
-        monitor.lastChecked || '',
-      lastSync:
-        monitor.lastSync || ''
-    }
-  );
-}
-
-
 function normalizeUptimeRobotLocalRow_(
   row
 ) {
@@ -991,10 +847,6 @@ function invalidateUptimeRobotDataCaches_() {
       UPTIMEROBOT_MONITOR_CACHE_KEY
     );
   } catch (error) {}
-
-  invalidateAppPage_(
-    'uptimeRobot'
-  );
 
   invalidateAppPage_(
     'internetWan'

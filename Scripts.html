@@ -109,7 +109,7 @@ const PAGE_RENDERER_FUNCTIONS = {
   routes: 'renderRoutesPage', securityCameras: 'renderSecurityCamerasPage',
   busCameras: 'renderBusCamerasPage', intercom: 'renderIntercomPage',
   backups: 'renderBackupsPage', internetWan: 'renderInternetWanPage',
-  outages: 'renderOutagesPage', uptimeRobot: 'renderUptimeRobotPage',
+  outages: 'renderOutagesPage',
   workflow: 'renderWorkflowPage', users: 'renderUsersPage', settings: 'renderSettingsPage'
 };
 
@@ -119,7 +119,7 @@ const PAGE_UPDATE_FUNCTIONS = {
   securityCameras: 'updateRecordTablePage_', backups: 'updateRecordTablePage_',
   busCameras: 'updateStructuredTables_', intercom: 'updateStructuredTables_',
   internetWan: 'updateInternetWanPage_', outages: 'updateOutagesPage_',
-  uptimeRobot: 'updateUptimeRobotPage_', workflow: 'updateWorkflowPage_'
+  workflow: 'updateWorkflowPage_'
 };
 
 const pageRequestVersions = new Map();
@@ -1785,24 +1785,6 @@ function applyUptimeRobotHealthRefreshResult_(
   } else {
     invalidateClientPage(
       'internetWan'
-    );
-  }
-
-  if (
-    currentPageKey === 'uptimeRobot' &&
-    !isStartupRefresh
-  ) {
-    loadPage(
-      'uptimeRobot',
-      true,
-      {
-        reason:
-          options.reason || 'uptimerobot-health-refresh'
-      }
-    );
-  } else {
-    invalidateClientPage(
-      'uptimeRobot'
     );
   }
 

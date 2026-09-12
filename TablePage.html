@@ -3,6 +3,36 @@
 const RECORD_PAGE_DEFINITIONS = {};
 let currentRecordDefinition = null;
 
+function resolveRecordDefaultColumns_(
+  data,
+  definition
+) {
+  const headers =
+    Array.isArray(data.headers)
+      ? data.headers
+      : [];
+
+  const serverDefaults =
+    Array.isArray(data.defaultColumns)
+      ? data.defaultColumns
+      : [];
+
+  const clientDefaults =
+    definition && Array.isArray(definition.defaultColumns)
+      ? definition.defaultColumns
+      : [];
+
+  const configured =
+    serverDefaults.length
+      ? serverDefaults
+      : clientDefaults.length
+        ? clientDefaults
+        : headers.slice(0, 6);
+
+  return Array.from(new Set(configured))
+    .filter(field => headers.includes(field));
+}
+
 function renderRecordTable_(data, definition) {
 
   currentTableData =
@@ -14,7 +44,7 @@ function renderRecordTable_(data, definition) {
 
 
   currentRecordDefinition = definition;
-  data.defaultColumns = definition.defaultColumns.filter(field => data.headers.includes(field));
+  data.defaultColumns = resolveRecordDefaultColumns_(data, definition);
   if (definition.onOpen) definition.onOpen(data);
   definition.header(data);
   definition.actions(data);
@@ -1742,7 +1772,7 @@ function createActionMenuItem(
 async function updateRecordTablePage_(data) {
   const definition = currentRecordDefinition;
   const table = tableInstance;
-  data.defaultColumns = definition.defaultColumns.filter(field => data.headers.includes(field));
+  data.defaultColumns = resolveRecordDefaultColumns_(data, definition);
   currentTableData = data;
   currentHeaders = data.headers || [];
   definition.header(data);

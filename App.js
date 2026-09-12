@@ -70,7 +70,7 @@ const APP_PAGE_CONFIG = {
     group: 'Infrastructure',
     centralSync: true,
 
-    defaultColumns: ["Status","Device Label","Model","Type","IP Address","Campus"]
+    defaultColumns: ["Status","Device Label","Model","Type","IP Address","Campus","Serial Number"]
   },
 
   accessPoints: {
@@ -149,24 +149,6 @@ const APP_PAGE_CONFIG = {
       'Restored',
       'Duration',
       'Status'
-    ]
-  },
-
-  uptimeRobot: {
-    key: 'uptimeRobot',
-    label: 'UptimeRobot',
-    sheet: 'UptimeRobot',
-    type: 'uptimeRobot',
-    icon: 'fa-heart-pulse',
-    group: 'Monitoring',
-    integrationId: 'uptimerobot',
-
-    defaultColumns: [
-      'Monitor Name',
-      'Health',
-      'Target',
-      'Last Checked',
-      'Last Sync'
     ]
   },
 
@@ -1826,7 +1808,6 @@ function getUptimeRobotStartupRefreshState_(
     enabled: false,
     reason: '',
     affectedPages: [
-      'uptimeRobot',
       'internetWan',
       'dashboard'
     ]
@@ -1921,7 +1902,7 @@ function appGetPageData(pageKey, forceRefresh) {
     const loaders = {
       dashboard: getAppDashboardData_, workflow: getDepartmentWorkflowData_,
       internetWan: getInternetWanPageData_, outages: getOutagesPageData_,
-      uptimeRobot: getUptimeRobotPageData_, users: getAppUsers_, settings: getSettingsPageData_
+      users: getAppUsers_, settings: getSettingsPageData_
     };
     const result = measureAppReadStep_('pageData', function() {
       if (loaders[pageKey]) return loaders[pageKey](!!forceRefresh);
@@ -4639,20 +4620,25 @@ function finalizeDashboardData_(
   data.uptimeRobot =
     buildDashboardUptimeRobotData_();
 
-  data.availableWidgets =
+  const availableWidgets =
     getDashboardAvailableWidgets_();
 
   data.widgetConfig =
     getDashboardWidgetConfiguration_(
-      data.availableWidgets
+      availableWidgets
     );
 
   data.widgets =
     hydrateDashboardWidgets_(
-      data.availableWidgets,
+      availableWidgets,
       data.widgetConfig,
       data,
       metricMap || {}
+    );
+
+  data.availableWidgets =
+    availableWidgets.map(
+      getDashboardWidgetClientMetadata_
     );
 
   data.canCustomize =
@@ -4671,7 +4657,7 @@ function getDashboardWidgetRegistry_() {
       description: 'Total switch inventory records.',
       category: 'Infrastructure',
       type: 'kpi',
-      dataSource: 'Dashboard sheet metric switches.total',
+      sourceLabel: 'Switch inventory',
       metricKey: 'switches.total',
       requiredModule: 'switches',
       defaultEnabled: true,
@@ -4686,7 +4672,7 @@ function getDashboardWidgetRegistry_() {
       description: 'Total access point inventory records.',
       category: 'Infrastructure',
       type: 'kpi',
-      dataSource: 'Dashboard sheet metric access_points.total',
+      sourceLabel: 'Wireless inventory',
       metricKey: 'access_points.total',
       requiredModule: 'accessPoints',
       defaultEnabled: true,
@@ -4701,7 +4687,7 @@ function getDashboardWidgetRegistry_() {
       description: 'Total active server records.',
       category: 'Infrastructure',
       type: 'kpi',
-      dataSource: 'Dashboard sheet metric servers.total',
+      sourceLabel: 'Server inventory',
       metricKey: 'servers.total',
       requiredModule: 'servers',
       defaultEnabled: true,
@@ -4716,7 +4702,7 @@ function getDashboardWidgetRegistry_() {
       description: 'Total Internet/WAN circuit records.',
       category: 'Infrastructure',
       type: 'kpi',
-      dataSource: 'Dashboard sheet metric internet_wan.total',
+      sourceLabel: 'Internet / WAN inventory',
       metricKey: 'internet_wan.total',
       requiredModule: 'internetWan',
       defaultEnabled: true,
@@ -4727,11 +4713,12 @@ function getDashboardWidgetRegistry_() {
     },
     {
       id: 'uptimerobot.total',
-      display: 'UR Monitors',
-      description: 'Total synchronized UptimeRobot monitors.',
+      display: 'Monitored Services',
+      description: 'Total synchronized service monitors.',
       category: 'Monitoring',
       type: 'kpi',
-      dataSource: 'UptimeRobot sheet',
+      sourceLabel: 'Monitoring integration',
+      actionPage: 'internetWan',
       dataPath: 'uptimeRobot.summary.total',
       requiredIntegration: 'uptimerobot',
       defaultEnabled: true,
@@ -4742,11 +4729,12 @@ function getDashboardWidgetRegistry_() {
     },
     {
       id: 'uptimerobot.online',
-      display: 'UR Online',
-      description: 'Synchronized UptimeRobot monitors with Online health.',
+      display: 'Monitors Online',
+      description: 'Synchronized service monitors reporting online.',
       category: 'Monitoring',
       type: 'kpi',
-      dataSource: 'UptimeRobot sheet',
+      sourceLabel: 'Monitoring integration',
+      actionPage: 'internetWan',
       dataPath: 'uptimeRobot.summary.online',
       requiredIntegration: 'uptimerobot',
       defaultEnabled: true,
@@ -4757,11 +4745,12 @@ function getDashboardWidgetRegistry_() {
     },
     {
       id: 'uptimerobot.down',
-      display: 'UR Down',
-      description: 'Synchronized UptimeRobot monitors with Down health.',
+      display: 'Monitors Down',
+      description: 'Synchronized service monitors reporting an outage.',
       category: 'Monitoring',
       type: 'kpi',
-      dataSource: 'UptimeRobot sheet',
+      sourceLabel: 'Monitoring integration',
+      actionPage: 'internetWan',
       dataPath: 'uptimeRobot.summary.down',
       requiredIntegration: 'uptimerobot',
       defaultEnabled: true,
@@ -4772,11 +4761,12 @@ function getDashboardWidgetRegistry_() {
     },
     {
       id: 'uptimerobot.paused',
-      display: 'UR Paused',
-      description: 'Synchronized UptimeRobot monitors with Paused health.',
+      display: 'Monitors Paused',
+      description: 'Synchronized service monitors currently paused.',
       category: 'Monitoring',
       type: 'kpi',
-      dataSource: 'UptimeRobot sheet',
+      sourceLabel: 'Monitoring integration',
+      actionPage: 'internetWan',
       dataPath: 'uptimeRobot.summary.paused',
       requiredIntegration: 'uptimerobot',
       defaultEnabled: false,
@@ -4791,7 +4781,8 @@ function getDashboardWidgetRegistry_() {
       description: 'Active incidents, outages started in the last 30 days, and aggregate circuit downtime overlapping that window.',
       category: 'Monitoring',
       type: 'kpi_group',
-      dataSource: 'Outages sheet',
+      sourceLabel: 'Outage history',
+      actionPage: 'outages',
       dataPath: 'outages.summary',
       requiredModule: 'outages',
       defaultEnabled: true,
@@ -4806,7 +4797,7 @@ function getDashboardWidgetRegistry_() {
       description: 'Switch count by campus.',
       category: 'Infrastructure',
       type: 'chart',
-      dataSource: 'Dashboard formula summary',
+      sourceLabel: 'Switch inventory',
       dataPath: 'campusDistribution',
       requiredModule: 'switches',
       defaultEnabled: true,
@@ -4820,7 +4811,8 @@ function getDashboardWidgetRegistry_() {
       description: 'Workflow groups, tiers, ticket steps and workflows.',
       category: 'Operations',
       type: 'kpi_group',
-      dataSource: 'Department Workflow sheet',
+      sourceLabel: 'Department workflow',
+      actionPage: 'workflow',
       dataPath: 'workflow',
       requiredModule: 'workflow',
       defaultEnabled: true,
@@ -4834,7 +4826,7 @@ function getDashboardWidgetRegistry_() {
       description: 'Switch records grouped by status.',
       category: 'Infrastructure',
       type: 'status_summary',
-      dataSource: 'Dashboard formula summary',
+      sourceLabel: 'Switch inventory',
       dataPath: 'switchStatus',
       requiredModule: 'switches',
       defaultEnabled: true,
@@ -4848,7 +4840,7 @@ function getDashboardWidgetRegistry_() {
       description: 'Access point records grouped by status.',
       category: 'Infrastructure',
       type: 'status_summary',
-      dataSource: 'Dashboard formula summary',
+      sourceLabel: 'Wireless inventory',
       dataPath: 'apStatus',
       requiredModule: 'accessPoints',
       defaultEnabled: true,
@@ -4862,7 +4854,7 @@ function getDashboardWidgetRegistry_() {
       description: 'Internet/WAN records grouped by administrative status.',
       category: 'Infrastructure',
       type: 'status_summary',
-      dataSource: 'Dashboard formula summary',
+      sourceLabel: 'Internet / WAN inventory',
       dataPath: 'wanStatus',
       requiredModule: 'internetWan',
       defaultEnabled: true,
@@ -4873,10 +4865,11 @@ function getDashboardWidgetRegistry_() {
     {
       id: 'uptimerobot.wan_health',
       display: 'WAN Monitor Health',
-      description: 'WAN circuits joined to synchronized UptimeRobot monitor health.',
+      description: 'WAN circuits summarized by current monitoring health.',
       category: 'Monitoring',
       type: 'status_summary',
-      dataSource: 'Internet WAN sheet joined to UptimeRobot sheet',
+      sourceLabel: 'Internet / WAN monitoring',
+      actionPage: 'internetWan',
       dataPath: 'uptimeRobot.wanHealth',
       requiredModule: 'internetWan',
       requiredIntegration: 'uptimerobot',
@@ -4888,10 +4881,11 @@ function getDashboardWidgetRegistry_() {
     {
       id: 'uptimerobot.down_monitors',
       display: 'Down Monitors',
-      description: 'Synchronized UptimeRobot monitors currently down.',
+      description: 'Monitored Internet/WAN services currently down.',
       category: 'Monitoring',
       type: 'list',
-      dataSource: 'UptimeRobot sheet',
+      sourceLabel: 'Internet / WAN monitoring',
+      actionPage: 'internetWan',
       dataPath: 'uptimeRobot.downMonitors',
       requiredIntegration: 'uptimerobot',
       defaultEnabled: true,
@@ -4911,6 +4905,31 @@ function getDashboardAvailableWidgets_() {
         widget
       )
     );
+}
+
+
+function getDashboardWidgetClientMetadata_(
+  widget
+) {
+
+  return {
+    id:
+      widget.id,
+    display:
+      widget.display,
+    description:
+      widget.description || '',
+    category:
+      widget.category || '',
+    icon:
+      widget.icon || 'fa-chart-simple',
+    defaultEnabled:
+      !!widget.defaultEnabled,
+    defaultOrder:
+      Number(widget.defaultOrder || 0),
+    defaultSize:
+      widget.defaultSize || 'medium'
+  };
 }
 
 
@@ -5135,38 +5154,31 @@ function getDashboardWidgetProvenance_(
   data
 ) {
 
+  let lastUpdated = '';
+
   if (
     widget.requiredIntegration === 'uptimerobot'
   ) {
-    return {
-      source:
-        'UptimeRobot sheet',
-      lastUpdated:
-        data.uptimeRobot &&
-        data.uptimeRobot.lastSuccessfulSync
-          ? data.uptimeRobot.lastSuccessfulSync
-          : ''
-    };
-  }
-
-  if (
+    lastUpdated =
+      data.uptimeRobot &&
+      data.uptimeRobot.lastSuccessfulSync
+        ? data.uptimeRobot.lastSuccessfulSync
+        : '';
+  } else if (
     widget.requiredModule === 'outages'
   ) {
-    return {
-      source:
-        'Outages sheet',
-      lastUpdated:
-        data.outages &&
-        data.outages.lastUpdated
-          ? data.outages.lastUpdated
-          : ''
-    };
+    lastUpdated =
+      data.outages &&
+      data.outages.lastUpdated
+        ? data.outages.lastUpdated
+        : '';
   }
 
   return {
     source:
-      widget.dataSource || '',
-    lastUpdated: ''
+      widget.sourceLabel || '',
+    lastUpdated:
+      lastUpdated
   };
 }
 

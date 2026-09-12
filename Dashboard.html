@@ -217,38 +217,12 @@ function renderDashboardWidgetAction_(
   widget
 ) {
 
-  if (widget.id === 'workflow_summary') {
+  if (widget.actionPage) {
     return `
       <button
         type="button"
         class="btn btn-sm btn-light border"
-        onclick="navigateTo('workflow')"
-      >
-        Open
-      </button>
-    `;
-  }
-
-  if (widget.id === 'outages.summary') {
-    return `
-      <button
-        type="button"
-        class="btn btn-sm btn-light border"
-        onclick="navigateTo('outages')"
-      >
-        Open
-      </button>
-    `;
-  }
-
-  if (
-    widget.requiredIntegration === 'uptimerobot'
-  ) {
-    return `
-      <button
-        type="button"
-        class="btn btn-sm btn-light border"
-        onclick="navigateTo('uptimeRobot')"
+        onclick="navigateTo('${escapeAttribute(widget.actionPage)}')"
       >
         Open
       </button>
@@ -367,7 +341,7 @@ function renderDashboardWidgetProvenance_(
 
   return `
     <div class="dashboard-widget-provenance">
-      ${escapeHtml(provenance.source || '')}
+      ${provenance.source ? 'Source: ' + escapeHtml(provenance.source) : ''}
       ${updated ? ' - ' + escapeHtml(updated) : ''}
     </div>
   `;
@@ -937,9 +911,15 @@ function renderDashboardWidgetSettingRow_(
           class="form-check-input"
           ${widget.enabled === false ? '' : 'checked'}
         >
-        <span>
-          <strong>${escapeHtml(widget.display)}</strong>
-          <small>${escapeHtml(widget.category)} - ${escapeHtml(widget.type)} - ${escapeHtml(widget.dataSource)}</small>
+        <span class="dashboard-widget-settings-icon" aria-hidden="true">
+          <i class="fa-solid ${escapeAttribute(widget.icon || 'fa-chart-simple')}"></i>
+        </span>
+        <span class="dashboard-widget-settings-copy">
+          <span class="dashboard-widget-settings-heading">
+            <strong>${escapeHtml(widget.display)}</strong>
+            <span class="dashboard-widget-settings-category">${escapeHtml(widget.category)}</span>
+          </span>
+          <small>${escapeHtml(widget.description || '')}</small>
         </span>
       </label>
       <div class="dashboard-widget-settings-actions">
