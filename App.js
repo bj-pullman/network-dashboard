@@ -78,7 +78,7 @@ const APP_PAGE_CONFIG = {
     label: 'Access Points',
     sheet: 'Access Points',
     type: 'table',
-    icon: 'fa-wifi',
+    icon: 'fa-tower-broadcast',
     group: 'Infrastructure',
     centralSync: true,
 
@@ -184,13 +184,15 @@ const APP_PAGE_CONFIG = {
     icon: 'fa-wifi',
     group: 'Infrastructure',
     defaultColumns: [
-      'SSID', 'Type', 'Authentication', 'VLAN', 'Password', 'Scope / Location'
+      'SSID', 'Type', 'Security', 'Authentication', 'VLAN', 'Password', 'Availability'
     ],
     suggestedOptions: {
       'Type': ['Staff', 'Student', 'Guest', 'IoT', 'Device', 'Testing', 'Other'],
+      'Security': [
+        'Open', 'WEP', 'WPA', 'WPA2', 'WPA3', 'WPA/WPA2', 'WPA2/WPA3', 'Other'
+      ],
       'Authentication': [
-        'Open', 'WPA2-Personal', 'WPA3-Personal', 'WPA2/WPA3-Personal',
-        'WPA2-Enterprise', 'WPA3-Enterprise', 'WPA2/WPA3-Enterprise', 'Other'
+        'Open', 'PSK', '802.1X / Enterprise', 'Other'
       ]
     }
   },

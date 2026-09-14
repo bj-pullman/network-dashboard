@@ -140,8 +140,8 @@ Network Dashboard
 Open **Help -> About Network Dashboard** in the production web app and confirm:
 
 ```text
-Application Version: 1.1.0
-Schema Version: 5
+Application Version: 1.1.1
+Schema Version: 6
 ```
 
 Then test the functionality affected by the release.
@@ -197,13 +197,13 @@ Validation reports expected and installed versions separately:
 
 ```text
 APPLICATION VERSION
-Installed: 1.1.0
-Expected: 1.1.0
+Installed: 1.1.1
+Expected: 1.1.1
 Status: Current
 
 SCHEMA VERSION
-Installed: 5
-Expected: 5
+Installed: 6
+Expected: 6
 Status: Current
 ```
 
@@ -240,7 +240,7 @@ After validation, open the configured production dashboard from the Google Sheet
 
 * the Dashboard and navigation load;
 * organization branding and settings remain intact;
-* **About Network Dashboard** reports application version `1.1.0` and schema `5`;
+* **About Network Dashboard** reports application version `1.1.1` and schema `6`;
 * the features changed by the release work as expected;
 * affected integrations work where applicable;
 * affected RBAC behavior works with an appropriate non-admin account;
@@ -363,13 +363,15 @@ Organization-owned data structure revision.
 For example, application and schema versions may advance independently:
 
 ```text
-Application 1.1.0
-Schema 5
+Application 1.1.1
+Schema 6
 ```
 
 A patch release does not automatically require a new schema version. The schema version changes only when the data structure requires a new migration boundary.
 
 Schema 5 adds the SSIDs sheet and migrates Security Cameras from `Location` to `Name`. Update / Repair creates a verified backup before rewriting a populated camera table, keeps an already populated `Name`, fills blank names from `Location`, preserves extra organization columns, and can be rerun safely.
+
+Schema 6 separates SSID `Security` from `Authentication` and renames `Scope / Location` to `Availability`. Update / Repair normalizes recognized combined authentication values, preserves unrecognized values and extra organization columns, and creates a verified backup before rewriting populated SSID data.
 
 ## Schema migrations
 
@@ -462,8 +464,8 @@ Never place API keys, secrets, refresh tokens, private keys, or organization cre
 
 ```text
 [ ] Open Dashboard loads the production GUI
-[ ] About reports Application Version 1.1.0
-[ ] About reports Schema Version 5
+[ ] About reports Application Version 1.1.1
+[ ] About reports Schema Version 6
 [ ] Affected functionality tested
 [ ] Affected integrations tested where applicable
 [ ] Managed protections verified where applicable

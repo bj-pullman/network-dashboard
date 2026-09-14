@@ -1,11 +1,12 @@
 <script>
 RECORD_PAGE_DEFINITIONS.ssids = {
-  defaultColumns: ["SSID","Type","Authentication","VLAN","Password","Scope / Location"],
+  defaultColumns: ["SSID","Type","Security","Authentication","VLAN","Password","Availability"],
   requiredColumns: ["SSID"],
   columns: {
     "SSID": { minWidth: 140 },
+    "Security": { minWidth: 120 },
     "Authentication": { minWidth: 165 },
-    "Scope / Location": { minWidth: 150 },
+    "Availability": { minWidth: 150 },
     "Notes": { minWidth: 130 }
   },
   buildColumns: function(data) {

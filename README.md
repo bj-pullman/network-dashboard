@@ -436,7 +436,7 @@ Current optional modules include:
 * Intercom Bell System
 * Backup Schedule
 
-SSIDs are maintained manually in Google Sheets and support per-page `view`/`edit` RBAC through the `ssids` permission key. Passwords use the shared restricted-field workflow: normal page data omits raw values, edit-authorized users may reveal them on demand, and blank edits preserve the saved password.
+SSIDs are maintained manually in Google Sheets and support per-page `view`/`edit` RBAC through the `ssids` permission key. Security (for example, WPA2 or WPA3) is recorded separately from Authentication (Open, PSK, or 802.1X / Enterprise), while Availability remains free-form for any campus combination. Passwords are optional and use the shared restricted-field workflow: normal page data omits raw values, edit-authorized users may reveal them on demand, and blank edits preserve the saved password.
 
 Enabling a module provisions its required application structure.
 
@@ -1030,13 +1030,13 @@ Network Dashboard tracks application and schema versions independently.
 Current application version:
 
 ```text
-1.1.0
+1.1.1
 ```
 
 Current schema version:
 
 ```text
-5
+6
 ```
 
 The source release and schema constants define the expected versions. App Settings records the versions successfully installed by Setup or Update / Repair; Validation reports installed and expected values separately.

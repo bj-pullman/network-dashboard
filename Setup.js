@@ -198,13 +198,17 @@ function getNetworkDashboardSchema_() {
     'SSIDs': {
       type: 'operational',
       category: 'Infrastructure',
-      headers: ["SSID","Type","Authentication","VLAN","Password","Scope / Location","Notes"],
-      requiredHeaders: ["SSID","Type","Authentication","VLAN","Password","Scope / Location","Notes"],
+      retiredHeaders: ["Scope / Location"],
+      headerAliases: {"Scope / Location":"Availability"},
+      headers: ["SSID","Type","Security","Authentication","VLAN","Password","Availability","Notes"],
+      requiredHeaders: ["SSID","Type","Security","Authentication","VLAN","Password","Availability","Notes"],
       suggestedOptions: {
         'Type': ['Staff', 'Student', 'Guest', 'IoT', 'Device', 'Testing', 'Other'],
+        'Security': [
+          'Open', 'WEP', 'WPA', 'WPA2', 'WPA3', 'WPA/WPA2', 'WPA2/WPA3', 'Other'
+        ],
         'Authentication': [
-          'Open', 'WPA2-Personal', 'WPA3-Personal', 'WPA2/WPA3-Personal',
-          'WPA2-Enterprise', 'WPA3-Enterprise', 'WPA2/WPA3-Enterprise', 'Other'
+          'Open', 'PSK', '802.1X / Enterprise', 'Other'
         ]
       },
       frozenRows: 1,
@@ -2630,6 +2634,11 @@ function getNetworkDashboardSchemaMigrations_() {
       from: 4,
       to: 5,
       run: migrateSchema4To5_
+    },
+    {
+      from: 5,
+      to: 6,
+      run: migrateSchema5To6_
     }
   ];
 }
@@ -2779,6 +2788,169 @@ function migrateSchema4To5_(
     getNetworkDashboardSchema_()['Security Cameras'],
     result
   );
+}
+
+
+function migrateSchema5To6_(
+  ss,
+  result
+) {
+
+  const sheet = ss.getSheetByName('SSIDs');
+
+  if (!sheet) return;
+
+  migrateSsidSecurityModel_(
+    sheet,
+    'SSIDs',
+    getNetworkDashboardSchema_()['SSIDs'],
+    result
+  );
+}
+
+
+function normalizeLegacySsidAuthentication_(value) {
+
+  const original = String(value == null ? '' : value).trim();
+  const compact = original.replace(/\s+/g, '');
+  const match = /^(WEP|WPA|WPA2|WPA3|WPA\/?WPA2|WPA2\/?WPA3)[_-]*(Personal|Enterprise)$/i.exec(compact);
+
+  if (/^Open$/i.test(original)) {
+    return {
+      security: 'Open',
+      authentication: 'Open'
+    };
+  }
+
+  if (/^Other$/i.test(original)) {
+    return {
+      security: 'Other',
+      authentication: 'Other'
+    };
+  }
+
+  if (!match) {
+    return {
+      security: '',
+      authentication: original
+    };
+  }
+
+  const securityKey = match[1].toUpperCase().replace('/', '');
+  const security = {
+    WEP: 'WEP',
+    WPA: 'WPA',
+    WPA2: 'WPA2',
+    WPA3: 'WPA3',
+    WPAWPA2: 'WPA/WPA2',
+    WPA2WPA3: 'WPA2/WPA3'
+  }[securityKey] || '';
+
+  return {
+    security: security,
+    authentication:
+      match[2].toLowerCase() === 'personal'
+        ? 'PSK'
+        : '802.1X / Enterprise'
+  };
+}
+
+
+function migrateSsidSecurityModel_(
+  sheet,
+  sheetName,
+  definition,
+  result
+) {
+
+  const width = Math.max(sheet.getLastColumn(), 1);
+  const height = Math.max(sheet.getLastRow(), 1);
+  const values = sheet.getRange(1, 1, height, width).getValues();
+  const formulas = sheet.getRange(1, 1, height, width).getFormulas();
+  const headers = (values[0] || []).map(value => String(value || '').trim());
+  const canonical = definition.headers.slice();
+  const authenticationIndex = headers.indexOf('Authentication');
+  const securityIndex = headers.indexOf('Security');
+  const hasCombinedAuthentication = authenticationIndex >= 0 && values.slice(1).some((row, offset) => {
+    const rowIndex = offset + 1;
+    const originalAuthentication =
+      formulas[rowIndex][authenticationIndex] || row[authenticationIndex];
+    const existingSecurity = securityIndex >= 0
+      ? formulas[rowIndex][securityIndex] || row[securityIndex]
+      : '';
+    const normalized = normalizeLegacySsidAuthentication_(originalAuthentication);
+    return !!normalized.security && (
+      !String(existingSecurity == null ? '' : existingSecurity).trim() ||
+      String(originalAuthentication == null ? '' : originalAuthentication).trim() !== normalized.authentication
+    );
+  });
+
+  if (
+    !headers.includes('Scope / Location') &&
+    canonical.every((header, index) => headers[index] === header) &&
+    !hasCombinedAuthentication
+  ) {
+    return;
+  }
+
+  const headerIndexes = {};
+  headers.forEach((header, index) => {
+    if (header && headerIndexes[header] === undefined) {
+      headerIndexes[header] = index;
+    }
+  });
+
+  const extraHeaders = headers.filter(header =>
+    header &&
+    header !== 'Scope / Location' &&
+    !canonical.includes(header) &&
+    !/^Legacy: /i.test(header)
+  );
+  const outputHeaders = canonical.concat(extraHeaders);
+  const sourceValue = (rowIndex, header) => {
+    const columnIndex = headerIndexes[header];
+    if (columnIndex === undefined) return '';
+    return formulas[rowIndex][columnIndex] || values[rowIndex][columnIndex];
+  };
+  const output = [outputHeaders];
+
+  for (let rowIndex = 1; rowIndex < values.length; rowIndex++) {
+    const normalized = normalizeLegacySsidAuthentication_(
+      sourceValue(rowIndex, 'Authentication')
+    );
+    const existingSecurity = sourceValue(rowIndex, 'Security');
+    const existingAvailability = sourceValue(rowIndex, 'Availability');
+
+    output.push(outputHeaders.map(header => {
+      if (header === 'Security') {
+        return String(existingSecurity == null ? '' : existingSecurity).trim()
+          ? existingSecurity
+          : normalized.security;
+      }
+      if (header === 'Authentication') {
+        return normalized.authentication;
+      }
+      if (header === 'Availability') {
+        return String(existingAvailability == null ? '' : existingAvailability).trim()
+          ? existingAvailability
+          : sourceValue(rowIndex, 'Scope / Location');
+      }
+      return sourceValue(rowIndex, header);
+    }));
+  }
+
+  const hasData = values.slice(1).some(row => row.some(value => value !== '' && value != null));
+  const backupName = hasData ? createMigrationBackup_(sheet, sheetName) : '';
+
+  sheet.getRange(1, 1, height, width).clearContent();
+  sheet.getRange(1, 1, output.length, outputHeaders.length).setValues(output);
+
+  result.migrations.push({
+    sheet: sheetName,
+    message: 'Separated SSID Security and Authentication, and renamed Scope / Location to Availability.',
+    backupSheet: backupName,
+    rowsMigrated: Math.max(output.length - 1, 0)
+  });
 }
 
 
