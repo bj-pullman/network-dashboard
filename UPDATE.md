@@ -140,7 +140,7 @@ Network Dashboard
 Open **Help -> About Network Dashboard** in the production web app and confirm:
 
 ```text
-Application Version: 1.0.1
+Application Version: 1.0.2
 Schema Version: 4
 ```
 
@@ -197,8 +197,8 @@ Validation reports expected and installed versions separately:
 
 ```text
 APPLICATION VERSION
-Installed: 1.0.1
-Expected: 1.0.1
+Installed: 1.0.2
+Expected: 1.0.2
 Status: Current
 
 SCHEMA VERSION
@@ -240,7 +240,7 @@ After validation, open the configured production dashboard from the Google Sheet
 
 * the Dashboard and navigation load;
 * organization branding and settings remain intact;
-* **About Network Dashboard** reports application version `1.0.1` and schema `4`;
+* **About Network Dashboard** reports application version `1.0.2` and schema `4`;
 * the features changed by the release work as expected;
 * affected integrations work where applicable;
 * affected RBAC behavior works with an appropriate non-admin account;
@@ -346,8 +346,8 @@ Do not use `clasp pull` as the normal update mechanism. Do not replace organizat
 
 Network Dashboard uses semantic application versions:
 
-* **Patch** (`1.0.0` -> `1.0.1`) for backward-compatible fixes, documentation, and reliability improvements;
-* **Minor** (`1.0.1` -> `1.1.0`) for meaningful backward-compatible functionality;
+* **Patch** (`1.0.1` -> `1.0.2`) for backward-compatible fixes, documentation, and reliability improvements;
+* **Minor** (`1.0.2` -> `1.1.0`) for meaningful backward-compatible functionality;
 * **Major** (`1.x.x` -> `2.0.0`) for breaking or major architectural changes.
 
 The two installed version fields have different meanings:
@@ -363,7 +363,7 @@ Organization-owned data structure revision.
 Therefore this is valid:
 
 ```text
-Application 1.0.1
+Application 1.0.2
 Schema 4
 ```
 
@@ -460,7 +460,7 @@ Never place API keys, secrets, refresh tokens, private keys, or organization cre
 
 ```text
 [ ] Open Dashboard loads the production GUI
-[ ] About reports Application Version 1.0.1
+[ ] About reports Application Version 1.0.2
 [ ] About reports Schema Version 4
 [ ] Affected functionality tested
 [ ] Affected integrations tested where applicable

@@ -1,96 +1,190 @@
-function getArubaCentralToken_() {
-
-  const props =
-    PropertiesService.getScriptProperties();
-
-  const clientId =
-    props.getProperty(
-      'ARUBA_CLIENT_ID'
-    );
-
-  const clientSecret =
-    props.getProperty(
-      'ARUBA_CLIENT_SECRET'
-    );
-
-  const refreshToken =
-    props.getProperty(
-      'ARUBA_REFRESH_TOKEN'
-    );
+var ARUBA_CENTRAL_ACCESS_TOKEN_CACHE_KEY = 'aruba_central_access_token';
+var ARUBA_CENTRAL_ACCESS_TOKEN_CACHE_SECONDS = 6300;
+var ARUBA_CENTRAL_OAUTH_LOCK_TIMEOUT_MS = 30000;
 
 
-  if (
-    !clientId ||
-    !clientSecret ||
-    !refreshToken
-  ) {
-    throw new Error(
-      'Missing ARUBA_CLIENT_ID, ARUBA_CLIENT_SECRET, or ARUBA_REFRESH_TOKEN in Script Properties.'
-    );
+function getArubaCentralToken_(options) {
+
+  const forceRefresh = !!(options && options.forceRefresh);
+  const cache = CacheService.getScriptCache();
+
+  if (!forceRefresh) {
+    const cachedToken = cache.get(ARUBA_CENTRAL_ACCESS_TOKEN_CACHE_KEY);
+    if (cachedToken) return cachedToken;
   }
 
+  const lock = LockService.getScriptLock();
+  let lockAcquired = false;
 
-  const url =
-    'https://apigw-prod2.central.arubanetworks.com/oauth2/token';
+  try {
+    try {
+      lock.waitLock(ARUBA_CENTRAL_OAUTH_LOCK_TIMEOUT_MS);
+      lockAcquired = true;
+    } catch (lockError) {
+      const message =
+        'Aruba Central OAuth refresh is busy. Wait a moment and try again.';
+      recordArubaCentralOAuthError_(message);
+      throw new Error(message);
+    }
 
-  const payload = {
-    'grant_type': 'refresh_token',
-    'client_id': clientId.trim(),
-    'client_secret': clientSecret.trim(),
-    'refresh_token': refreshToken.trim()
-  };
+    // Another execution may have refreshed while this normal call waited.
+    if (!forceRefresh) {
+      const refreshedCachedToken =
+        cache.get(ARUBA_CENTRAL_ACCESS_TOKEN_CACHE_KEY);
+      if (refreshedCachedToken) return refreshedCachedToken;
+    }
 
-  const options = {
-    method: 'post',
-    contentType:
-      'application/x-www-form-urlencoded',
-    payload: payload,
-    muteHttpExceptions: true
-  };
+    // Credentials, especially the rotating refresh token, must be read only
+    // after this execution owns the script lock.
+    const props = PropertiesService.getScriptProperties();
+    const clientId = props.getProperty('ARUBA_CLIENT_ID');
+    const clientSecret = props.getProperty('ARUBA_CLIENT_SECRET');
+    const refreshToken = props.getProperty('ARUBA_REFRESH_TOKEN');
 
-  const response =
-    UrlFetchApp.fetch(
-      url,
-      options
-    );
-
-  const resCode =
-    response.getResponseCode();
-
-  if (resCode === 200) {
-
-    const json =
-      JSON.parse(
-        response.getContentText()
-      );
-
-    if (
-      json.refresh_token &&
-      json.refresh_token !== refreshToken
-    ) {
-      props.setProperty(
-        'ARUBA_REFRESH_TOKEN',
-        json.refresh_token
+    if (!clientId || !clientSecret || !refreshToken) {
+      throw new Error(
+        'Missing ARUBA_CLIENT_ID, ARUBA_CLIENT_SECRET, or ARUBA_REFRESH_TOKEN in Script Properties.'
       );
     }
 
-    return json.access_token;
+    let response;
+    try {
+      response = UrlFetchApp.fetch(
+        'https://apigw-prod2.central.arubanetworks.com/oauth2/token',
+        {
+          method: 'post',
+          contentType: 'application/x-www-form-urlencoded',
+          payload: {
+            'grant_type': 'refresh_token',
+            'client_id': clientId.trim(),
+            'client_secret': clientSecret.trim(),
+            'refresh_token': refreshToken.trim()
+          },
+          muteHttpExceptions: true
+        }
+      );
+    } catch (fetchError) {
+      throw new Error(
+        'Aruba Central OAuth request could not be completed.'
+      );
+    }
 
-  }
+    const resCode = response.getResponseCode();
+    const responseBody = response.getContentText();
 
+    if (resCode !== 200) {
+      if (isArubaCentralInvalidRefreshTokenResponse_(responseBody)) {
+        throw new Error(
+          'Aruba Central rejected the stored refresh token. Generate a new refresh token in Aruba Central Classic and replace ARUBA_REFRESH_TOKEN in Apps Script Script Properties.'
+        );
+      }
 
-  const responseDetail =
-    getArubaCentralOAuthErrorDetail_(
-      response.getContentText()
+      const responseDetail =
+        getArubaCentralOAuthErrorDetail_(responseBody);
+
+      throw new Error(
+        'Aruba Central OAuth refresh failed (HTTP ' +
+        resCode +
+        ').' +
+        (responseDetail ? ' Aruba response: ' + responseDetail + '.' : '')
+      );
+    }
+
+    let json;
+    try {
+      json = JSON.parse(responseBody);
+    } catch (parseError) {
+      throw new Error(
+        'Aruba Central OAuth refresh returned an invalid response.'
+      );
+    }
+
+    const accessToken =
+      typeof json.access_token === 'string' ? json.access_token.trim() : '';
+
+    if (!accessToken) {
+      throw new Error(
+        'Aruba Central OAuth refresh succeeded without returning an access token.'
+      );
+    }
+
+    const rotatedRefreshToken =
+      typeof json.refresh_token === 'string' ? json.refresh_token.trim() : '';
+
+    // Persist rotation before caching or returning the access token.
+    if (rotatedRefreshToken) {
+      try {
+        props.setProperty('ARUBA_REFRESH_TOKEN', rotatedRefreshToken);
+      } catch (propertyError) {
+        throw new Error(
+          'Aruba Central returned a rotated refresh token, but Network Dashboard could not persist it securely.'
+        );
+      }
+    }
+
+    props.setProperty('ARUBA_TOKEN_LAST_REFRESH_AT', new Date().toISOString());
+    props.setProperty('ARUBA_TOKEN_LAST_REFRESH_STATUS', 'success');
+    props.deleteProperty('ARUBA_TOKEN_LAST_REFRESH_ERROR');
+
+    try {
+      cache.put(
+        ARUBA_CENTRAL_ACCESS_TOKEN_CACHE_KEY,
+        accessToken,
+        ARUBA_CENTRAL_ACCESS_TOKEN_CACHE_SECONDS
+      );
+    } catch (cacheError) {
+      throw new Error(
+        'Aruba Central refreshed successfully, but Network Dashboard could not cache the access token.'
+      );
+    }
+
+    return accessToken;
+  } catch (error) {
+    cache.remove(ARUBA_CENTRAL_ACCESS_TOKEN_CACHE_KEY);
+    recordArubaCentralOAuthError_(error && error.message ? error.message : error);
+    throw new Error(
+      sanitizeArubaCentralOAuthDiagnosticText_(
+        error && error.message ? error.message : error
+      ) || 'Aruba Central OAuth refresh failed.'
     );
+  } finally {
+    if (lockAcquired) lock.releaseLock();
+  }
+}
 
-  throw new Error(
-    'Aruba Central refresh token failed (HTTP ' +
-    resCode +
-    ').' +
-    (responseDetail ? ' Aruba response: ' + responseDetail + '.' : '') +
-    ' Check ARUBA_CLIENT_ID, ARUBA_CLIENT_SECRET, and ARUBA_REFRESH_TOKEN.'
-  );
+
+function recordArubaCentralOAuthError_(error) {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    props.setProperty('ARUBA_TOKEN_LAST_REFRESH_STATUS', 'error');
+    props.setProperty(
+      'ARUBA_TOKEN_LAST_REFRESH_ERROR',
+      sanitizeArubaCentralOAuthDiagnosticText_(error) ||
+        'Aruba Central OAuth refresh failed.'
+    );
+  } catch (diagnosticError) {
+    // OAuth diagnostics are best-effort and must not mask the actionable error.
+  }
+}
+
+
+function sanitizeArubaCentralOAuthDiagnosticText_(value) {
+  return redactArubaCentralOAuthErrorText_(value)
+    .replace(/Bearer\s+[A-Za-z0-9._~+\/-]+/gi, 'Bearer [REDACTED]')
+    .slice(0, 500);
+}
+
+
+function isArubaCentralInvalidRefreshTokenResponse_(responseBody) {
+  try {
+    const json = JSON.parse(String(responseBody || ''));
+    const error = String(json.error || '').toLowerCase();
+    const description = String(json.error_description || '').toLowerCase();
+    return error === 'invalid_request' &&
+      /invalid[\s_-]*refresh[\s_-]*token/.test(description);
+  } catch (error) {
+    return false;
+  }
 }
 
 
@@ -121,7 +215,10 @@ function getArubaCentralOAuthErrorDetail_(responseBody) {
 
 function redactArubaCentralOAuthErrorText_(value) {
   return String(value || '')
-    .replace(/(access_token|refresh_token|client_secret)\s*[=:]\s*[^\s,&]+/gi, '$1=[REDACTED]')
+    .replace(
+      /(access_token|refresh_token|client_secret)["']?\s*[=:]\s*["']?[^\s,"'&}]+/gi,
+      '$1=[REDACTED]'
+    )
     .slice(0, 500);
 }
 
@@ -138,8 +235,8 @@ function maintainArubaCentralOAuthToken() {
     return { status: 'skipped', reason: 'not_configured' };
   }
 
-  // This intentionally performs only the existing OAuth refresh exchange.
-  getArubaCentralToken_();
+  // Maintenance refreshes OAuth only; it never synchronizes inventory.
+  getArubaCentralToken_({ forceRefresh: true });
   return { status: 'success' };
 }
 
