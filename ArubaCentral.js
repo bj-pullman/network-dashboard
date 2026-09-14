@@ -175,6 +175,20 @@ function sanitizeArubaCentralOAuthDiagnosticText_(value) {
 }
 
 
+function sanitizeArubaCentralOAuthStatusError_(value, props) {
+  let safe = sanitizeArubaCentralOAuthDiagnosticText_(value);
+  const properties = props || PropertiesService.getScriptProperties();
+
+  ['ARUBA_CLIENT_ID', 'ARUBA_CLIENT_SECRET', 'ARUBA_REFRESH_TOKEN']
+    .forEach(key => {
+      const secret = properties.getProperty(key);
+      if (secret) safe = safe.split(String(secret)).join('[REDACTED]');
+    });
+
+  return safe.slice(0, 500);
+}
+
+
 function isArubaCentralInvalidRefreshTokenResponse_(responseBody) {
   try {
     const json = JSON.parse(String(responseBody || ''));

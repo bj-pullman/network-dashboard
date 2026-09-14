@@ -172,8 +172,27 @@ const APP_PAGE_CONFIG = {
     group:
       'Physical Systems',
 
-    defaultColumns: ["Location","Asset / System","Username","Password","Server Location"]
+    defaultColumns: ["Name","IP Address","Asset / System","Username","Password","Server Location"]
 
+  },
+
+  ssids: {
+    key: 'ssids',
+    label: 'SSIDs',
+    sheet: 'SSIDs',
+    type: 'table',
+    icon: 'fa-wifi',
+    group: 'Infrastructure',
+    defaultColumns: [
+      'SSID', 'Type', 'Authentication', 'VLAN', 'Password', 'Scope / Location'
+    ],
+    suggestedOptions: {
+      'Type': ['Staff', 'Student', 'Guest', 'IoT', 'Device', 'Testing', 'Other'],
+      'Authentication': [
+        'Open', 'WPA2-Personal', 'WPA3-Personal', 'WPA2/WPA3-Personal',
+        'WPA2-Enterprise', 'WPA3-Enterprise', 'WPA2/WPA3-Enterprise', 'Other'
+      ]
+    }
   },
 
   busCameras: {
@@ -379,6 +398,17 @@ const APP_MODULE_REGISTRY = {
       'Security Cameras'
     ],
     permissionKey: 'securityCameras'
+  },
+
+  ssids: {
+    id: 'ssids',
+    name: 'SSIDs',
+    description: 'Manually maintain wireless network names, access settings and scope.',
+    classification: 'optional',
+    enabledByDefault: true,
+    pageKey: 'ssids',
+    requiredSheets: ['SSIDs'],
+    permissionKey: 'ssids'
   },
 
   workflow: {
@@ -2433,6 +2463,9 @@ function getAppTableData_(
         config.sheet
       ),
 
+    suggestedOptions:
+      config.suggestedOptions || {},
+
     centralSync:
       !!config.centralSync,
 
@@ -2448,7 +2481,9 @@ function getAppTableData_(
           header:
             column.header,
           field:
-            column.field
+            column.field,
+          sourceIndex:
+            column.sourceIndex
         })
       )
 
@@ -3090,22 +3125,12 @@ function prepareTableDataForAccess_(
       return;
     }
 
-    const usernameIndex =
-      output.headers.findIndex(
-        isUsernameHeader_
-      );
+    const configuredIndex = Number(column.sourceIndex);
+    const insertAt = Number.isFinite(configuredIndex)
+      ? Math.min(Math.max(configuredIndex, 0), output.headers.length)
+      : output.headers.length;
 
-    if (usernameIndex >= 0) {
-      output.headers.splice(
-        usernameIndex + 1,
-        0,
-        field
-      );
-    } else {
-      output.headers.push(
-        field
-      );
-    }
+    output.headers.splice(insertAt, 0, field);
 
   });
 
@@ -3143,6 +3168,8 @@ function emptyTableResult_(
       getControlledOptionsForSheet_(
         config.sheet
       ),
+    suggestedOptions:
+      config.suggestedOptions || {},
     centralSync:
       !!config.centralSync,
     permission:
@@ -7732,7 +7759,10 @@ function getRequiredRecordFieldsForPage_(
       'Network / CIDR'
     ],
     securityCameras: [
-      'Location'
+      'Name'
+    ],
+    ssids: [
+      'SSID'
     ],
     backups: [
       'Server Name'

@@ -107,6 +107,7 @@ const PAGE_RENDERER_FUNCTIONS = {
   dashboard: 'renderDashboard', switches: 'renderSwitchesPage',
   accessPoints: 'renderAccessPointsPage', servers: 'renderServersPage',
   routes: 'renderRoutesPage', securityCameras: 'renderSecurityCamerasPage',
+  ssids: 'renderSsidsPage',
   busCameras: 'renderBusCamerasPage', intercom: 'renderIntercomPage',
   backups: 'renderBackupsPage', internetWan: 'renderInternetWanPage',
   outages: 'renderOutagesPage',
@@ -116,7 +117,8 @@ const PAGE_RENDERER_FUNCTIONS = {
 const PAGE_UPDATE_FUNCTIONS = {
   switches: 'updateRecordTablePage_', accessPoints: 'updateRecordTablePage_',
   servers: 'updateRecordTablePage_', routes: 'updateRecordTablePage_',
-  securityCameras: 'updateRecordTablePage_', backups: 'updateRecordTablePage_',
+  securityCameras: 'updateRecordTablePage_', ssids: 'updateRecordTablePage_',
+  backups: 'updateRecordTablePage_',
   busCameras: 'updateStructuredTables_', intercom: 'updateStructuredTables_',
   internetWan: 'updateInternetWanPage_', outages: 'updateOutagesPage_',
   workflow: 'updateWorkflowPage_'
@@ -2223,6 +2225,7 @@ function pageStructureSignature_(data) {
     pageKey: data.pageKey, headers: data.headers, permission: data.permission,
     credentials: data.credentialColumns, hasCredentials: data.hasCredentials,
     options: data.controlledOptions,
+    suggestions: data.suggestedOptions,
     integrationControls: [data.integration, data.monitoring].map(item => item && [
       item.enabled, item.configurationComplete, item.canSync, item.canRefresh
     ]),
@@ -2415,6 +2418,12 @@ function openRecordModal(
           ? currentPageData.controlledOptions[header] || []
           : [];
 
+      const suggestions =
+        currentPageData &&
+        currentPageData.suggestedOptions
+          ? currentPageData.suggestedOptions[header] || []
+          : [];
+
       const credentialField =
         typeof isPasswordHeaderClient === 'function' &&
         isPasswordHeaderClient(
@@ -2461,6 +2470,28 @@ function openRecordModal(
       input.id =
         'recordField_' +
         index;
+
+      if (
+        suggestions.length &&
+        input.tagName === 'INPUT'
+      ) {
+        const list =
+          document.createElement('datalist');
+
+        list.id =
+          input.id + '_suggestions';
+
+        suggestions.forEach(option => {
+          const item =
+            document.createElement('option');
+
+          item.value = option;
+          list.appendChild(item);
+        });
+
+        input.setAttribute('list', list.id);
+        column.appendChild(list);
+      }
 
 
       if (requiredFields[header]) {

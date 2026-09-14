@@ -183,15 +183,32 @@ function getNetworkDashboardSchema_() {
     },
 
     'Security Cameras': {
-      retiredHeaders: ["Type","Category"],
+      retiredHeaders: ["Type","Category","Location"],
+      headerAliases: {"Location":"Name"},
       type: 'operational',
       category: 'Physical Systems',
       frozenRows: 1,
       tabColor: '#7c3aed',
       migration:
         'unifySecurityCameras',
-      headers: ["Location","Asset / System","IP Address","Username","Password","Server Location","Notes"],
-      requiredHeaders: ["Location","Asset / System","IP Address","Username","Password","Server Location","Notes"]
+      headers: ["Name","IP Address","Asset / System","Username","Password","Server Location","Notes"],
+      requiredHeaders: ["Name","IP Address","Asset / System","Username","Password","Server Location","Notes"]
+    },
+
+    'SSIDs': {
+      type: 'operational',
+      category: 'Infrastructure',
+      headers: ["SSID","Type","Authentication","VLAN","Password","Scope / Location","Notes"],
+      requiredHeaders: ["SSID","Type","Authentication","VLAN","Password","Scope / Location","Notes"],
+      suggestedOptions: {
+        'Type': ['Staff', 'Student', 'Guest', 'IoT', 'Device', 'Testing', 'Other'],
+        'Authentication': [
+          'Open', 'WPA2-Personal', 'WPA3-Personal', 'WPA2/WPA3-Personal',
+          'WPA2-Enterprise', 'WPA3-Enterprise', 'WPA2/WPA3-Enterprise', 'Other'
+        ]
+      },
+      frozenRows: 1,
+      tabColor: '#2563eb'
     },
 
     'Intercom Bell System': {
@@ -750,7 +767,7 @@ function getDashboardMetricDefinitions_() {
       formula:
         dashboardCountFormula_(
           'Security Cameras',
-          'Location'
+          'Name'
         ),
       notes: 'Camera system records.'
     },
@@ -2159,6 +2176,11 @@ function setupSchemaSheet_(
     definition
   );
 
+  applySheetSuggestedValidations_(
+    sheet,
+    definition
+  );
+
 
   if (definition.frozenRows) {
     sheet.setFrozenRows(
@@ -2186,6 +2208,39 @@ function setupSchemaSheet_(
     definition,
     result
   );
+}
+
+
+function applySheetSuggestedValidations_(
+  sheet,
+  definition
+) {
+
+  const suggestions = definition.suggestedOptions || {};
+
+  if (!definition.headers) return;
+
+  Object.keys(suggestions).forEach(field => {
+    const column = definition.headers.indexOf(field) + 1;
+    const options = suggestions[field] || [];
+
+    if (!column || !options.length) return;
+
+    const rule = SpreadsheetApp
+      .newDataValidation()
+      .requireValueInList(options, true)
+      .setAllowInvalid(true)
+      .build();
+
+    sheet
+      .getRange(
+        2,
+        column,
+        Math.max(sheet.getMaxRows() - 1, 1),
+        1
+      )
+      .setDataValidation(rule);
+  });
 }
 
 
@@ -2570,6 +2625,11 @@ function getNetworkDashboardSchemaMigrations_() {
       from: 3,
       to: 4,
       run: migrateSchema3To4_
+    },
+    {
+      from: 4,
+      to: 5,
+      run: migrateSchema4To5_
     }
   ];
 }
@@ -2701,6 +2761,94 @@ function migrateSchema3To4_(
     ],
     result
   );
+}
+
+
+function migrateSchema4To5_(
+  ss,
+  result
+) {
+
+  const sheet = ss.getSheetByName('Security Cameras');
+
+  if (!sheet) return;
+
+  migrateSecurityCameraNameColumn_(
+    sheet,
+    'Security Cameras',
+    getNetworkDashboardSchema_()['Security Cameras'],
+    result
+  );
+}
+
+
+function migrateSecurityCameraNameColumn_(
+  sheet,
+  sheetName,
+  definition,
+  result
+) {
+
+  const width = Math.max(sheet.getLastColumn(), 1);
+  const height = Math.max(sheet.getLastRow(), 1);
+  const values = sheet.getRange(1, 1, height, width).getValues();
+  const headers = (values[0] || []).map(value => String(value || '').trim());
+  const canonical = definition.headers.slice();
+
+  if (
+    !headers.includes('Location') &&
+    canonical.every((header, index) => headers[index] === header)
+  ) {
+    return;
+  }
+
+  const nameIndex = headers.indexOf('Name');
+  const locationIndex = headers.indexOf('Location');
+
+  if (nameIndex < 0 && locationIndex < 0) return;
+
+  const extraHeaders = headers.filter(header =>
+    header &&
+    header !== 'Location' &&
+    !canonical.includes(header) &&
+    !/^Legacy: /i.test(header)
+  );
+  const outputHeaders = canonical.concat(extraHeaders);
+  const headerIndexes = {};
+
+  headers.forEach((header, index) => {
+    if (header && headerIndexes[header] === undefined) {
+      headerIndexes[header] = index;
+    }
+  });
+
+  const output = [outputHeaders];
+
+  values.slice(1).forEach(row => {
+    output.push(outputHeaders.map(header => {
+      if (header === 'Name') {
+        const name = nameIndex >= 0 ? row[nameIndex] : '';
+        return String(name == null ? '' : name).trim()
+          ? name
+          : locationIndex >= 0 ? row[locationIndex] : '';
+      }
+
+      const index = headerIndexes[header];
+      return index === undefined ? '' : row[index];
+    }));
+  });
+
+  const backupName = createMigrationBackup_(sheet, sheetName);
+
+  sheet.getRange(1, 1, height, width).clearContent();
+  sheet.getRange(1, 1, output.length, outputHeaders.length).setValues(output);
+
+  result.migrations.push({
+    sheet: sheetName,
+    message: 'Migrated Security Cameras Location to Name and applied the current column order.',
+    backupSheet: backupName,
+    rowsMigrated: Math.max(output.length - 1, 0)
+  });
 }
 
 
@@ -3329,8 +3477,8 @@ function appendLegacyCameraSectionRows_(
 
     output.push([
       location,
-      section.software ? type : '',
       ipAddress,
+      section.software ? type : '',
       username,
       password,
       serverLocation,

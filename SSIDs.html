@@ -1,0 +1,25 @@
+<script>
+RECORD_PAGE_DEFINITIONS.ssids = {
+  defaultColumns: ["SSID","Type","Authentication","VLAN","Password","Scope / Location"],
+  requiredColumns: ["SSID"],
+  columns: {
+    "SSID": { minWidth: 140 },
+    "Authentication": { minWidth: 165 },
+    "Scope / Location": { minWidth: 150 },
+    "Notes": { minWidth: 130 }
+  },
+  buildColumns: function(data) {
+    return buildRecordColumns_(data, RECORD_PAGE_DEFINITIONS.ssids);
+  },
+  header: function(data) {
+    setPageHeader(data.label, data.totalCount + ' records');
+  },
+  actions: function(data) {
+    renderRecordActions_(data);
+  }
+};
+
+function renderSsidsPage(data) {
+  renderRecordTable_(data, RECORD_PAGE_DEFINITIONS.ssids);
+}
+</script>

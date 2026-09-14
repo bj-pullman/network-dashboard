@@ -807,6 +807,7 @@ function renderIntegrationRuntimeSummary_(
         <span>Records</span>
         ${renderIntegrationRecordCounts_(integration)}
       </div>
+      ${renderArubaOAuthRefreshSummary_(integration)}
       ${
         integration.latestError
           ? `
@@ -819,6 +820,64 @@ function renderIntegrationRuntimeSummary_(
       }
     </div>
   `;
+}
+
+
+function renderArubaOAuthRefreshSummary_(
+  integration
+) {
+
+  if (
+    integration.id !== 'aruba_central' ||
+    !integration.oauthRefresh
+  ) {
+    return '';
+  }
+
+  const refresh = integration.oauthRefresh;
+  const statusLabel = refresh.status === 'success'
+    ? 'Success'
+    : refresh.status === 'error'
+      ? 'Error'
+      : 'Never Refreshed / Unknown';
+
+  return `
+    <div>
+      <span>Last OAuth Refresh</span>
+      <strong>${escapeHtml(formatOAuthRefreshTimestamp_(refresh.at))}</strong>
+    </div>
+    <div>
+      <span>OAuth Status</span>
+      ${statusPill(statusLabel)}
+    </div>
+    ${
+      refresh.status === 'error' && refresh.error
+        ? `
+          <div class="integration-runtime-error">
+            <span>OAuth Refresh Error</span>
+            <strong>${escapeHtml(refresh.error)}</strong>
+          </div>
+        `
+        : ''
+    }
+  `;
+}
+
+
+function formatOAuthRefreshTimestamp_(
+  value
+) {
+
+  const text = String(value || '').trim();
+  if (!text) return 'Never';
+
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) return 'Unknown';
+
+  return new Intl.DateTimeFormat('en-US', {
+    dateStyle: 'long',
+    timeStyle: 'short'
+  }).format(date);
 }
 
 

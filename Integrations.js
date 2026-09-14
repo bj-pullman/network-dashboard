@@ -589,6 +589,30 @@ function getIntegrationStatusList_(onlyId, includeLiveCounts) {
           itemState
         );
 
+      let oauthRefresh = null;
+
+      if (id === 'aruba_central') {
+        const rawStatus = String(
+          props.getProperty('ARUBA_TOKEN_LAST_REFRESH_STATUS') || ''
+        ).trim().toLowerCase();
+        const status = rawStatus === 'success'
+          ? 'success'
+          : rawStatus === 'error'
+            ? 'error'
+            : 'unknown';
+
+        oauthRefresh = {
+          at: props.getProperty('ARUBA_TOKEN_LAST_REFRESH_AT') || '',
+          status: status,
+          error: status === 'error'
+            ? sanitizeArubaCentralOAuthStatusError_(
+                props.getProperty('ARUBA_TOKEN_LAST_REFRESH_ERROR') || '',
+                props
+              )
+            : ''
+        };
+      }
+
       let connectionStatus =
         itemState.connectionStatus ||
         (
@@ -672,6 +696,8 @@ function getIntegrationStatusList_(onlyId, includeLiveCounts) {
           recordCounts,
         latestError:
           itemState.latestError || '',
+        oauthRefresh:
+          oauthRefresh,
         lastSync:
           itemState.lastSuccessfulSync ||
           itemState.lastSync ||

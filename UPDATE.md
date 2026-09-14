@@ -140,8 +140,8 @@ Network Dashboard
 Open **Help -> About Network Dashboard** in the production web app and confirm:
 
 ```text
-Application Version: 1.0.2
-Schema Version: 4
+Application Version: 1.1.0
+Schema Version: 5
 ```
 
 Then test the functionality affected by the release.
@@ -197,13 +197,13 @@ Validation reports expected and installed versions separately:
 
 ```text
 APPLICATION VERSION
-Installed: 1.0.2
-Expected: 1.0.2
+Installed: 1.1.0
+Expected: 1.1.0
 Status: Current
 
 SCHEMA VERSION
-Installed: 4
-Expected: 4
+Installed: 5
+Expected: 5
 Status: Current
 ```
 
@@ -240,7 +240,7 @@ After validation, open the configured production dashboard from the Google Sheet
 
 * the Dashboard and navigation load;
 * organization branding and settings remain intact;
-* **About Network Dashboard** reports application version `1.0.2` and schema `4`;
+* **About Network Dashboard** reports application version `1.1.0` and schema `5`;
 * the features changed by the release work as expected;
 * affected integrations work where applicable;
 * affected RBAC behavior works with an appropriate non-admin account;
@@ -360,14 +360,16 @@ Schema Version
 Organization-owned data structure revision.
 ```
 
-Therefore this is valid:
+For example, application and schema versions may advance independently:
 
 ```text
-Application 1.0.2
-Schema 4
+Application 1.1.0
+Schema 5
 ```
 
-A patch release does not automatically require Schema 5. The schema version changes only when the data structure requires a new migration boundary.
+A patch release does not automatically require a new schema version. The schema version changes only when the data structure requires a new migration boundary.
+
+Schema 5 adds the SSIDs sheet and migrates Security Cameras from `Location` to `Name`. Update / Repair creates a verified backup before rewriting a populated camera table, keeps an already populated `Name`, fills blank names from `Location`, preserves extra organization columns, and can be rerun safely.
 
 ## Schema migrations
 
@@ -460,8 +462,8 @@ Never place API keys, secrets, refresh tokens, private keys, or organization cre
 
 ```text
 [ ] Open Dashboard loads the production GUI
-[ ] About reports Application Version 1.0.2
-[ ] About reports Schema Version 4
+[ ] About reports Application Version 1.1.0
+[ ] About reports Schema Version 5
 [ ] Affected functionality tested
 [ ] Affected integrations tested where applicable
 [ ] Managed protections verified where applicable
