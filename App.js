@@ -4708,7 +4708,7 @@ function getDashboardWidgetRegistry_() {
       defaultOrder: 20,
       defaultSize: 'small',
       permission: 'view',
-      icon: 'fa-wifi'
+      icon: 'fa-tower-broadcast'
     },
     {
       id: 'servers.total',
@@ -4875,7 +4875,8 @@ function getDashboardWidgetRegistry_() {
       defaultEnabled: true,
       defaultOrder: 91,
       defaultSize: 'medium',
-      permission: 'view'
+      permission: 'view',
+      icon: 'fa-tower-broadcast'
     },
     {
       id: 'wan_status',
@@ -5637,7 +5638,7 @@ function buildDashboardMetricCards_(
     {
       key: 'access_points.total',
       label: 'Access Points',
-      icon: 'fa-wifi'
+      icon: 'fa-tower-broadcast'
     },
     {
       key: 'servers.total',
