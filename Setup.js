@@ -1589,11 +1589,9 @@ function updateNetworkDashboard(options) {
       options
     );
   } catch (error) {
-    showNetworkDashboardToast_(
-      'Update / Repair failed: ' +
-      error.message,
-      10
-    );
+    showNetworkDashboardUpdateResultDialog_({
+      error: error
+    });
     throw error;
   }
 }
@@ -1762,12 +1760,18 @@ function reconcileNetworkDashboard_(
 
 
   if (!options.silent) {
-    showNetworkDashboardToast_(
-      buildReconciliationToastMessage_(
-        result
-      ),
-      8
-    );
+    if (mode === 'update') {
+      showNetworkDashboardUpdateResultDialog_({
+        result: result
+      });
+    } else {
+      showNetworkDashboardToast_(
+        buildReconciliationToastMessage_(
+          result
+        ),
+        8
+      );
+    }
   }
 
 
@@ -6450,6 +6454,205 @@ function buildReconciliationToastMessage_(result) {
     sheetCount + ' sheets reconciled',
     'Next: Validate Installation, open Dashboard, and verify affected functionality.'
   ].join('\n');
+}
+
+
+function showNetworkDashboardUpdateResultDialog_(details) {
+
+  try {
+    const model =
+      buildNetworkDashboardUpdateDialogModel_(
+        details || {}
+      );
+
+    const output =
+      HtmlService
+        .createHtmlOutput(
+          buildNetworkDashboardUpdateDialogHtml_(
+            model
+          )
+        )
+        .setWidth(560)
+        .setHeight(410);
+
+    SpreadsheetApp
+      .getUi()
+      .showModalDialog(
+        output,
+        'Network Dashboard Update / Repair'
+      );
+  } catch (dialogError) {
+    console.log(
+      'Could not show the Network Dashboard Update / Repair result dialog: ' +
+      dialogError.message
+    );
+  }
+}
+
+
+function buildNetworkDashboardUpdateDialogModel_(details) {
+
+  const result =
+    details.result || null;
+
+  const error =
+    details.error || null;
+
+  const validation =
+    result && result.validation
+      ? result.validation
+      : null;
+
+  const uniqueMessages = values =>
+    Array.from(
+      new Set(
+        values
+          .flat()
+          .filter(Boolean)
+          .map(value => String(value).trim())
+          .filter(Boolean)
+      )
+    );
+
+  const warnings =
+    uniqueMessages([
+      result ? result.warnings || [] : [],
+      result && result.sheets
+        ? result.sheets.warnings || []
+        : [],
+      result && result.protections
+        ? result.protections.warnings || []
+        : [],
+      result && result.users
+        ? result.users.warnings || []
+        : [],
+      result && result.protectionRestore
+        ? result.protectionRestore.warnings || []
+        : [],
+      validation ? validation.warnings || [] : [],
+      validation ? validation.actionRequired || [] : [],
+      validation ? validation.advisories || [] : []
+    ]);
+
+  const errors =
+    uniqueMessages([
+      error ? [error.message || String(error)] : [],
+      result ? result.errors || [] : [],
+      validation ? validation.errors || [] : [],
+      validation ? validation.criticalIssues || [] : []
+    ]);
+
+  let status =
+    'Completed successfully';
+
+  let state =
+    'success';
+
+  if (error || errors.length || (result && !result.healthy)) {
+    status = error
+      ? 'Failed'
+      : 'Completed with errors';
+    state = 'failure';
+  } else if (warnings.length) {
+    status = 'Completed with warnings';
+    state = 'warning';
+  }
+
+  return {
+    title: 'Network Dashboard Update / Repair',
+    status: status,
+    state: state,
+    applicationVersion:
+      result && result.applicationVersion
+        ? result.applicationVersion
+        : NETWORK_DASHBOARD_VERSION,
+    schemaVersion:
+      result && result.schemaVersion
+        ? result.schemaVersion
+        : NETWORK_DASHBOARD_SCHEMA_VERSION,
+    validationResult: validation
+      ? buildValidationToastMessage_(validation)
+      : error
+        ? 'Validation did not complete because Update / Repair stopped with an error.'
+        : 'Validation result unavailable.',
+    warnings: warnings,
+    errors: errors,
+    nextSteps: result && result.nextSteps
+      ? result.nextSteps
+      : error
+        ? [
+            'Review the error details, correct the reported issue, and run Update / Repair again.'
+          ]
+        : [],
+    summaryNextStep:
+      'Validate Installation, open Dashboard, and verify affected functionality.'
+  };
+}
+
+
+function buildNetworkDashboardUpdateDialogHtml_(model) {
+
+  const escapeHtml = value =>
+    String(value == null ? '' : value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+
+  const renderMessages = (heading, messages, emptyText) =>
+    '<section class="detail-section">' +
+      '<h2>' + escapeHtml(heading) + '</h2>' +
+      (messages.length
+        ? '<ul>' + messages.map(message =>
+            '<li>' + escapeHtml(message) + '</li>'
+          ).join('') + '</ul>'
+        : '<p class="muted">' + escapeHtml(emptyText) + '</p>') +
+    '</section>';
+
+  const nextSteps =
+    [model.summaryNextStep]
+      .concat(model.nextSteps || []);
+
+  return '<!doctype html>' +
+    '<html><head><base target="_top"><style>' +
+    'body{margin:0;font:14px Arial,sans-serif;color:#202124;background:#fff}' +
+    '.dialog{display:flex;flex-direction:column;height:100vh}' +
+    '.content{flex:1;overflow:auto;padding:20px 24px 12px}' +
+    'h1{font-size:20px;margin:0 0 14px}' +
+    '.status{border-left:5px solid;padding:10px 12px;margin-bottom:16px;font-weight:700}' +
+    '.status.success{background:#e6f4ea;border-color:#188038;color:#137333}' +
+    '.status.warning{background:#fef7e0;border-color:#f9ab00;color:#8a4b00}' +
+    '.status.failure{background:#fce8e6;border-color:#d93025;color:#b3261e}' +
+    '.versions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}' +
+    '.field{background:#f8f9fa;border:1px solid #dadce0;border-radius:4px;padding:9px 10px}' +
+    '.label{display:block;color:#5f6368;font-size:12px;margin-bottom:3px}' +
+    '.validation{margin:0 0 16px;line-height:1.45}' +
+    '.detail-section{margin:0 0 14px}' +
+    'h2{font-size:14px;margin:0 0 6px}' +
+    'ul{margin:0;padding-left:20px;line-height:1.45}' +
+    'li+li{margin-top:5px}.muted{color:#5f6368;margin:0}' +
+    '.actions{border-top:1px solid #dadce0;padding:12px 24px;text-align:right}' +
+    'button{background:#1a73e8;border:0;border-radius:4px;color:#fff;cursor:pointer;font-weight:600;padding:9px 20px}' +
+    'button:hover{background:#1765cc}button:focus{outline:2px solid #8ab4f8;outline-offset:2px}' +
+    '</style></head><body><div class="dialog"><main class="content">' +
+    '<h1>' + escapeHtml(model.title) + '</h1>' +
+    '<div class="status ' + escapeHtml(model.state) + '">Completion status: ' +
+      escapeHtml(model.status) + '</div>' +
+    '<div class="versions">' +
+      '<div class="field"><span class="label">Application Version</span>' +
+        escapeHtml(model.applicationVersion) + '</div>' +
+      '<div class="field"><span class="label">Schema Version</span>' +
+        escapeHtml(model.schemaVersion) + '</div>' +
+    '</div>' +
+    '<section class="detail-section"><h2>Validation result</h2><p class="validation">' +
+      escapeHtml(model.validationResult) + '</p></section>' +
+    renderMessages('Warnings', model.warnings, 'None') +
+    renderMessages('Errors', model.errors, 'None') +
+    renderMessages('Next steps', nextSteps, 'None') +
+    '</main><footer class="actions">' +
+      '<button type="button" onclick="google.script.host.close()">Close</button>' +
+    '</footer></div></body></html>';
 }
 
 
