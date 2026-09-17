@@ -1044,6 +1044,10 @@ var AppConfig = (function() {
         values['schema.version'] || '',
       webAppUrl:
         values['app.web_app_url'] || '',
+      spreadsheetUrl:
+        SpreadsheetApp
+          .getActiveSpreadsheet()
+          .getUrl(),
       organization: {
         name:
           values['organization.name'] || '',

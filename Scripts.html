@@ -387,6 +387,7 @@ function buildGlobalHelpMenu_() {
   menu.innerHTML = `
     <div class="help-menu-heading">Help</div>
     <div class="dropdown-divider"></div>
+    ${helpExternalItem_('Open Spreadsheet', config.spreadsheetUrl)}
     ${helpExternalItem_('Frequently Asked Questions', docs.faqUrl)}
     ${admin ? helpExternalItem_('Update & Maintenance Guide', docs.updateGuideUrl) : ''}
     ${admin ? helpExternalItem_('Setup & Deployment Guide', docs.setupGuideUrl) : ''}
@@ -417,6 +418,7 @@ function showNetworkDashboardAbout_() {
       <dt>Application Version</dt><dd>${escapeHtml(config.applicationVersion || '')}</dd>
       <dt>Schema Version</dt><dd>${escapeHtml(config.schemaVersion || '')}</dd>
       <dt>Organization Name</dt><dd>${escapeHtml(organization.name || 'Not configured')}</dd>
+      <dt>Spreadsheet</dt><dd>${aboutExternalValue_('Open Spreadsheet', config.spreadsheetUrl)}</dd>
       <dt>FAQ</dt><dd>${aboutExternalValue_('Open FAQ', docs.faqUrl)}</dd>
       ${admin ? `<dt>Update Guide</dt><dd>${aboutExternalValue_('Open Update & Maintenance Guide', docs.updateGuideUrl)}</dd>` : ''}
       ${admin ? `<dt>Setup Guide</dt><dd>${aboutExternalValue_('Open Setup & Deployment Guide', docs.setupGuideUrl)}</dd>` : ''}
