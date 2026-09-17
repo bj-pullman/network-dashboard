@@ -70,6 +70,12 @@ function getControlledOptionDefinitions_() {
     yesNo: [
       'Yes',
       'No'
+    ],
+    changeStatus: [
+      'Implemented',
+      'Monitoring',
+      'Rolled Back',
+      'Retired'
     ]
   };
 }
@@ -260,6 +266,28 @@ function getControlledOptionsForSheet_(
       );
   }
 
+  if (sheetName === 'SSIDs') {
+    map.Status =
+      getControlledOptions_(
+        'enabledDisabled'
+      );
+    map['Hidden SSID'] =
+      getControlledOptions_(
+        'yesNo'
+      );
+    map['MAC Authentication'] =
+      getControlledOptions_(
+        'yesNo'
+      );
+  }
+
+  if (sheetName === 'Change Log') {
+    map.Status =
+      getControlledOptions_(
+        'changeStatus'
+      );
+  }
+
   if (sheetName === 'App Users') {
     map.Role =
       getControlledOptions_(
@@ -325,6 +353,25 @@ function getControlledOptionKeyForSheetField_(
     if (field === 'Status') {
       return 'outageStatus';
     }
+  }
+
+  if (sheetName === 'SSIDs') {
+    if (field === 'Status') {
+      return 'enabledDisabled';
+    }
+    if (
+      field === 'Hidden SSID' ||
+      field === 'MAC Authentication'
+    ) {
+      return 'yesNo';
+    }
+  }
+
+  if (
+    sheetName === 'Change Log' &&
+    field === 'Status'
+  ) {
+    return 'changeStatus';
   }
 
   if (sheetName === 'App Users') {

@@ -89,24 +89,30 @@ function renderSettingsPage(data) {
           </div>
         </div>
 
-        <div class="settings-grid">
+        <div class="settings-document-list">
           ${settingsDocumentationField_(
             'documentation.faq_url',
             'Frequently Asked Questions',
             'Open FAQ',
-            values
+            values,
+            'fa-circle-question',
+            'Answers to common usage, access, and troubleshooting questions.'
           )}
           ${settingsDocumentationField_(
             'documentation.update_guide_url',
             'Update & Maintenance Guide',
             'Open Update Guide',
-            values
+            values,
+            'fa-screwdriver-wrench',
+            'Administrator guidance for updating and maintaining an installation.'
           )}
           ${settingsDocumentationField_(
             'documentation.setup_guide_url',
             'Setup & Deployment Guide',
             'Open Setup Guide',
-            values
+            values,
+            'fa-rocket',
+            'Administrator instructions for initial setup and deployment.'
           )}
         </div>
 
@@ -462,26 +468,62 @@ function settingsUrlField(key, label, values, description) {
 }
 
 
-function settingsDocumentationField_(key, label, actionLabel, values) {
+function settingsDocumentationField_(key, label, actionLabel, values, icon, description) {
   const value = String(values[key] || '').trim();
   const url = getSafeExternalUrl_(value);
+  const editorId = 'documentationEditor_' + key.replace(/[^a-z0-9]+/gi, '_');
   return `
-    <div class="settings-field settings-url-field">
-      <label>
-        <span>${escapeHtml(label)}</span>
-        <input
-          class="form-control"
-          type="url"
-          data-setting-key="${escapeAttribute(key)}"
-          value="${escapeAttribute(value)}"
+    <article class="settings-document-row">
+      <div class="settings-document-icon">
+        <i class="fa-solid ${escapeAttribute(icon || 'fa-file-lines')}"></i>
+      </div>
+      <div class="settings-document-copy">
+        <strong>${escapeHtml(label)}</strong>
+        <span>${escapeHtml(description || '')}</span>
+        <div id="${escapeAttribute(editorId)}" class="settings-document-editor" hidden>
+          <label for="${escapeAttribute(editorId)}_input">Document URL</label>
+          <div>
+            <input
+              id="${escapeAttribute(editorId)}_input"
+              class="form-control form-control-sm"
+              type="url"
+              data-setting-key="${escapeAttribute(key)}"
+              value="${escapeAttribute(value)}"
+              placeholder="https://"
+            >
+            <button class="btn btn-sm btn-light border" type="button" onclick="toggleSettingsDocumentationEditor_('${escapeAttribute(editorId)}', this)">Done</button>
+          </div>
+        </div>
+      </div>
+      <div class="settings-document-actions">
+        ${url
+          ? `<a class="btn btn-sm btn-light border" href="${escapeAttribute(url)}" target="_blank" rel="noopener noreferrer"><i class="fa-solid fa-arrow-up-right-from-square me-2"></i>${escapeHtml(actionLabel)}</a>`
+          : `<button class="btn btn-sm btn-light border" type="button" disabled title="This documentation link is not configured or is invalid.">${escapeHtml(actionLabel)} unavailable</button>`
+        }
+        <button
+          class="btn btn-sm btn-link settings-document-edit"
+          type="button"
+          onclick="toggleSettingsDocumentationEditor_('${escapeAttribute(editorId)}', this)"
         >
-      </label>
-      ${url
-        ? `<a class="btn btn-sm btn-light border mt-2" href="${escapeAttribute(url)}" target="_blank" rel="noopener noreferrer"><i class="fa-solid fa-arrow-up-right-from-square me-2"></i>${escapeHtml(actionLabel)}</a>`
-        : `<button class="btn btn-sm btn-light border mt-2" type="button" disabled title="This documentation link is not configured or is invalid.">${escapeHtml(actionLabel)} unavailable</button>`
-      }
-    </div>
+          <i class="fa-solid fa-link me-2"></i>Edit Link
+        </button>
+      </div>
+    </article>
   `;
+}
+
+
+function toggleSettingsDocumentationEditor_(editorId, button) {
+  const editor = document.getElementById(editorId);
+  if (!editor) return;
+  editor.hidden = !editor.hidden;
+  if (!editor.hidden) {
+    const input = editor.querySelector('input');
+    if (input) input.focus();
+  }
+  if (button && button.classList && button.classList.contains('settings-document-edit')) {
+    button.setAttribute('aria-expanded', String(!editor.hidden));
+  }
 }
 
 
@@ -643,9 +685,9 @@ function renderIntegrationCard(integration) {
       : 'btn btn-sm btn-brand';
 
   return `
-    <article class="${integrationCardClass}">
+    <article class="${integrationCardClass} integration-provider-card">
 
-      <div class="integration-card-main">
+      <div class="integration-card-main integration-provider-header">
         <div>
           <div class="integration-card-title-row">
             <h3>${escapeHtml(integration.name)}</h3>
@@ -663,6 +705,7 @@ function renderIntegrationCard(integration) {
             integration.capabilities &&
             integration.capabilities.length
               ? `
+                <div class="integration-section-label">Capabilities</div>
                 <div class="integration-capability-list">
                   ${integration.capabilities.map(capability => `
                     <span class="${isArubaCentral ? 'integration-chip-aruba' : ''}">${escapeHtml(capability)}</span>
@@ -689,6 +732,7 @@ function renderIntegrationCard(integration) {
         </label>
       </div>
 
+      <div class="integration-section-label">Credentials / Configuration</div>
       <div class="integration-property-table">
         ${integration.requiredProperties.map(property => `
           <div>
@@ -704,6 +748,7 @@ function renderIntegrationCard(integration) {
 
       ${renderIntegrationRuntimeSummary_(integration)}
 
+      <div class="integration-section-label">Actions</div>
       <div class="integration-actions">
         ${
           integration.supportsConnectionTest
@@ -782,7 +827,9 @@ function renderIntegrationRuntimeSummary_(
     '';
 
   return `
-    <div class="integration-runtime-grid">
+    <div class="integration-runtime-section">
+      <div class="integration-section-label">Runtime Status</div>
+      <div class="integration-runtime-grid">
       <div>
         <span>Enabled</span>
         ${statusPill(integration.enabled ? 'Enabled' : 'Disabled')}
@@ -818,6 +865,7 @@ function renderIntegrationRuntimeSummary_(
           `
           : ''
       }
+      </div>
     </div>
   `;
 }

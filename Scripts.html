@@ -108,6 +108,7 @@ const PAGE_RENDERER_FUNCTIONS = {
   accessPoints: 'renderAccessPointsPage', servers: 'renderServersPage',
   routes: 'renderRoutesPage', securityCameras: 'renderSecurityCamerasPage',
   ssids: 'renderSsidsPage',
+  changeLog: 'renderChangeLogPage',
   busCameras: 'renderBusCamerasPage', intercom: 'renderIntercomPage',
   backups: 'renderBackupsPage', internetWan: 'renderInternetWanPage',
   outages: 'renderOutagesPage',
@@ -118,6 +119,7 @@ const PAGE_UPDATE_FUNCTIONS = {
   switches: 'updateRecordTablePage_', accessPoints: 'updateRecordTablePage_',
   servers: 'updateRecordTablePage_', routes: 'updateRecordTablePage_',
   securityCameras: 'updateRecordTablePage_', ssids: 'updateRecordTablePage_',
+  changeLog: 'updateRecordTablePage_',
   backups: 'updateRecordTablePage_',
   busCameras: 'updateStructuredTables_', intercom: 'updateStructuredTables_',
   internetWan: 'updateInternetWanPage_', outages: 'updateOutagesPage_',
@@ -2286,11 +2288,22 @@ function setPageHeader(
 
 function openAddRecord() {
 
+  if (
+    currentRecordDefinition &&
+    typeof currentRecordDefinition.openEditor === 'function'
+  ) {
+    editingRow = null;
+    currentRecordDefinition.openEditor(null);
+    return;
+  }
+
   editingRow =
     null;
 
 
   openRecordModal(
+    currentRecordDefinition &&
+    currentRecordDefinition.addTitle ||
     'Add Record',
     {}
   );
@@ -2301,11 +2314,22 @@ function openEditRecord(
   row
 ) {
 
+  if (
+    currentRecordDefinition &&
+    typeof currentRecordDefinition.openEditor === 'function'
+  ) {
+    editingRow = row;
+    currentRecordDefinition.openEditor(row);
+    return;
+  }
+
   editingRow =
     row;
 
 
   openRecordModal(
+    currentRecordDefinition &&
+    currentRecordDefinition.editTitle ||
     'Edit Record',
     row
   );
@@ -2462,6 +2486,17 @@ function openRecordModal(
           editingRow
             ? 'Leave blank to keep current password'
             : 'Optional password';
+      }
+
+      if (
+        !credentialField &&
+        input.tagName === 'INPUT' &&
+        currentRecordDefinition &&
+        currentRecordDefinition.inputTypes &&
+        currentRecordDefinition.inputTypes[header]
+      ) {
+        input.type =
+          currentRecordDefinition.inputTypes[header];
       }
 
 

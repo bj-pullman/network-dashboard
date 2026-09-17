@@ -418,6 +418,7 @@ Core infrastructure functionality includes:
 * Internet / WAN
 * Outages
 * Security Cameras
+* Change Log
 
 System administration functionality includes:
 
@@ -436,7 +437,9 @@ Current optional modules include:
 * Intercom Bell System
 * Backup Schedule
 
-SSIDs are maintained manually in Google Sheets and support per-page `view`/`edit` RBAC through the `ssids` permission key. Security (for example, WPA2 or WPA3) is recorded separately from Authentication (Open, PSK, or 802.1X / Enterprise), while Availability remains free-form for any campus combination. Passwords are optional and use the shared restricted-field workflow: normal page data omits raw values, edit-authorized users may reveal them on demand, and blank edits preserve the saved password.
+SSIDs are maintained manually in Google Sheets and support per-page `view`/`edit` RBAC through the `ssids` permission key. The inventory separates Security Level (Open, Personal, Enterprise, or a custom value) from Key Management and includes practical Aruba-oriented fields for radio bands, authentication servers, MAC authentication, client IP/VLAN assignment, and VLAN. Passwords are optional and use the shared restricted-field workflow: normal page data omits raw values, edit-authorized users may reveal them on demand, and blank edits preserve the saved password.
+
+Change Log is a Google Sheets-backed infrastructure and application change-record index. It supports standard page permissions, search, filters, column selection, optional external documentation links, and a Recent Changes Dashboard widget.
 
 Enabling a module provisions its required application structure.
 

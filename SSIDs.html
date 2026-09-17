@@ -1,19 +1,29 @@
 <script>
 RECORD_PAGE_DEFINITIONS.ssids = {
-  defaultColumns: ["SSID","Type","Security","Authentication","VLAN","Password","Availability"],
-  requiredColumns: ["SSID"],
+  defaultColumns: [
+    'SSID', 'Status', 'Primary Usage', 'Bands / Radio Bands',
+    'Security Level', 'Key Management', 'VLAN', 'Password'
+  ],
+  requiredColumns: ['SSID'],
+  addLabel: 'Add SSID',
   columns: {
-    "SSID": { minWidth: 140 },
-    "Security": { minWidth: 120 },
-    "Authentication": { minWidth: 165 },
-    "Availability": { minWidth: 150 },
-    "Notes": { minWidth: 130 }
+    'SSID': { minWidth: 150 },
+    'Primary Usage': { minWidth: 135 },
+    'Bands / Radio Bands': { minWidth: 155 },
+    'Security Level': { minWidth: 135 },
+    'Key Management': { minWidth: 185 },
+    'Authentication Server': { minWidth: 180 },
+    'Client IP Assignment': { minWidth: 180 },
+    'Client VLAN Assignment': { minWidth: 185 },
+    'Availability': { minWidth: 150 },
+    'Notes': { minWidth: 150 }
   },
+  openEditor: openSsidRecordEditor_,
   buildColumns: function(data) {
     return buildRecordColumns_(data, RECORD_PAGE_DEFINITIONS.ssids);
   },
   header: function(data) {
-    setPageHeader(data.label, data.totalCount + ' records');
+    setPageHeader(data.label, data.totalCount + ' wireless networks');
   },
   actions: function(data) {
     renderRecordActions_(data);
@@ -22,5 +32,152 @@ RECORD_PAGE_DEFINITIONS.ssids = {
 
 function renderSsidsPage(data) {
   renderRecordTable_(data, RECORD_PAGE_DEFINITIONS.ssids);
+}
+
+function openSsidRecordEditor_(record) {
+  record = record || {};
+  document.getElementById('recordModalTitle').textContent =
+    editingRow ? 'Edit SSID' : 'Add SSID';
+
+  const saveButton = document.getElementById('saveRecordButton');
+  saveButton.style.display = '';
+  saveButton.onclick = saveRecordFromModal;
+
+  document.getElementById('recordModalBody').innerHTML = `
+    <div class="ssid-form">
+      <div class="form-required-note">
+        <span class="required-marker">*</span> Required
+      </div>
+
+      ${ssidFormSection_('General', `
+        ${ssidTextField_('SSID', record.SSID, { required: true })}
+        ${ssidSelectField_('Status', record.Status || 'Enabled', ['Enabled', 'Disabled'])}
+        ${ssidTextField_('Primary Usage', record['Primary Usage'], { suggestions: ssidSuggestions_('Primary Usage') })}
+        ${ssidTextField_('Bands / Radio Bands', record['Bands / Radio Bands'], { suggestions: ssidSuggestions_('Bands / Radio Bands') })}
+        ${ssidSelectField_('Hidden SSID', record['Hidden SSID'] || 'No', ['No', 'Yes'])}
+      `)}
+
+      ${ssidFormSection_('Security', `
+        ${ssidTextField_('Security Level', record['Security Level'] || 'Open', {
+          suggestions: ssidSuggestions_('Security Level'),
+          oninput: 'updateSsidSecurityFields_()'
+        })}
+        <div data-ssid-security="secured">
+          ${ssidTextField_('Key Management', record['Key Management'], { suggestions: ssidSuggestions_('Key Management') })}
+        </div>
+        <div data-ssid-security="personal">
+          ${ssidTextField_('Password', '', {
+            type: 'password',
+            autocomplete: 'new-password',
+            placeholder: editingRow ? 'Leave blank to keep current password' : 'Optional PSK / password',
+            label: 'PSK / Password',
+            help: editingRow ? 'Leave blank to keep the saved password.' : 'Used only for Personal/PSK networks.'
+          })}
+        </div>
+        <div data-ssid-security="enterprise">
+          ${ssidTextField_('Authentication Server', record['Authentication Server'], {
+            placeholder: 'RADIUS server or service name'
+          })}
+        </div>
+        ${ssidSelectField_('MAC Authentication', record['MAC Authentication'] || 'No', ['No', 'Yes'])}
+      `)}
+
+      ${ssidFormSection_('Network / VLAN', `
+        ${ssidTextField_('Client IP Assignment', record['Client IP Assignment'], { suggestions: ssidSuggestions_('Client IP Assignment') })}
+        ${ssidTextField_('Client VLAN Assignment', record['Client VLAN Assignment'], { suggestions: ssidSuggestions_('Client VLAN Assignment') })}
+        ${ssidTextField_('VLAN', record.VLAN, { placeholder: 'VLAN name or ID' })}
+      `)}
+
+      ${ssidFormSection_('Other', `
+        ${ssidTextField_('Availability', record.Availability, { placeholder: 'Optional location or scope' })}
+        ${ssidTextareaField_('Notes', record.Notes)}
+      `)}
+    </div>
+  `;
+
+  updateSsidSecurityFields_();
+  recordModal.show();
+}
+
+function ssidFormSection_(title, content) {
+  return `
+    <section class="ssid-form-section">
+      <h3>${escapeHtml(title)}</h3>
+      <div class="ssid-form-grid">${content}</div>
+    </section>
+  `;
+}
+
+function ssidSuggestions_(field) {
+  return currentPageData && currentPageData.suggestedOptions
+    ? currentPageData.suggestedOptions[field] || []
+    : [];
+}
+
+function ssidTextField_(field, value, options) {
+  options = options || {};
+  const listId = 'ssidSuggestions_' + field.replace(/[^a-z0-9]+/gi, '_');
+  const suggestions = options.suggestions || [];
+  return `
+    <label class="ssid-field">
+      <span>${escapeHtml(options.label || field)}${options.required ? ' <span class="required-marker">*</span>' : ''}</span>
+      <input
+        class="form-control"
+        type="${escapeAttribute(options.type || 'text')}"
+        data-header="${escapeAttribute(field)}"
+        value="${escapeAttribute(value || '')}"
+        ${suggestions.length ? `list="${escapeAttribute(listId)}"` : ''}
+        ${options.required ? 'required aria-required="true"' : ''}
+        ${options.autocomplete ? `autocomplete="${escapeAttribute(options.autocomplete)}"` : ''}
+        ${options.placeholder ? `placeholder="${escapeAttribute(options.placeholder)}"` : ''}
+        ${options.oninput ? `oninput="${escapeAttribute(options.oninput)}"` : ''}
+      >
+      ${suggestions.length ? `
+        <datalist id="${escapeAttribute(listId)}">
+          ${suggestions.map(item => `<option value="${escapeAttribute(item)}"></option>`).join('')}
+        </datalist>
+      ` : ''}
+      ${options.help ? `<small>${escapeHtml(options.help)}</small>` : ''}
+    </label>
+  `;
+}
+
+function ssidSelectField_(field, value, options) {
+  const selected = String(value || '');
+  return `
+    <label class="ssid-field">
+      <span>${escapeHtml(field)}</span>
+      <select class="form-select" data-header="${escapeAttribute(field)}">
+        ${options.map(option => `
+          <option value="${escapeAttribute(option)}" ${option === selected ? 'selected' : ''}>
+            ${escapeHtml(option)}
+          </option>
+        `).join('')}
+      </select>
+    </label>
+  `;
+}
+
+function ssidTextareaField_(field, value) {
+  return `
+    <label class="ssid-field ssid-field-full">
+      <span>${escapeHtml(field)}</span>
+      <textarea class="form-control" rows="3" data-header="${escapeAttribute(field)}">${escapeHtml(value || '')}</textarea>
+    </label>
+  `;
+}
+
+function updateSsidSecurityFields_() {
+  const input = document.querySelector('[data-header="Security Level"]');
+  const level = String(input && input.value || '').trim().toLowerCase();
+  document.querySelectorAll('[data-ssid-security]').forEach(container => {
+    const kind = container.dataset.ssidSecurity;
+    const visible = kind === 'secured'
+      ? level !== 'open'
+      : kind === 'personal'
+        ? level === 'personal'
+        : level === 'enterprise';
+    container.hidden = !visible;
+  });
 }
 </script>

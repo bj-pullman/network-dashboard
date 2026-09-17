@@ -851,6 +851,39 @@ textarea {
   font-size: 0.73rem;
 }
 
+.dashboard-change-row {
+  display: grid;
+  grid-template-columns: minmax(90px, auto) minmax(0, 1fr) auto;
+}
+
+.dashboard-change-date {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 750;
+}
+
+.dashboard-change-copy {
+  min-width: 0;
+}
+
+.dashboard-change-status {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.dashboard-change-status a,
+.change-log-document-link {
+  color: var(--brand-primary);
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.dashboard-change-status a:hover,
+.change-log-document-link:hover {
+  text-decoration: underline;
+}
+
 .dashboard-widget-settings-list {
   display: grid;
   gap: 10px;
@@ -4174,6 +4207,86 @@ textarea {
   padding: 18px;
 }
 
+.settings-document-list {
+  display: grid;
+  gap: 0;
+}
+
+.settings-document-row {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 15px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-document-row:last-child {
+  border-bottom: 0;
+}
+
+.settings-document-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 9px;
+  background: #eef3f8;
+  color: var(--brand-primary);
+}
+
+.settings-document-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.settings-document-copy > strong {
+  color: var(--navy-900);
+  font-size: 0.9rem;
+}
+
+.settings-document-copy > span {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.settings-document-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.settings-document-edit {
+  color: var(--brand-primary);
+  text-decoration: none;
+}
+
+.settings-document-editor {
+  display: grid;
+  gap: 6px;
+  margin-top: 9px;
+}
+
+.settings-document-editor[hidden] {
+  display: none;
+}
+
+.settings-document-editor > label,
+.integration-section-label {
+  color: #526172;
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.settings-document-editor > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
 .settings-branding-grid {
   grid-template-columns: minmax(0, 1fr);
   align-items: start;
@@ -4583,17 +4696,18 @@ textarea {
 
 .integration-list {
   display: grid;
-  gap: 12px;
+  gap: 22px;
   padding: 18px;
 }
 
 .integration-card {
   display: grid;
   gap: 13px;
-  padding: 15px;
+  padding: 0 17px 17px;
   border: 1px solid var(--border);
-  border-radius: 9px;
+  border-radius: 12px;
   background: #ffffff;
+  box-shadow: 0 4px 14px rgba(13, 35, 66, .06);
 }
 
 .integration-card-aruba {
@@ -4606,6 +4720,23 @@ textarea {
   align-items: flex-start;
   justify-content: space-between;
   gap: 18px;
+}
+
+.integration-provider-header {
+  margin: 0 -17px;
+  padding: 16px 17px;
+  border-bottom: 1px solid #e4e9ef;
+  border-radius: 12px 12px 0 0;
+  background: #f7f9fc;
+}
+
+.integration-card-aruba .integration-provider-header {
+  background: var(--integration-aruba-orange-soft);
+}
+
+.integration-runtime-section {
+  display: grid;
+  gap: 8px;
 }
 
 .integration-card-title-row {
@@ -4977,6 +5108,85 @@ textarea {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
+.internet-wan-advanced {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: #fafbfc;
+}
+
+.internet-wan-advanced > summary {
+  padding: 13px 15px;
+  color: var(--navy-900);
+  cursor: pointer;
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.internet-wan-advanced > summary span {
+  margin-left: 8px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.internet-wan-advanced-body {
+  display: grid;
+  gap: 20px;
+  padding: 4px 15px 15px;
+}
+
+.ssid-form {
+  display: grid;
+  gap: 20px;
+}
+
+.ssid-form-section {
+  display: grid;
+  gap: 11px;
+}
+
+.ssid-form-section h3 {
+  margin: 0;
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--border);
+  color: var(--navy-900);
+  font-size: 0.88rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.ssid-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+}
+
+.ssid-field {
+  display: grid;
+  gap: 6px;
+}
+
+.ssid-field > span {
+  color: #485565;
+  font-size: 10px;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.ssid-field > small {
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.ssid-field-full {
+  grid-column: 1 / -1;
+}
+
+.change-log-filter {
+  width: 155px;
+}
+
 .internet-wan-field {
   display: grid;
   gap: 6px;
@@ -5103,6 +5313,23 @@ textarea {
 }
 
 @media (max-width: 720px) {
+  .settings-document-row {
+    grid-template-columns: 40px minmax(0, 1fr);
+  }
+
+  .settings-document-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+
+  .dashboard-change-row {
+    grid-template-columns: 1fr auto;
+  }
+
+  .dashboard-change-date {
+    grid-column: 1 / -1;
+  }
+
   .integration-card-main {
     flex-direction: column;
   }

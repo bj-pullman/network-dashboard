@@ -302,6 +302,32 @@ function renderDashboardListWidget_(
     `;
   }
 
+  if (widget.id === 'recent_changes') {
+    return `
+      <div class="dashboard-list-widget dashboard-recent-changes">
+        ${items.map(item => {
+          const url = getSafeExternalUrl_(item.documentationUrl);
+          const context = [item.category, item.system]
+            .filter(Boolean)
+            .join(' / ');
+          return `
+            <div class="dashboard-list-row dashboard-change-row">
+              <div class="dashboard-change-date">${escapeHtml(item.date || '')}</div>
+              <div class="dashboard-change-copy">
+                <strong>${escapeHtml(item.name || '')}</strong>
+                <small>${escapeHtml(context)}</small>
+              </div>
+              <div class="dashboard-change-status">
+                ${statusPill(item.status || 'Unknown')}
+                ${url ? `<a href="${escapeAttribute(url)}" target="_blank" rel="noopener noreferrer" title="Open change documentation" aria-label="Open documentation for ${escapeAttribute(item.name || 'change')}"><i class="fa-solid fa-file-lines"></i></a>` : ''}
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+  }
+
   return `
     <div class="dashboard-list-widget">
       ${items.map(item => `

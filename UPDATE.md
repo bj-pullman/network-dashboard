@@ -141,7 +141,7 @@ Open **Help -> About Network Dashboard** in the production web app and confirm:
 
 ```text
 Application Version: 1.1.1
-Schema Version: 6
+Schema Version: 7
 ```
 
 Then test the functionality affected by the release.
@@ -364,7 +364,7 @@ For example, application and schema versions may advance independently:
 
 ```text
 Application 1.1.1
-Schema 6
+Schema 7
 ```
 
 A patch release does not automatically require a new schema version. The schema version changes only when the data structure requires a new migration boundary.
@@ -372,6 +372,8 @@ A patch release does not automatically require a new schema version. The schema 
 Schema 5 adds the SSIDs sheet and migrates Security Cameras from `Location` to `Name`. Update / Repair creates a verified backup before rewriting a populated camera table, keeps an already populated `Name`, fills blank names from `Location`, preserves extra organization columns, and can be rerun safely.
 
 Schema 6 separates SSID `Security` from `Authentication` and renames `Scope / Location` to `Availability`. Update / Repair normalizes recognized combined authentication values, preserves unrecognized values and extra organization columns, and creates a verified backup before rewriting populated SSID data.
+
+Schema 7 migrates SSIDs to the Aruba-oriented inventory model and adds the managed Change Log sheet. The SSID migration maps legacy `Type`, `Security`, and `Authentication` values into Primary Usage, Security Level, and Key Management; retains passwords, VLANs, availability, notes, formulas, and organization-specific columns; applies safe defaults for new status/boolean fields; and creates a verified backup before rewriting populated SSID data.
 
 ## Schema migrations
 
@@ -465,7 +467,7 @@ Never place API keys, secrets, refresh tokens, private keys, or organization cre
 ```text
 [ ] Open Dashboard loads the production GUI
 [ ] About reports Application Version 1.1.1
-[ ] About reports Schema Version 6
+[ ] About reports Schema Version 7
 [ ] Affected functionality tested
 [ ] Affected integrations tested where applicable
 [ ] Managed protections verified where applicable

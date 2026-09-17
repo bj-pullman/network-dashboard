@@ -198,21 +198,90 @@ function getNetworkDashboardSchema_() {
     'SSIDs': {
       type: 'operational',
       category: 'Infrastructure',
-      retiredHeaders: ["Scope / Location"],
-      headerAliases: {"Scope / Location":"Availability"},
-      headers: ["SSID","Type","Security","Authentication","VLAN","Password","Availability","Notes"],
-      requiredHeaders: ["SSID","Type","Security","Authentication","VLAN","Password","Availability","Notes"],
+      retiredHeaders: ["Scope / Location","Type","Security","Authentication"],
+      headers: [
+        'SSID',
+        'Status',
+        'Primary Usage',
+        'Bands / Radio Bands',
+        'Hidden SSID',
+        'Security Level',
+        'Key Management',
+        'Password',
+        'Authentication Server',
+        'MAC Authentication',
+        'Client IP Assignment',
+        'Client VLAN Assignment',
+        'VLAN',
+        'Availability',
+        'Notes'
+      ],
+      requiredHeaders: [
+        'SSID',
+        'Status',
+        'Primary Usage',
+        'Bands / Radio Bands',
+        'Hidden SSID',
+        'Security Level',
+        'Key Management',
+        'Password',
+        'Authentication Server',
+        'MAC Authentication',
+        'Client IP Assignment',
+        'Client VLAN Assignment',
+        'VLAN',
+        'Availability',
+        'Notes'
+      ],
       suggestedOptions: {
-        'Type': ['Staff', 'Student', 'Guest', 'IoT', 'Device', 'Testing', 'Other'],
-        'Security': [
-          'Open', 'WEP', 'WPA', 'WPA2', 'WPA3', 'WPA/WPA2', 'WPA2/WPA3', 'Other'
+        'Primary Usage': ['Employee', 'Student', 'Guest', 'IoT', 'Voice', 'Device', 'Testing', 'Other'],
+        'Bands / Radio Bands': ['2.4 GHz', '5 GHz', '6 GHz', '2.4 / 5 GHz', '5 / 6 GHz', 'All Bands', 'Other'],
+        'Security Level': ['Open', 'Personal', 'Enterprise', 'Other'],
+        'Key Management': [
+          'WPA2-Personal', 'WPA3-Personal', 'WPA2/WPA3-Personal',
+          'WPA2-Enterprise', 'WPA3-Enterprise', 'WPA2/WPA3-Enterprise', 'Other'
         ],
-        'Authentication': [
-          'Open', 'PSK', '802.1X / Enterprise', 'Other'
-        ]
+        'Client IP Assignment': ['Virtual Controller Managed', 'Network Assigned', 'Static', 'Other'],
+        'Client VLAN Assignment': ['Default', 'Static', 'Dynamic', 'Other']
       },
       frozenRows: 1,
       tabColor: '#2563eb'
+    },
+
+    'Change Log': {
+      type: 'operational',
+      category: 'Operations',
+      headers: [
+        'Change Date',
+        'Change Name',
+        'Category',
+        'System / Area',
+        'Summary',
+        'Documentation URL',
+        'Implemented By',
+        'Status',
+        'Notes'
+      ],
+      requiredHeaders: [
+        'Change Date',
+        'Change Name',
+        'Category',
+        'System / Area',
+        'Summary',
+        'Documentation URL',
+        'Implemented By',
+        'Status',
+        'Notes'
+      ],
+      suggestedOptions: {
+        'Category': [
+          'Firewall', 'Switching', 'Wireless', 'Server', 'Application',
+          'Internet/WAN', 'Security', 'Other'
+        ],
+        'Status': ['Implemented', 'Monitoring', 'Rolled Back', 'Retired']
+      },
+      frozenRows: 1,
+      tabColor: '#059669'
     },
 
     'Intercom Bell System': {
@@ -2639,6 +2708,11 @@ function getNetworkDashboardSchemaMigrations_() {
       from: 5,
       to: 6,
       run: migrateSchema5To6_
+    },
+    {
+      from: 6,
+      to: 7,
+      run: migrateSchema6To7_
     }
   ];
 }
@@ -2803,9 +2877,289 @@ function migrateSchema5To6_(
   migrateSsidSecurityModel_(
     sheet,
     'SSIDs',
+    getSchema6SsidDefinition_(),
+    result
+  );
+}
+
+
+function getSchema6SsidDefinition_() {
+
+  return {
+    headers: [
+      'SSID', 'Type', 'Security', 'Authentication',
+      'VLAN', 'Password', 'Availability', 'Notes'
+    ]
+  };
+}
+
+
+function migrateSchema6To7_(
+  ss,
+  result
+) {
+
+  const sheet =
+    ss.getSheetByName('SSIDs');
+
+  if (!sheet) {
+    return;
+  }
+
+  migrateSsidArubaInventoryModel_(
+    sheet,
+    'SSIDs',
     getNetworkDashboardSchema_()['SSIDs'],
     result
   );
+}
+
+
+function getSsidSecurityLevel_(
+  authentication,
+  keyManagement
+) {
+
+  const auth =
+    String(authentication || '').trim();
+
+  const key =
+    String(keyManagement || '').trim();
+
+  if (/^open$/i.test(auth) || /^open$/i.test(key)) {
+    return 'Open';
+  }
+
+  if (/psk|personal/i.test(auth) || /personal/i.test(key)) {
+    return 'Personal';
+  }
+
+  if (/802\.1x|enterprise|radius/i.test(auth) || /enterprise/i.test(key)) {
+    return 'Enterprise';
+  }
+
+  if (/^other$/i.test(auth) || /^other$/i.test(key)) {
+    return 'Other';
+  }
+
+  return auth;
+}
+
+
+function getSsidKeyManagement_(
+  security,
+  securityLevel
+) {
+
+  const value =
+    String(security || '').trim();
+
+  if (!value || /^open$/i.test(value)) {
+    return '';
+  }
+
+  if (/personal|enterprise/i.test(value)) {
+    return value;
+  }
+
+  const suffix =
+    securityLevel === 'Personal'
+      ? '-Personal'
+      : securityLevel === 'Enterprise'
+        ? '-Enterprise'
+        : '';
+
+  return value + suffix;
+}
+
+
+function migrateSsidArubaInventoryModel_(
+  sheet,
+  sheetName,
+  definition,
+  result
+) {
+
+  const width =
+    Math.max(sheet.getLastColumn(), 1);
+
+  const height =
+    Math.max(sheet.getLastRow(), 1);
+
+  const values =
+    sheet.getRange(1, 1, height, width).getValues();
+
+  const formulas =
+    sheet.getRange(1, 1, height, width).getFormulas();
+
+  const headers =
+    (values[0] || []).map(value =>
+      String(value || '').trim()
+    );
+
+  const canonical =
+    definition.headers.slice();
+
+  const replacedHeaders = new Set([
+    'Type',
+    'Security',
+    'Authentication',
+    'Scope / Location'
+  ]);
+
+  if (
+    canonical.every((header, index) =>
+      headers[index] === header
+    ) &&
+    !headers.some(header =>
+      replacedHeaders.has(header)
+    )
+  ) {
+    return;
+  }
+
+  const headerIndexes = {};
+
+  headers.forEach((header, index) => {
+    if (header && headerIndexes[header] === undefined) {
+      headerIndexes[header] = index;
+    }
+  });
+
+  const extraHeaders =
+    headers.filter(header =>
+      header &&
+      !replacedHeaders.has(header) &&
+      !canonical.includes(header) &&
+      !/^Legacy: /i.test(header)
+    );
+
+  const outputHeaders =
+    canonical.concat(extraHeaders);
+
+  const sourceValue =
+    function(rowIndex, header) {
+      const columnIndex =
+        headerIndexes[header];
+
+      if (columnIndex === undefined) {
+        return '';
+      }
+
+      return formulas[rowIndex][columnIndex] ||
+        values[rowIndex][columnIndex];
+    };
+
+  const output = [outputHeaders];
+
+  for (
+    let rowIndex = 1;
+    rowIndex < values.length;
+    rowIndex++
+  ) {
+    const legacySecurity =
+      sourceValue(rowIndex, 'Security');
+
+    const legacyAuthentication =
+      sourceValue(rowIndex, 'Authentication');
+
+    const existingSecurityLevel =
+      sourceValue(rowIndex, 'Security Level');
+
+    const securityLevel =
+      String(existingSecurityLevel || '').trim() ||
+      getSsidSecurityLevel_(
+        legacyAuthentication,
+        legacySecurity
+      );
+
+    const existingKeyManagement =
+      sourceValue(rowIndex, 'Key Management');
+
+    const keyManagement =
+      String(existingKeyManagement || '').trim()
+        ? existingKeyManagement
+        : getSsidKeyManagement_(
+            legacySecurity,
+            securityLevel
+          );
+
+    output.push(
+      outputHeaders.map(header => {
+        const existing =
+          sourceValue(rowIndex, header);
+
+        if (String(existing == null ? '' : existing).trim()) {
+          return existing;
+        }
+
+        if (header === 'Status') {
+          return 'Enabled';
+        }
+
+        if (header === 'Primary Usage') {
+          return sourceValue(rowIndex, 'Type');
+        }
+
+        if (header === 'Hidden SSID') {
+          return 'No';
+        }
+
+        if (header === 'Security Level') {
+          return securityLevel;
+        }
+
+        if (header === 'Key Management') {
+          return keyManagement;
+        }
+
+        if (header === 'MAC Authentication') {
+          return 'No';
+        }
+
+        if (header === 'Availability') {
+          return sourceValue(rowIndex, 'Scope / Location');
+        }
+
+        return existing;
+      })
+    );
+  }
+
+  const hasData =
+    values.slice(1).some(row =>
+      row.some(value =>
+        value !== '' && value != null
+      )
+    );
+
+  const backupName =
+    hasData
+      ? createMigrationBackup_(
+          sheet,
+          sheetName
+        )
+      : '';
+
+  sheet
+    .getRange(1, 1, height, width)
+    .clearContent();
+
+  sheet
+    .getRange(
+      1,
+      1,
+      output.length,
+      outputHeaders.length
+    )
+    .setValues(output);
+
+  result.migrations.push({
+    sheet: sheetName,
+    message: 'Migrated SSIDs to the Aruba-oriented inventory model.',
+    backupSheet: backupName,
+    rowsMigrated: Math.max(output.length - 1, 0)
+  });
 }
 
 

@@ -193,7 +193,11 @@ function renderRecordActions_(data, extraActions) {
 
           <i class="fa-solid fa-plus me-2"></i>
 
-          Add Record
+          ${escapeHtml(
+            currentRecordDefinition &&
+            currentRecordDefinition.addLabel ||
+            'Add Record'
+          )}
 
         </button>
 
@@ -535,6 +539,9 @@ function buildRecordTable_(data) {
 
         paginationSize:
           25,
+
+        initialSort:
+          currentRecordDefinition.initialSort || [],
 
         movableColumns:
           true,
@@ -1529,6 +1536,12 @@ function applyTableSearch() {
 function clearTableFilters() {
   const search = document.getElementById('tableSearch');
   if (search) search.value = '';
+  if (
+    currentRecordDefinition &&
+    typeof currentRecordDefinition.clearFilters === 'function'
+  ) {
+    currentRecordDefinition.clearFilters();
+  }
   applyTableSearch();
 }
 

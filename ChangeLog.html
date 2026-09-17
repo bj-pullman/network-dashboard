@@ -1,0 +1,99 @@
+<script>
+RECORD_PAGE_DEFINITIONS.changeLog = {
+  defaultColumns: [
+    'Change Date', 'Change Name', 'Category', 'System / Area',
+    'Summary', 'Documentation URL', 'Implemented By', 'Status'
+  ],
+  requiredColumns: ['Change Date', 'Change Name'],
+  addLabel: 'Add Change',
+  addTitle: 'Add Change',
+  editTitle: 'Edit Change',
+  initialSort: [
+    { column: 'Change Date', dir: 'desc' }
+  ],
+  inputTypes: {
+    'Documentation URL': 'url'
+  },
+  columns: {
+    'Change Date': {
+      minWidth: 125,
+      sorter: function(left, right) {
+        const leftTime = Date.parse(String(left || ''));
+        const rightTime = Date.parse(String(right || ''));
+        return (Number.isFinite(leftTime) ? leftTime : 0) -
+          (Number.isFinite(rightTime) ? rightTime : 0);
+      }
+    },
+    'Change Name': { minWidth: 190 },
+    'Category': { minWidth: 125 },
+    'System / Area': { minWidth: 150 },
+    'Summary': { minWidth: 240 },
+    'Documentation URL': {
+      minWidth: 145,
+      formatter: function(cell) {
+        const url = getSafeExternalUrl_(cell.getValue());
+        return url
+          ? `<a class="change-log-document-link" href="${escapeAttribute(url)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()"><i class="fa-solid fa-file-lines me-2"></i>Open document</a>`
+          : '<span class="text-muted">Not linked</span>';
+      }
+    },
+    'Implemented By': { minWidth: 150 },
+    'Status': { minWidth: 125 },
+    'Notes': { minWidth: 180 }
+  },
+  toolbar: function() {
+    return `
+      <select
+        id="changeLogCategoryFilter"
+        class="form-select form-select-sm change-log-filter"
+        onchange="applyTableSearch()"
+        aria-label="Filter changes by category"
+      >
+        <option value="">All categories</option>
+        ${['Firewall', 'Switching', 'Wireless', 'Server', 'Application', 'Internet/WAN', 'Security', 'Other']
+          .map(value => `<option value="${escapeAttribute(value)}">${escapeHtml(value)}</option>`)
+          .join('')}
+      </select>
+      <select
+        id="changeLogStatusFilter"
+        class="form-select form-select-sm change-log-filter"
+        onchange="applyTableSearch()"
+        aria-label="Filter changes by status"
+      >
+        <option value="">All statuses</option>
+        ${['Implemented', 'Monitoring', 'Rolled Back', 'Retired']
+          .map(value => `<option value="${escapeAttribute(value)}">${escapeHtml(value)}</option>`)
+          .join('')}
+      </select>
+    `;
+  },
+  matchesRow: function(row) {
+    const category = document.getElementById('changeLogCategoryFilter');
+    const status = document.getElementById('changeLogStatusFilter');
+    return (!category || !category.value || row.Category === category.value) &&
+      (!status || !status.value || row.Status === status.value);
+  },
+  clearFilters: function() {
+    ['changeLogCategoryFilter', 'changeLogStatusFilter'].forEach(id => {
+      const input = document.getElementById(id);
+      if (input) input.value = '';
+    });
+  },
+  buildColumns: function(data) {
+    return buildRecordColumns_(data, RECORD_PAGE_DEFINITIONS.changeLog);
+  },
+  header: function(data) {
+    setPageHeader(
+      data.label,
+      'Infrastructure and application change-record index'
+    );
+  },
+  actions: function(data) {
+    renderRecordActions_(data);
+  }
+};
+
+function renderChangeLogPage(data) {
+  renderRecordTable_(data, RECORD_PAGE_DEFINITIONS.changeLog);
+}
+</script>

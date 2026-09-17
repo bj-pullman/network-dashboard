@@ -184,16 +184,39 @@ const APP_PAGE_CONFIG = {
     icon: 'fa-wifi',
     group: 'Infrastructure',
     defaultColumns: [
-      'SSID', 'Type', 'Security', 'Authentication', 'VLAN', 'Password', 'Availability'
+      'SSID', 'Status', 'Primary Usage', 'Bands / Radio Bands',
+      'Security Level', 'Key Management', 'VLAN', 'Password'
     ],
     suggestedOptions: {
-      'Type': ['Staff', 'Student', 'Guest', 'IoT', 'Device', 'Testing', 'Other'],
-      'Security': [
-        'Open', 'WEP', 'WPA', 'WPA2', 'WPA3', 'WPA/WPA2', 'WPA2/WPA3', 'Other'
+      'Primary Usage': ['Employee', 'Student', 'Guest', 'IoT', 'Voice', 'Device', 'Testing', 'Other'],
+      'Bands / Radio Bands': ['2.4 GHz', '5 GHz', '6 GHz', '2.4 / 5 GHz', '5 / 6 GHz', 'All Bands', 'Other'],
+      'Security Level': ['Open', 'Personal', 'Enterprise', 'Other'],
+      'Key Management': [
+        'WPA2-Personal', 'WPA3-Personal', 'WPA2/WPA3-Personal',
+        'WPA2-Enterprise', 'WPA3-Enterprise', 'WPA2/WPA3-Enterprise', 'Other'
       ],
-      'Authentication': [
-        'Open', 'PSK', '802.1X / Enterprise', 'Other'
-      ]
+      'Client IP Assignment': ['Virtual Controller Managed', 'Network Assigned', 'Static', 'Other'],
+      'Client VLAN Assignment': ['Default', 'Static', 'Dynamic', 'Other']
+    }
+  },
+
+  changeLog: {
+    key: 'changeLog',
+    label: 'Change Log',
+    sheet: 'Change Log',
+    type: 'table',
+    icon: 'fa-clock-rotate-left',
+    group: 'Operations',
+    defaultColumns: [
+      'Change Date', 'Change Name', 'Category', 'System / Area',
+      'Summary', 'Documentation URL', 'Implemented By', 'Status'
+    ],
+    suggestedOptions: {
+      'Category': [
+        'Firewall', 'Switching', 'Wireless', 'Server', 'Application',
+        'Internet/WAN', 'Security', 'Other'
+      ],
+      'Status': ['Implemented', 'Monitoring', 'Rolled Back', 'Retired']
     }
   },
 
@@ -411,6 +434,17 @@ const APP_MODULE_REGISTRY = {
     pageKey: 'ssids',
     requiredSheets: ['SSIDs'],
     permissionKey: 'ssids'
+  },
+
+  changeLog: {
+    id: 'changeLog',
+    name: 'Change Log',
+    description: 'Searchable infrastructure and application change-record index.',
+    classification: 'core',
+    enabledByDefault: true,
+    pageKey: 'changeLog',
+    requiredSheets: ['Change Log'],
+    permissionKey: 'changeLog'
   },
 
   workflow: {
@@ -2418,6 +2452,10 @@ function getAppTableData_(
       row
     );
 
+  }
+
+  if (pageKey === 'changeLog') {
+    rows.sort(compareChangeLogRowsNewestFirst_);
   }
 
 
@@ -4649,6 +4687,12 @@ function finalizeDashboardData_(
   data.uptimeRobot =
     buildDashboardUptimeRobotData_();
 
+  data.integrationHealth =
+    buildDashboardIntegrationHealth_();
+
+  data.recentChanges =
+    buildDashboardRecentChanges_();
+
   const availableWidgets =
     getDashboardAvailableWidgets_();
 
@@ -4821,6 +4865,37 @@ function getDashboardWidgetRegistry_() {
       icon: 'fa-triangle-exclamation'
     },
     {
+      id: 'recent_changes',
+      display: 'Recent Changes',
+      description: 'Newest infrastructure and application change records.',
+      category: 'Operations',
+      type: 'list',
+      sourceLabel: 'Change Log',
+      actionPage: 'changeLog',
+      dataPath: 'recentChanges',
+      requiredModule: 'changeLog',
+      requiredPagePermission: 'changeLog',
+      defaultEnabled: true,
+      defaultOrder: 65,
+      defaultSize: 'large',
+      permission: 'view',
+      icon: 'fa-clock-rotate-left'
+    },
+    {
+      id: 'integration_health',
+      display: 'Integration Health',
+      description: 'Enabled integration configuration and runtime readiness.',
+      category: 'Monitoring',
+      type: 'status_summary',
+      sourceLabel: 'Integration registry',
+      dataPath: 'integrationHealth',
+      defaultEnabled: true,
+      defaultOrder: 66,
+      defaultSize: 'medium',
+      permission: 'view',
+      icon: 'fa-plug-circle-check'
+    },
+    {
       id: 'campus_distribution',
       display: 'Switch Deployment by Campus',
       description: 'Switch count by campus.',
@@ -4972,6 +5047,15 @@ function isDashboardWidgetAvailable_(
     !isModuleEnabled_(
       widget.requiredModule
     )
+  ) {
+    return false;
+  }
+
+  if (
+    widget.requiredPagePermission &&
+    getPagePermission_(
+      widget.requiredPagePermission
+    ) === 'none'
   ) {
     return false;
   }
@@ -5210,6 +5294,104 @@ function getDashboardWidgetProvenance_(
     lastUpdated:
       lastUpdated
   };
+}
+
+
+function buildDashboardRecentChanges_() {
+
+  if (
+    !isPageEnabled_('changeLog') ||
+    getPagePermission_('changeLog') === 'none'
+  ) {
+    return [];
+  }
+
+  const config =
+    APP_PAGE_CONFIG.changeLog;
+
+  const sheet =
+    getReadSheet_(
+      config.sheet
+    );
+
+  if (!sheet) {
+    return [];
+  }
+
+  const values =
+    readConfiguredPageValues_(
+      sheet,
+      config
+    );
+
+  if (values.length < 2) {
+    return [];
+  }
+
+  const headers =
+    values[0].map(value =>
+      String(value || '').trim()
+    );
+
+  return values
+    .slice(1)
+    .map((sourceRow, index) => {
+      const row = {
+        _row: index + 2
+      };
+
+      headers.forEach((header, columnIndex) => {
+        if (header) {
+          row[header] =
+            String(sourceRow[columnIndex] || '');
+        }
+      });
+
+      return row;
+    })
+    .filter(row =>
+      String(row['Change Name'] || '').trim()
+    )
+    .sort(compareChangeLogRowsNewestFirst_)
+    .slice(0, 5)
+    .map(row => ({
+      date: row['Change Date'] || '',
+      name: row['Change Name'] || '',
+      category: row['Category'] || '',
+      system: row['System / Area'] || '',
+      status: row['Status'] || '',
+      documentationUrl:
+        row['Documentation URL'] || ''
+    }));
+}
+
+
+function buildDashboardIntegrationHealth_() {
+
+  const summary = {
+    Ready: 0,
+    'Needs Attention': 0,
+    Disabled: 0
+  };
+
+  try {
+    getIntegrationStatusList_()
+      .forEach(integration => {
+        if (!integration.enabled) {
+          summary.Disabled++;
+        } else if (
+          integration.configurationComplete &&
+          integration.connectionStatus !== 'error' &&
+          integration.dataStatus !== 'error'
+        ) {
+          summary.Ready++;
+        } else {
+          summary['Needs Attention']++;
+        }
+      });
+  } catch (error) {}
+
+  return summary;
 }
 
 
@@ -6505,14 +6687,30 @@ function normalizeInternetWanRecord_(
   record
 ) {
 
+  const circuitName =
+    String(
+      record['Circuit Name'] || ''
+    ).trim();
+
+  const serviceType =
+    normalizeControlledOption_(
+      'wanServiceType',
+      record['Service Type'],
+      'Circuit Type',
+      false
+    );
+
+  if (!circuitName && !serviceType) {
+    throw new Error(
+      'Circuit Name or Circuit Type is required.'
+    );
+  }
+
   const normalized = {
     'Circuit ID':
       String(record['Circuit ID'] || '').trim(),
     'Circuit Name':
-      requiredInternetWanText_(
-        record['Circuit Name'],
-        'Circuit Name'
-      ),
+      circuitName,
     'Site / Location':
       requiredInternetWanText_(
         record['Site / Location'],
@@ -6523,7 +6721,7 @@ function normalizeInternetWanRecord_(
         'wanRole',
         record['Role'],
         'Role',
-        true
+        false
       ),
     'Provider':
       requiredInternetWanText_(
@@ -6531,12 +6729,7 @@ function normalizeInternetWanRecord_(
         'Provider'
       ),
     'Service Type':
-      normalizeControlledOption_(
-        'wanServiceType',
-        record['Service Type'],
-        'Service Type',
-        true
-      ),
+      serviceType,
     'APSCN Device Name':
       String(
         record['APSCN Device Name'] || ''
@@ -6573,7 +6766,7 @@ function normalizeInternetWanRecord_(
         'wanStatus',
         record['Status'],
         'Status',
-        true
+        false
       ),
     'Notes':
       String(
@@ -6653,10 +6846,7 @@ function normalizeInternetWanBandwidth_(
     String(value || '').trim();
 
   if (!text) {
-    throw new Error(
-      label +
-      ' is required.'
-    );
+    return '';
   }
 
   if (
@@ -6684,12 +6874,11 @@ function normalizeInternetWanCidr_(
   }
 
   if (
-    !isValidCidrBlock_(
-      text
-    )
+    !isValidIpAddress_(text) &&
+    !isValidCidrBlock_(text)
   ) {
     throw new Error(
-      'Public Network / CIDR must be a valid IPv4 or IPv6 CIDR block.'
+      'Public Network / CIDR must be a valid IPv4 or IPv6 address, optionally followed by a CIDR prefix.'
     );
   }
 
@@ -7767,6 +7956,10 @@ function getRequiredRecordFieldsForPage_(
     ssids: [
       'SSID'
     ],
+    changeLog: [
+      'Change Date',
+      'Change Name'
+    ],
     backups: [
       'Server Name'
     ]
@@ -7800,6 +7993,37 @@ function getRequiredRecordFieldsForPage_(
   }
 
   return [];
+}
+
+
+function compareChangeLogRowsNewestFirst_(
+  left,
+  right
+) {
+
+  const leftTime =
+    Date.parse(
+      String(left && left['Change Date'] || '')
+    );
+
+  const rightTime =
+    Date.parse(
+      String(right && right['Change Date'] || '')
+    );
+
+  const safeLeft =
+    Number.isFinite(leftTime)
+      ? leftTime
+      : 0;
+
+  const safeRight =
+    Number.isFinite(rightTime)
+      ? rightTime
+      : 0;
+
+  return safeRight - safeLeft ||
+    Number(right && right._row || 0) -
+      Number(left && left._row || 0);
 }
 
 

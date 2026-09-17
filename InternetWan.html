@@ -1380,58 +1380,63 @@ function openInternetWanForm_(
   ).innerHTML = `
     <div class="internet-wan-form">
       <div class="form-required-note">
-        <span class="required-marker">*</span> Required
+        <span class="required-marker">*</span> Required. Provide a Circuit Name or Circuit Type.
       </div>
 
       <div class="internet-wan-form-section">
         <h3>Circuit</h3>
         <div class="internet-wan-form-grid">
           ${internetWanTextField_('Circuit ID', row ? row['Circuit ID'] : 'Assigned on save', true)}
-          ${internetWanTextField_('Circuit Name', row && row['Circuit Name'], false, true)}
+          ${internetWanTextField_('Circuit Name', row && row['Circuit Name'])}
           ${internetWanTextField_('Site / Location', row && row['Site / Location'], false, true)}
-          ${internetWanSelectField_('Role', row && row['Role'], ['Primary', 'Secondary', 'Backup'], true)}
           ${internetWanTextField_('Provider', row && row['Provider'], false, true)}
-          ${internetWanSelectField_('Service Type', row && row['Service Type'], ['Fiber', 'DIA', 'Cable', 'Fixed Wireless', 'DSL', 'Cellular', 'Other'], true)}
-          ${internetWanTextField_('APSCN Device Name', row && row['APSCN Device Name'])}
-          ${internetWanSelectField_('Status', row && row['Status'], ['Active', 'Standby', 'Disabled'], true)}
+          ${internetWanSelectField_('Service Type', row && row['Service Type'], ['Fiber', 'DIA', 'Cable', 'Fixed Wireless', 'DSL', 'Cellular', 'Other'], false, 'Circuit Type')}
+          ${internetWanSelectField_('Status', row ? row['Status'] : 'Active', ['Active', 'Standby', 'Disabled'])}
         </div>
       </div>
 
-      <div class="internet-wan-form-section">
-        <h3>Bandwidth</h3>
-        <div class="internet-wan-form-grid">
-          ${internetWanTextField_('Bandwidth', row && row.Bandwidth, false, true)}
-        </div>
-      </div>
+      <details class="internet-wan-advanced" ${row ? 'open' : ''}>
+        <summary>Technical details <span>Optional addressing, capacity, failover, and monitoring</span></summary>
+        <div class="internet-wan-advanced-body">
+          <div class="internet-wan-form-section">
+            <h3>Circuit Details</h3>
+            <div class="internet-wan-form-grid">
+              ${internetWanSelectField_('Role', row && row['Role'], ['Primary', 'Secondary', 'Backup'])}
+              ${internetWanTextField_('Bandwidth', row && row.Bandwidth)}
+              ${internetWanTextField_('APSCN Device Name', row && row['APSCN Device Name'])}
+            </div>
+          </div>
 
-      <div class="internet-wan-form-section">
-        <h3>Public Internet Configuration</h3>
-        <div class="internet-wan-form-grid two-column">
-          ${internetWanTextField_('Public Network / CIDR', row && row['Public Network / CIDR'])}
-          ${internetWanTextField_('Gateway', row && row['Gateway'])}
-        </div>
+          <div class="internet-wan-form-section">
+            <h3>Public Internet Configuration</h3>
+            <div class="internet-wan-form-grid two-column">
+              ${internetWanTextField_('Public Network / CIDR', row && row['Public Network / CIDR'], false, false, 'IP address or CIDR prefix')}
+              ${internetWanTextField_('Gateway', row && row['Gateway'])}
+            </div>
 
-        <div class="internet-wan-ip-editor">
-          <label>Public IP Addresses</label>
-          <div id="internetWanIpFields"></div>
-          <button
-            type="button"
-            class="btn btn-sm btn-light border"
-            onclick="addInternetWanIpField()"
-          >
-            <i class="fa-solid fa-plus me-2"></i>
-            Add More IPs
-          </button>
-        </div>
-      </div>
+            <div class="internet-wan-ip-editor">
+              <label>Public IP Addresses</label>
+              <div id="internetWanIpFields"></div>
+              <button
+                type="button"
+                class="btn btn-sm btn-light border"
+                onclick="addInternetWanIpField()"
+              >
+                <i class="fa-solid fa-plus me-2"></i>
+                Add More IPs
+              </button>
+            </div>
+          </div>
 
-      <div class="internet-wan-form-section">
-        <h3>Provider Reference</h3>
-        <div class="internet-wan-form-grid two-column">
-          ${internetWanTextField_('Circuit / Account ID', row && row['Circuit / Account ID'])}
-          ${internetWanMonitorField_('UptimeRobot Monitor ID', row && row['UptimeRobot Monitor ID'])}
+          <div class="internet-wan-form-section">
+            <h3>Provider Reference</h3>
+            <div class="internet-wan-form-grid two-column">
+              ${internetWanTextField_('Circuit / Account ID', row && row['Circuit / Account ID'])}
+              ${internetWanMonitorField_('UptimeRobot Monitor ID', row && row['UptimeRobot Monitor ID'])}
+            </div>
+          </div>
         </div>
-      </div>
+      </details>
 
       <div class="internet-wan-form-section">
         <h3>Notes</h3>
@@ -1457,7 +1462,8 @@ function internetWanTextField_(
   label,
   value,
   readonly,
-  required
+  required,
+  placeholder
 ) {
 
   return `
@@ -1467,6 +1473,7 @@ function internetWanTextField_(
         class="form-control"
         data-wan-field="${escapeAttribute(label)}"
         value="${escapeAttribute(value || '')}"
+        ${placeholder ? `placeholder="${escapeAttribute(placeholder)}"` : ''}
         ${readonly ? 'readonly' : ''}
         ${required ? 'required aria-required="true"' : ''}
       >
@@ -1479,7 +1486,8 @@ function internetWanSelectField_(
   label,
   value,
   options,
-  required
+  required,
+  displayLabel
 ) {
 
   options =
@@ -1489,9 +1497,7 @@ function internetWanSelectField_(
     );
 
   const selected =
-    String(
-      label === 'Status' && value === '' ? '' : value || options[0] || ''
-    ).trim();
+    String(value || '').trim();
 
   const optionList =
     selected &&
@@ -1504,13 +1510,13 @@ function internetWanSelectField_(
 
   return `
     <label class="internet-wan-field">
-      <span>${internetWanFieldLabel_(label, required)}</span>
+      <span>${internetWanFieldLabel_(displayLabel || label, required)}</span>
       <select
         class="form-select"
         data-wan-field="${escapeAttribute(label)}"
         ${required ? 'required aria-required="true"' : ''}
       >
-        ${selected === '' ? '<option value="" selected>Select status</option>' : ''}
+        ${selected === '' ? '<option value="" selected>Not specified</option>' : ''}
         ${optionList.map(option => `
           <option
             value="${escapeAttribute(option)}"
