@@ -260,7 +260,10 @@ function getNetworkDashboardSchema_() {
         'Documentation URL',
         'Implemented By',
         'Status',
-        'Notes'
+        'Notes',
+        'Documentation File ID',
+        'Imported At',
+        'Import Source'
       ],
       requiredHeaders: [
         'Change Date',
@@ -271,13 +274,14 @@ function getNetworkDashboardSchema_() {
         'Documentation URL',
         'Implemented By',
         'Status',
-        'Notes'
+        'Notes',
+        'Documentation File ID',
+        'Imported At',
+        'Import Source'
       ],
       suggestedOptions: {
-        'Category': [
-          'Firewall', 'Switching', 'Wireless', 'Server', 'Application',
-          'Internet/WAN', 'Security', 'Other'
-        ],
+        'Category': NETWORK_DASHBOARD_CHANGE_CATEGORIES,
+        'System / Area': NETWORK_DASHBOARD_CHANGE_SYSTEMS,
         'Status': ['Implemented', 'Monitoring', 'Rolled Back', 'Retired']
       },
       frozenRows: 1,
@@ -2255,7 +2259,8 @@ function setupSchemaSheet_(
 
   applySheetSuggestedValidations_(
     sheet,
-    definition
+    definition,
+    sheetName
   );
 
 
@@ -2290,10 +2295,18 @@ function setupSchemaSheet_(
 
 function applySheetSuggestedValidations_(
   sheet,
-  definition
+  definition,
+  sheetName
 ) {
 
-  const suggestions = definition.suggestedOptions || {};
+  const suggestions =
+    sheetName === 'Change Log'
+      ? Object.assign(
+          {},
+          definition.suggestedOptions || {},
+          getChangeLogConfiguredOptions_()
+        )
+      : definition.suggestedOptions || {};
 
   if (!definition.headers) return;
 
@@ -2717,6 +2730,11 @@ function getNetworkDashboardSchemaMigrations_() {
       from: 6,
       to: 7,
       run: migrateSchema6To7_
+    },
+    {
+      from: 7,
+      to: 8,
+      run: function() {}
     }
   ];
 }

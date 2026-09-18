@@ -12,11 +12,17 @@ RECORD_PAGE_DEFINITIONS.changeLog = {
     { column: 'Change Date', dir: 'desc' }
   ],
   inputTypes: {
+    'Change Date': 'date',
     'Documentation URL': 'url'
   },
+  configurableSelectFields: ['Category', 'System / Area'],
+  hiddenEditorColumns: ['Documentation File ID', 'Imported At', 'Import Source'],
   columns: {
     'Change Date': {
       minWidth: 125,
+      formatter: function(cell) {
+        return escapeHtml(formatAppDate_(cell.getValue(), false));
+      },
       sorter: function(left, right) {
         const leftTime = Date.parse(String(left || ''));
         const rightTime = Date.parse(String(right || ''));
@@ -41,7 +47,15 @@ RECORD_PAGE_DEFINITIONS.changeLog = {
     'Status': { minWidth: 125 },
     'Notes': { minWidth: 180 }
   },
-  toolbar: function() {
+  toolbar: function(data) {
+    const categories = Array.from(new Set(
+      (data.suggestedOptions && data.suggestedOptions.Category || [])
+        .concat((data.rows || []).map(row => row.Category).filter(Boolean))
+    ));
+    const statuses = Array.from(new Set(
+      (data.suggestedOptions && data.suggestedOptions.Status || [])
+        .concat((data.rows || []).map(row => row.Status).filter(Boolean))
+    ));
     return `
       <select
         id="changeLogCategoryFilter"
@@ -50,7 +64,7 @@ RECORD_PAGE_DEFINITIONS.changeLog = {
         aria-label="Filter changes by category"
       >
         <option value="">All categories</option>
-        ${['Firewall', 'Switching', 'Wireless', 'Server', 'Application', 'Internet/WAN', 'Security', 'Other']
+        ${categories
           .map(value => `<option value="${escapeAttribute(value)}">${escapeHtml(value)}</option>`)
           .join('')}
       </select>
@@ -61,7 +75,7 @@ RECORD_PAGE_DEFINITIONS.changeLog = {
         aria-label="Filter changes by status"
       >
         <option value="">All statuses</option>
-        ${['Implemented', 'Monitoring', 'Rolled Back', 'Retired']
+        ${statuses
           .map(value => `<option value="${escapeAttribute(value)}">${escapeHtml(value)}</option>`)
           .join('')}
       </select>
@@ -89,11 +103,169 @@ RECORD_PAGE_DEFINITIONS.changeLog = {
     );
   },
   actions: function(data) {
-    renderRecordActions_(data);
+    const importAction = data.permission === 'edit'
+      ? `<button class="btn btn-sm btn-light border" onclick="openChangeLogImport_()"><i class="fa-solid fa-file-import me-2"></i>Import Documentation</button>`
+      : '';
+    renderRecordActions_(data, importAction);
   }
 };
 
 function renderChangeLogPage(data) {
   renderRecordTable_(data, RECORD_PAGE_DEFINITIONS.changeLog);
+}
+
+
+let changeLogImportPreviewData_ = null;
+
+
+function openChangeLogImport_() {
+  changeLogImportPreviewData_ = null;
+  document.getElementById('changeLogDocumentUrl').value = '';
+  document.getElementById('changeLogImportFeedback').textContent = '';
+  document.getElementById('changeLogImportFeedback').className = 'form-text mt-2';
+  document.getElementById('changeLogImportPreview').hidden = true;
+  document.getElementById('changeLogImportPreview').innerHTML = '';
+  document.getElementById('confirmChangeLogImportButton').disabled = true;
+  bootstrap.Modal.getOrCreateInstance(
+    document.getElementById('changeLogImportModal')
+  ).show();
+}
+
+
+function readChangeLogDocumentation_(button) {
+  const url = String(document.getElementById('changeLogDocumentUrl').value || '').trim();
+  const feedback = document.getElementById('changeLogImportFeedback');
+  if (!url) {
+    feedback.className = 'form-text mt-2 text-danger';
+    feedback.textContent = 'Enter a Google Doc URL.';
+    return;
+  }
+  const action = setActionWorking(button, 'Reading...');
+  feedback.className = 'form-text mt-2';
+  feedback.textContent = 'Reading document metadata...';
+  scriptRunPromise_(
+    'appPreviewChangeLogDocumentation',
+    runner => runner.appPreviewChangeLogDocumentation(url)
+  ).then(function(preview) {
+    restoreAction(action);
+    changeLogImportPreviewData_ = preview;
+    renderChangeLogImportPreview_(preview);
+  }).catch(function(error) {
+    restoreAction(action);
+    feedback.className = 'form-text mt-2 text-danger';
+    feedback.textContent = getSafeErrorMessage_(error);
+  });
+}
+
+
+function renderChangeLogImportPreview_(preview) {
+  const container = document.getElementById('changeLogImportPreview');
+  const feedback = document.getElementById('changeLogImportFeedback');
+  const fields = preview.fields || {};
+  const required = new Set(['Change Date', 'Change Name', 'Category', 'System / Area', 'Summary', 'Implemented By']);
+  const names = ['Change Date', 'Change Name', 'Category', 'System / Area', 'Summary', 'Implemented By', 'Documentation URL'];
+  const selectFields = new Set(['Category', 'System / Area']);
+
+  const controls = names.map(function(name, index) {
+    const value = String(fields[name] || '');
+    const id = 'changeLogImportField_' + index;
+    let control;
+    if (selectFields.has(name)) {
+      const configured = preview.options && preview.options[name] || [];
+      const options = value && !configured.some(item => item.toLowerCase() === value.toLowerCase())
+        ? [value].concat(configured) : configured;
+      const placeholder = value ? '' : '<option value="" selected>Select a value...</option>';
+      control = `<select id="${id}" class="form-select" data-import-field="${escapeAttribute(name)}" onchange="toggleChangeLogImportOther_(this)" ${required.has(name) ? 'required' : ''}>${placeholder}${options.map(item => `<option value="${escapeAttribute(item)}" ${item === value ? 'selected' : ''}>${escapeHtml(item)}</option>`).join('')}</select><input type="text" class="form-control mt-2" data-import-custom="${escapeAttribute(name)}" placeholder="Enter a custom value" ${value === 'Other' ? 'required' : 'hidden'}>`;
+    } else {
+      const type = name === 'Change Date' ? 'date' : name === 'Documentation URL' ? 'url' : 'text';
+      const inputValue = name === 'Change Date' && value ? toHtmlDateValue_(value) : value;
+      control = `<input id="${id}" type="${type}" class="form-control" data-import-field="${escapeAttribute(name)}" value="${escapeAttribute(inputValue)}" ${required.has(name) ? 'required' : ''}>`;
+    }
+    return `<div class="col-md-6"><label class="form-label" for="${id}">${escapeHtml(name.toUpperCase())}${required.has(name) ? ' <span class="required-marker">*</span>' : ''}</label>${control}</div>`;
+  }).join('');
+
+  const duplicate = !!preview.duplicate;
+  feedback.className = 'form-text mt-2 ' + (duplicate ? 'text-danger' : 'text-success');
+  feedback.textContent = duplicate
+    ? 'This Google Doc has already been imported. Duplicate import is blocked.'
+    : (preview.missingFields || []).length
+      ? 'Document read. Complete the highlighted missing fields before importing.'
+      : 'Document metadata is ready to review.';
+
+  container.innerHTML = `
+    <div class="change-log-import-source"><strong>${escapeHtml(preview.documentTitle || 'Google Doc')}</strong> · <a href="${escapeAttribute(preview.documentUrl)}" target="_blank" rel="noopener noreferrer">Open Document</a></div>
+    <div class="row g-3 mt-1">${controls}</div>`;
+  container.hidden = false;
+  (preview.missingFields || []).forEach(name => {
+    const input = container.querySelector(`[data-import-field="${CSS.escape(name)}"]`);
+    if (input) input.classList.add('is-invalid');
+  });
+  document.getElementById('confirmChangeLogImportButton').disabled = duplicate;
+}
+
+
+function toHtmlDateValue_(value) {
+  const parsed = parseAppDate_(value);
+  if (!parsed) return '';
+  const year = parsed.date.getFullYear();
+  const month = String(parsed.date.getMonth() + 1).padStart(2, '0');
+  const day = String(parsed.date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+
+function toggleChangeLogImportOther_(select) {
+  const custom = document.querySelector(
+    `[data-import-custom="${CSS.escape(select.dataset.importField)}"]`
+  );
+  if (!custom) return;
+  custom.hidden = select.value !== 'Other';
+  custom.required = select.value === 'Other';
+  select.classList.remove('is-invalid');
+  if (!custom.hidden) custom.focus();
+}
+
+
+function confirmChangeLogDocumentationImport_(button) {
+  if (!changeLogImportPreviewData_ || changeLogImportPreviewData_.duplicate) return;
+  const fields = {};
+  const controls = document.querySelectorAll('#changeLogImportPreview [data-import-field]');
+  for (const control of controls) {
+    const custom = document.querySelector(
+      `[data-import-custom="${CSS.escape(control.dataset.importField)}"]`
+    );
+    const value = control.value === 'Other' && custom
+      ? String(custom.value || '').trim() : String(control.value || '').trim();
+    control.classList.remove('is-invalid');
+    if (control.required && !value) {
+      (control.value === 'Other' && custom ? custom : control).classList.add('is-invalid');
+      (control.value === 'Other' && custom ? custom : control).focus();
+      document.getElementById('changeLogImportFeedback').textContent = 'Complete all required fields.';
+      document.getElementById('changeLogImportFeedback').className = 'form-text mt-2 text-danger';
+      return;
+    }
+    fields[control.dataset.importField] = value;
+  }
+
+  const action = setActionWorking(button, 'Adding...');
+  scriptRunPromise_(
+    'appImportChangeLogDocumentation',
+    runner => runner.appImportChangeLogDocumentation({
+      fileId: changeLogImportPreviewData_.fileId,
+      documentUrl: changeLogImportPreviewData_.documentUrl,
+      fields: fields
+    })
+  ).then(function() {
+    restoreAction(action);
+    bootstrap.Modal.getInstance(document.getElementById('changeLogImportModal')).hide();
+    invalidateClientPage('changeLog');
+    loadPage('changeLog', true);
+    showToast('Documentation added to Change Log.');
+  }).catch(function(error) {
+    restoreAction(action);
+    const feedback = document.getElementById('changeLogImportFeedback');
+    feedback.className = 'form-text mt-2 text-danger';
+    feedback.textContent = getSafeErrorMessage_(error);
+  });
 }
 </script>

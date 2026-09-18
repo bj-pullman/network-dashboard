@@ -302,6 +302,39 @@
 </div>
 
 
+<!-- CHANGE LOG DOCUMENT IMPORT MODAL -->
+<div class="modal fade" id="changeLogImportModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <div class="modal-eyebrow">CHANGE LOG</div>
+          <h5 class="modal-title">Import Documentation</h5>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <label class="form-label" for="changeLogDocumentUrl">SOURCE DOCUMENT</label>
+        <div class="input-group">
+          <input id="changeLogDocumentUrl" type="url" class="form-control" placeholder="Google Doc URL">
+          <button id="readChangeLogDocumentButton" type="button" class="btn btn-brand" onclick="readChangeLogDocumentation_(this)">
+            <i class="fa-solid fa-file-import me-2"></i>Read Document
+          </button>
+        </div>
+        <div id="changeLogImportFeedback" class="form-text mt-2" aria-live="polite"></div>
+        <div id="changeLogImportPreview" class="mt-4" hidden></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+        <button id="confirmChangeLogImportButton" type="button" class="btn btn-brand" onclick="confirmChangeLogDocumentationImport_(this)" disabled>
+          <i class="fa-solid fa-plus me-2"></i>Add to Change Log
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
 <!-- CONFIG MODAL -->
 
 <div

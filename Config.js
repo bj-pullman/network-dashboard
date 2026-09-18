@@ -1,9 +1,20 @@
-var NETWORK_DASHBOARD_VERSION = '1.1.1';
-var NETWORK_DASHBOARD_SCHEMA_VERSION = '7';
+var NETWORK_DASHBOARD_VERSION = '1.2.0';
+var NETWORK_DASHBOARD_SCHEMA_VERSION = '8';
 var NETWORK_DASHBOARD_APP_NAME = 'Network Dashboard';
 var NETWORK_DASHBOARD_SETTINGS_SHEET = 'App Settings';
 var NETWORK_DASHBOARD_BREAK_GLASS_ADMINS_PROPERTY =
   'NETWORK_DASHBOARD_BREAK_GLASS_ADMINS';
+
+var NETWORK_DASHBOARD_CHANGE_CATEGORIES = [
+  'Configuration', 'Deployment', 'Infrastructure', 'Integration',
+  'Maintenance', 'Network', 'Security', 'Testing', 'Upgrade', 'Other'
+];
+
+var NETWORK_DASHBOARD_CHANGE_SYSTEMS = [
+  'Aruba Central', 'Backup', 'Chromebooks', 'Firewall', 'Google Admin',
+  'Intercom', 'Internal Applications', 'Microsoft / Entra', 'Network',
+  'Security Cameras', 'Servers', 'Snipe-IT', 'Wireless', 'Other'
+];
 
 
 function getBreakGlassAdmins_() {
@@ -201,7 +212,7 @@ function getAppSettingDefinitions_() {
       label: 'Date Format',
       category: 'Regional',
       type: 'select',
-      defaultValue: 'yyyy-MM-dd',
+      defaultValue: 'MM/dd/yyyy',
       editable: true,
       options: [
         'yyyy-MM-dd',
@@ -215,13 +226,58 @@ function getAppSettingDefinitions_() {
       label: 'Time Format',
       category: 'Regional',
       type: 'select',
-      defaultValue: 'HH:mm',
+      defaultValue: 'h:mm a',
       editable: true,
       options: [
         'HH:mm',
         'h:mm a'
       ],
       description: 'Preferred time display format.'
+    },
+    {
+      key: 'change_log.categories',
+      label: 'Change Log Categories',
+      category: 'Change Log',
+      type: 'json',
+      defaultValue: JSON.stringify(NETWORK_DASHBOARD_CHANGE_CATEGORIES),
+      editable: true,
+      description: 'Ordered JSON list used by Change Log category selectors.'
+    },
+    {
+      key: 'change_log.system_areas',
+      label: 'Change Log Systems / Areas',
+      category: 'Change Log',
+      type: 'json',
+      defaultValue: JSON.stringify(NETWORK_DASHBOARD_CHANGE_SYSTEMS),
+      editable: true,
+      description: 'Ordered JSON list used by Change Log system / area selectors.'
+    },
+    {
+      key: 'change_log.documentation_folder_id',
+      label: 'Documentation Folder ID',
+      category: 'Change Log',
+      type: 'text',
+      defaultValue: '',
+      editable: true,
+      description: 'Reserved Google Drive folder ID for a future automatic document import job.'
+    },
+    {
+      key: 'change_log.automatic_import_enabled',
+      label: 'Automatic Documentation Import',
+      category: 'Change Log',
+      type: 'boolean',
+      defaultValue: 'false',
+      editable: true,
+      description: 'Reserved switch for future scheduled folder imports; no trigger is created in this release.'
+    },
+    {
+      key: 'change_log.last_import_scan',
+      label: 'Last Documentation Scan',
+      category: 'Change Log',
+      type: 'text',
+      defaultValue: '',
+      editable: false,
+      description: 'Reserved state for a future automatic documentation scan.'
     },
     {
       key: 'users.domain_restriction_enabled',
@@ -279,6 +335,45 @@ function getDefaultTimezone_() {
   } catch (error) {
     return 'Etc/UTC';
   }
+}
+
+
+function getConfiguredStringList_(key, defaults) {
+  let values = [];
+  try {
+    const raw = String(AppConfig.get(key) || '').trim();
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) values = parsed;
+    }
+  } catch (error) {}
+
+  const seen = {};
+  const normalized = (values.length ? values : defaults || [])
+    .map(value => String(value || '').trim())
+    .filter(value => {
+      const identity = value.toLowerCase();
+      if (!value || seen[identity]) return false;
+      seen[identity] = true;
+      return true;
+    });
+
+  if (!seen.other) normalized.push('Other');
+  return normalized;
+}
+
+
+function getChangeLogConfiguredOptions_() {
+  return {
+    'Category': getConfiguredStringList_(
+      'change_log.categories',
+      NETWORK_DASHBOARD_CHANGE_CATEGORIES
+    ),
+    'System / Area': getConfiguredStringList_(
+      'change_log.system_areas',
+      NETWORK_DASHBOARD_CHANGE_SYSTEMS
+    )
+  };
 }
 
 
@@ -1080,9 +1175,9 @@ var AppConfig = (function() {
         timezone:
           values['regional.timezone'] || getDefaultTimezone_(),
         dateFormat:
-          values['regional.date_format'] || 'yyyy-MM-dd',
+          values['regional.date_format'] || 'MM/dd/yyyy',
         timeFormat:
-          values['regional.time_format'] || 'HH:mm'
+          values['regional.time_format'] || 'h:mm a'
       },
       userPolicy: {
         domainRestrictionEnabled:

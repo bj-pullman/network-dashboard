@@ -693,6 +693,10 @@ Save the production `/exec` URL in Network Dashboard using:
 app.web_app_url
 ```
 
+All pages use the same deployed `/exec` URL. Dashboard opens by default, and sidebar navigation switches pages inside the application without changing the browser URL or reloading the shell.
+
+The Change Log **Import Documentation** action reads Google Docs by file ID. The first use may request additional Google Docs authorization from the account under which the web app operation executes. Accept that authorization only for the intended Network Dashboard Apps Script project.
+
 ---
 
 # 17. Validate the Production Installation

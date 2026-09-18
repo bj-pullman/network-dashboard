@@ -1145,20 +1145,7 @@ function closeDashboardWidgetSettings_() {
 function formatDashboardTimestamp_(
   value
 ) {
-
-  const text =
-    String(value || '')
-      .trim();
-
-  if (!text) {
-    return '';
-  }
-
-  try {
-    return new Date(text).toLocaleString();
-  } catch (error) {
-    return text;
-  }
+  return formatAppDate_(value, true);
 }
 
 </script>

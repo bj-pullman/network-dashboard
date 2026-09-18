@@ -211,13 +211,7 @@ const APP_PAGE_CONFIG = {
       'Change Date', 'Change Name', 'Category', 'System / Area',
       'Summary', 'Documentation URL', 'Implemented By', 'Status'
     ],
-    suggestedOptions: {
-      'Category': [
-        'Firewall', 'Switching', 'Wireless', 'Server', 'Application',
-        'Internet/WAN', 'Security', 'Other'
-      ],
-      'Status': ['Implemented', 'Monitoring', 'Rolled Back', 'Retired']
-    }
+    suggestedOptions: {}
   },
 
   busCameras: {
@@ -2397,10 +2391,9 @@ function getAppTableData_(
       column => {
 
         const value =
-          String(
-            sourceRow[
-              column.sourceIndex
-            ] || ''
+          formatNetworkDashboardField_(
+            column.header,
+            sourceRow[column.sourceIndex]
           );
 
 
@@ -2504,7 +2497,13 @@ function getAppTableData_(
       ),
 
     suggestedOptions:
-      config.suggestedOptions || {},
+      pageKey === 'changeLog'
+        ? Object.assign(
+            {},
+            getChangeLogConfiguredOptions_(),
+            { 'Status': getControlledOptions_('changeStatus') }
+          )
+        : config.suggestedOptions || {},
 
     centralSync:
       !!config.centralSync,
@@ -2973,10 +2972,9 @@ function readServerSourceSheet_(
       column => {
 
         const value =
-          String(
-            sourceRow[
-              column.sourceIndex
-            ] || ''
+          formatNetworkDashboardField_(
+            column.header,
+            sourceRow[column.sourceIndex]
           );
 
 
@@ -3536,10 +3534,9 @@ function parseStructuredTable_(
       column => {
 
         const value =
-          String(
-            sourceRow[
-              column.sourceIndex
-            ] || ''
+          formatNetworkDashboardField_(
+            column.field,
+            sourceRow[column.sourceIndex]
           );
 
 
@@ -5343,7 +5340,10 @@ function buildDashboardRecentChanges_() {
       headers.forEach((header, columnIndex) => {
         if (header) {
           row[header] =
-            String(sourceRow[columnIndex] || '');
+            formatNetworkDashboardField_(
+              header,
+              sourceRow[columnIndex]
+            );
         }
       });
 
@@ -6090,7 +6090,10 @@ function getInternetWanPageData_(
     headers.forEach((header, columnIndex) => {
       if (header) {
         row[header] =
-          String(sourceRow[columnIndex] || '');
+          formatNetworkDashboardField_(
+            header,
+            sourceRow[columnIndex]
+          );
       }
     });
 
@@ -7749,11 +7752,14 @@ function appUpdateRecord(
       ) {
 
         output[index] =
-          normalizeControlledSheetField_(
-            targetSheetName,
+          normalizeNetworkDashboardSheetValue_(
             name,
-            record[name],
-            false
+            normalizeControlledSheetField_(
+              targetSheetName,
+              name,
+              record[name],
+              false
+            )
           );
 
       }
@@ -7878,11 +7884,14 @@ function appAddRecord(
       return Object.prototype
         .hasOwnProperty
         .call(record, name)
-          ? normalizeControlledSheetField_(
-              config.sheet,
+          ? normalizeNetworkDashboardSheetValue_(
               name,
-              record[name],
-              false
+              normalizeControlledSheetField_(
+                config.sheet,
+                name,
+                record[name],
+                false
+              )
             )
           : '';
 

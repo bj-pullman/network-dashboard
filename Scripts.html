@@ -137,6 +137,73 @@ const SCRIPT_RUN_TIMEOUT_MS =
   60000;
 
 
+function parseAppDate_(value) {
+  if (value === null || value === undefined || value === '') return null;
+  if (value instanceof Date) return isNaN(value.getTime()) ? null : { date: value, dateOnly: false };
+  const text = String(value).trim();
+  if (!text) return null;
+  let match = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (match) return {
+    date: new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])),
+    dateOnly: true, year: Number(match[1]), month: Number(match[2]), day: Number(match[3])
+  };
+  match = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (match) return {
+    date: new Date(Number(match[3]), Number(match[1]) - 1, Number(match[2])),
+    dateOnly: true, year: Number(match[3]), month: Number(match[1]), day: Number(match[2])
+  };
+  const date = new Date(text);
+  return isNaN(date.getTime()) ? null : { date: date, dateOnly: false };
+}
+
+
+function formatAppDate_(value, includeTime) {
+  const parsed = parseAppDate_(value);
+  if (!parsed) return String(value == null ? '' : value).trim();
+  if (parsed.dateOnly) {
+    return String(parsed.month).padStart(2, '0') + '/' +
+      String(parsed.day).padStart(2, '0') + '/' + parsed.year;
+  }
+  const options = {
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  };
+  if (includeTime && !parsed.dateOnly) {
+    options.hour = 'numeric';
+    options.minute = '2-digit';
+    options.hour12 = true;
+    const timezone = appBootstrap && appBootstrap.config &&
+      appBootstrap.config.regional && appBootstrap.config.regional.timezone;
+    if (timezone) options.timeZone = timezone;
+  }
+  try {
+    return new Intl.DateTimeFormat('en-US', options).format(parsed.date);
+  } catch (error) {
+    return String(value);
+  }
+}
+
+
+function formatAppDateTimeInput_(value) {
+  const parsed = parseAppDate_(value);
+  if (!parsed) return '';
+  const timezone = appBootstrap && appBootstrap.config &&
+    appBootstrap.config.regional && appBootstrap.config.regional.timezone;
+  const options = {
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+  };
+  if (timezone) options.timeZone = timezone;
+  try {
+    const parts = {};
+    new Intl.DateTimeFormat('en-CA', options).formatToParts(parsed.date)
+      .forEach(part => { if (part.type !== 'literal') parts[part.type] = part.value; });
+    return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+  } catch (error) {
+    return '';
+  }
+}
+
+
 /*******************************************************
  * STARTUP
  *******************************************************/
@@ -206,7 +273,6 @@ window.addEventListener(
 
   }
 );
-
 
 /*******************************************************
  * APP INITIALIZATION
@@ -2404,7 +2470,11 @@ function openRecordModal(
     'row g-3';
 
 
-  currentHeaders.forEach(
+  const hiddenEditorColumns = new Set(
+    currentRecordDefinition && currentRecordDefinition.hiddenEditorColumns || []
+  );
+
+  currentHeaders.filter(header => !hiddenEditorColumns.has(header)).forEach(
     (header, index) => {
 
       const column =
@@ -2450,6 +2520,18 @@ function openRecordModal(
           ? currentPageData.suggestedOptions[header] || []
           : [];
 
+      const configurableSelect =
+        currentRecordDefinition &&
+        Array.isArray(currentRecordDefinition.configurableSelectFields) &&
+        currentRecordDefinition.configurableSelectFields.includes(header);
+
+      const selectOptions =
+        options.length
+          ? options
+          : configurableSelect
+            ? suggestions
+            : [];
+
       const credentialField =
         typeof isPasswordHeaderClient === 'function' &&
         isPasswordHeaderClient(
@@ -2460,7 +2542,7 @@ function openRecordModal(
         currentPageData.permission === 'edit';
 
       const input =
-        options.length
+        selectOptions.length
           ? document.createElement(
               'select'
             )
@@ -2470,7 +2552,7 @@ function openRecordModal(
 
 
       input.className =
-        options.length
+        selectOptions.length
           ? 'form-select'
           : 'form-control';
 
@@ -2510,6 +2592,7 @@ function openRecordModal(
 
       if (
         suggestions.length &&
+        !configurableSelect &&
         input.tagName === 'INPUT'
       ) {
         const list =
@@ -2541,7 +2624,7 @@ function openRecordModal(
       }
 
 
-      if (options.length) {
+      if (selectOptions.length) {
 
         const currentValue =
           String(
@@ -2550,12 +2633,12 @@ function openRecordModal(
 
         const optionList =
           currentValue &&
-          !options.some(option =>
+          !selectOptions.some(option =>
             String(option).toLowerCase() ===
             currentValue.toLowerCase()
           )
-            ? [currentValue].concat(options)
-            : options;
+            ? [currentValue].concat(selectOptions)
+            : selectOptions;
 
         optionList.forEach(option => {
 
@@ -2578,15 +2661,25 @@ function openRecordModal(
 
         input.value =
           currentValue ||
-          options[0];
+          selectOptions[0];
 
       } else {
 
-        input.value =
-          credentialField &&
-          editingRow
+        const recordValue =
+          credentialField && editingRow
             ? ''
             : record[header] || '';
+
+        input.value =
+          input.type === 'date' && recordValue
+            ? (function() {
+                const parsed = parseAppDate_(recordValue);
+                if (!parsed) return '';
+                return parsed.date.getFullYear() + '-' +
+                  String(parsed.date.getMonth() + 1).padStart(2, '0') + '-' +
+                  String(parsed.date.getDate()).padStart(2, '0');
+              })()
+            : recordValue;
 
       }
 
@@ -2599,6 +2692,21 @@ function openRecordModal(
       column.appendChild(
         input
       );
+
+      if (configurableSelect) {
+        const custom = document.createElement('input');
+        custom.type = 'text';
+        custom.className = 'form-control mt-2';
+        custom.placeholder = 'Enter a custom value';
+        custom.dataset.customFor = header;
+        custom.hidden = input.value !== 'Other';
+        input.addEventListener('change', function() {
+          custom.hidden = input.value !== 'Other';
+          custom.required = input.required && input.value === 'Other';
+          if (!custom.hidden) custom.focus();
+        });
+        column.appendChild(custom);
+      }
 
       if (
         credentialField &&
@@ -2652,17 +2760,42 @@ function saveRecordFromModal() {
     {};
 
 
-  document
+  const formFields = document
     .querySelectorAll(
       '#recordModalBody [data-header]'
-    )
-    .forEach(
+    );
+
+  for (const input of formFields) {
+    if (!input.checkValidity()) {
+      input.reportValidity();
+      return;
+    }
+    const custom = document.querySelector(
+      '#recordModalBody [data-custom-for="' + CSS.escape(input.dataset.header) + '"]'
+    );
+    if (input.value === 'Other' && custom && !String(custom.value || '').trim()) {
+      custom.hidden = false;
+      custom.required = true;
+      custom.reportValidity();
+      return;
+    }
+  }
+
+  formFields.forEach(
       input => {
+
+        const custom = document.querySelector(
+          '#recordModalBody [data-custom-for="' + CSS.escape(input.dataset.header) + '"]'
+        );
+
+        const value = input.value === 'Other' && custom
+          ? String(custom.value || '').trim()
+          : input.value;
 
         record[
           input.dataset.header
         ] =
-          input.value;
+          value;
 
       }
     );

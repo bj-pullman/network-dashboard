@@ -50,6 +50,14 @@
 
   --shadow:
     0 5px 18px rgba(13, 35, 66, .07);
+
+  --layer-content: 1;
+  --layer-sticky: 20;
+  --layer-navigation: 100;
+  --layer-popover: 200;
+  --layer-modal: 1055;
+  --layer-working: 2050;
+  --layer-toast: 2100;
 }
 
 
@@ -92,7 +100,7 @@ textarea {
 
   max-width: 100%;
 
-  overflow-x: hidden;
+  overflow: visible;
 }
 
 
@@ -116,7 +124,7 @@ textarea {
 
   overflow-y: auto;
 
-  z-index: 100;
+  z-index: var(--layer-navigation);
 }
 
 
@@ -310,11 +318,14 @@ textarea {
 }
 
 .help-menu-shell {
+  position: relative;
   flex: 0 0 auto;
+  z-index: var(--layer-popover);
 }
 
 .help-menu-shell .dropdown-menu {
   min-width: 250px;
+  z-index: var(--layer-popover);
 }
 
 .help-menu-heading {
@@ -365,11 +376,12 @@ textarea {
 
   max-width: calc(100% - var(--sidebar-width));
 
-  overflow-x: hidden;
+  overflow: visible;
 }
 
 
 #pageHeader {
+  position: relative;
   min-height: 118px;
 
   display: flex;
@@ -389,6 +401,9 @@ textarea {
   min-width: 0;
 
   max-width: 100%;
+
+  overflow: visible;
+  z-index: var(--layer-navigation);
 }
 
 
@@ -482,11 +497,14 @@ textarea {
 
 
 #pageContent {
+  position: relative;
   padding: 25px 30px 35px;
 
   min-width: 0;
 
   max-width: 100%;
+
+  z-index: var(--layer-content);
 
   overflow-x: hidden;
 }
@@ -609,7 +627,7 @@ textarea {
 .app-working-modal-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 2050;
+  z-index: var(--layer-working);
   display: grid;
   place-items: center;
   padding: 24px;
@@ -1366,7 +1384,15 @@ textarea {
   right: 20px;
   bottom: 20px;
 
-  z-index: 9999;
+  z-index: var(--layer-toast);
+}
+
+.modal {
+  z-index: var(--layer-modal);
+}
+
+.modal-backdrop {
+  z-index: calc(var(--layer-modal) - 5);
 }
 
 

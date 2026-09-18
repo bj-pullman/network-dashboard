@@ -1469,53 +1469,7 @@ function syncOutagesFromUptimeRobot(
 function formatOutageDateDisplay_(
   value
 ) {
-
-  const text =
-    String(value || '').trim();
-
-  if (!text) {
-    return '';
-  }
-
-  const date =
-    new Date(text);
-
-  if (
-    isNaN(
-      date.getTime()
-    )
-  ) {
-    return text;
-  }
-
-  const regional =
-    appBootstrap && appBootstrap.config && appBootstrap.config.regional || {};
-
-  const locale =
-    regional.dateFormat === 'dd/MM/yyyy'
-      ? 'en-GB'
-      : regional.dateFormat === 'yyyy-MM-dd'
-        ? 'en-CA'
-        : 'en-US';
-
-  const options = {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: regional.timeFormat === 'h:mm a'
-  };
-
-  if (regional.timezone) {
-    options.timeZone = regional.timezone;
-  }
-
-  try {
-    return new Intl.DateTimeFormat(locale, options).format(date);
-  } catch (error) {
-    return date.toISOString();
-  }
+  return formatAppDate_(value, true);
 }
 
 
@@ -1535,42 +1489,7 @@ function formatOutageDurationClient_(minutes) {
 function formatOutageDateInput_(
   value
 ) {
-
-  const text =
-    String(value || '').trim();
-
-  if (!text) {
-    return '';
-  }
-
-  const date =
-    new Date(text);
-
-  if (
-    isNaN(
-      date.getTime()
-    )
-  ) {
-    return '';
-  }
-
-  const pad =
-    value =>
-      String(value)
-        .padStart(
-          2,
-          '0'
-        );
-
-  return date.getFullYear() +
-    '-' +
-    pad(date.getMonth() + 1) +
-    '-' +
-    pad(date.getDate()) +
-    'T' +
-    pad(date.getHours()) +
-    ':' +
-    pad(date.getMinutes());
+  return formatAppDateTimeInput_(value);
 }
 
 

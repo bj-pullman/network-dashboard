@@ -362,7 +362,7 @@ Application-controlled structure is protected to reduce accidental schema change
 
 Network Dashboard uses a lightweight application shell.
 
-Page renderers are included in the shell and routed by page key.
+Page renderers are included in the shell and selected by page key. The deployed `/exec` URL opens Dashboard by default, and major pages switch internally without changing the browser URL or reloading the application shell.
 
 Operational datasets are not all loaded during application startup.
 
@@ -440,6 +440,21 @@ Current optional modules include:
 SSIDs are maintained manually in Google Sheets and support per-page `view`/`edit` RBAC through the `ssids` permission key. The inventory separates Security Level (Open, Personal, Enterprise, or a custom value) from Key Management and includes practical Aruba-oriented fields for radio bands, authentication servers, MAC authentication, client IP/VLAN assignment, and VLAN. Passwords are optional and use the shared restricted-field workflow: normal page data omits raw values, edit-authorized users may reveal them on demand, and blank edits preserve the saved password.
 
 Change Log is a Google Sheets-backed infrastructure and application change-record index. It supports standard page permissions, search, filters, column selection, optional external documentation links, and a Recent Changes Dashboard widget.
+
+Category and System / Area choices are read from the editable JSON App Settings keys `change_log.categories` and `change_log.system_areas`. Both lists include `Other`; the editor stores the entered custom value instead of the word `Other`. Existing values outside the configured lists remain valid.
+
+Editors can use **Import Documentation** to read a Google Doc, review and correct parsed metadata, and then explicitly add one Change Log record. The source document URL and Drive file ID are retained, and an already imported file ID is blocked. A document metadata block should use this form:
+
+```text
+Change Date: 09/18/2026
+Change Name: Accuplacer Kiosk Installation
+Category: Testing
+System / Area: Google Admin
+Summary: Installed Accuplacer for Students > High devices.
+Implemented By: BJ Pullman
+```
+
+The metadata labels are case-insensitive and whitespace-tolerant. Other document sections are not parsed. Reading a Doc requires the deploying/executing account to authorize Google Docs access. The settings `change_log.documentation_folder_id`, `change_log.automatic_import_enabled`, and `change_log.last_import_scan` reserve configuration for a future scheduled folder scanner; this release does not create an automatic-import trigger.
 
 Enabling a module provisions its required application structure.
 
@@ -1033,13 +1048,13 @@ Network Dashboard tracks application and schema versions independently.
 Current application version:
 
 ```text
-1.1.1
+1.2.0
 ```
 
 Current schema version:
 
 ```text
-6
+8
 ```
 
 The source release and schema constants define the expected versions. App Settings records the versions successfully installed by Setup or Update / Repair; Validation reports installed and expected values separately.

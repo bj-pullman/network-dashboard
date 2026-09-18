@@ -140,8 +140,8 @@ Network Dashboard
 Open **Help -> About Network Dashboard** in the production web app and confirm:
 
 ```text
-Application Version: 1.1.1
-Schema Version: 7
+Application Version: 1.2.0
+Schema Version: 8
 ```
 
 Then test the functionality affected by the release.
@@ -197,13 +197,13 @@ Validation reports expected and installed versions separately:
 
 ```text
 APPLICATION VERSION
-Installed: 1.1.1
-Expected: 1.1.1
+Installed: 1.2.0
+Expected: 1.2.0
 Status: Current
 
 SCHEMA VERSION
-Installed: 6
-Expected: 6
+Installed: 8
+Expected: 8
 Status: Current
 ```
 
@@ -240,7 +240,7 @@ After validation, open the configured production dashboard from the Google Sheet
 
 * the Dashboard and navigation load;
 * organization branding and settings remain intact;
-* **About Network Dashboard** reports application version `1.1.1` and schema `6`;
+* **About Network Dashboard** reports application version `1.2.0` and schema `8`;
 * the features changed by the release work as expected;
 * affected integrations work where applicable;
 * affected RBAC behavior works with an appropriate non-admin account;
@@ -363,8 +363,8 @@ Organization-owned data structure revision.
 For example, application and schema versions may advance independently:
 
 ```text
-Application 1.1.1
-Schema 7
+Application 1.2.0
+Schema 8
 ```
 
 A patch release does not automatically require a new schema version. The schema version changes only when the data structure requires a new migration boundary.
@@ -374,6 +374,8 @@ Schema 5 adds the SSIDs sheet and migrates Security Cameras from `Location` to `
 Schema 6 separates SSID `Security` from `Authentication` and renames `Scope / Location` to `Availability`. Update / Repair normalizes recognized combined authentication values, preserves unrecognized values and extra organization columns, and creates a verified backup before rewriting populated SSID data.
 
 Schema 7 migrates SSIDs to the Aruba-oriented inventory model and adds the managed Change Log sheet. The SSID migration maps legacy `Type`, `Security`, and `Authentication` values into Primary Usage, Security Level, and Key Management; retains passwords, VLANs, availability, notes, formulas, and organization-specific columns; applies safe defaults for new status/boolean fields; and creates a verified backup before rewriting populated SSID data.
+
+Schema 8 additively appends `Documentation File ID`, `Imported At`, and `Import Source` to Change Log and seeds configurable Change Log category/system lists plus future folder-import placeholders. Existing rows, columns, settings, and source records are preserved. Run **Update / Repair** after deploying this release; no separate migration function is required.
 
 ## Schema migrations
 
@@ -466,8 +468,8 @@ Never place API keys, secrets, refresh tokens, private keys, or organization cre
 
 ```text
 [ ] Open Dashboard loads the production GUI
-[ ] About reports Application Version 1.1.1
-[ ] About reports Schema Version 7
+[ ] About reports Application Version 1.2.0
+[ ] About reports Schema Version 8
 [ ] Affected functionality tested
 [ ] Affected integrations tested where applicable
 [ ] Managed protections verified where applicable
