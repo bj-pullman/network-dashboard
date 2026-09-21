@@ -357,13 +357,13 @@ function buildRecordColumns_(data, definition) {
       '_actions',
 
     width:
-      82,
+      definition.viewRecord ? 122 : 82,
 
     minWidth:
-      82,
+      definition.viewRecord ? 122 : 82,
 
     maxWidth:
-      82,
+      definition.viewRecord ? 122 : 82,
 
     resizable:
       false,
@@ -403,6 +403,35 @@ function buildRecordColumns_(data, definition) {
 
         wrapper.className =
           'table-row-actions';
+
+
+        if (
+          typeof definition.viewRecord === 'function'
+        ) {
+
+          const view =
+            document.createElement(
+              'button'
+            );
+
+          view.type = 'button';
+          view.className =
+            'table-row-action table-row-action-view';
+          view.title = 'View details';
+          view.innerHTML =
+            '<i class="fa-regular fa-eye"></i>';
+
+          view.addEventListener(
+            'click',
+            function(event) {
+              event.stopPropagation();
+              definition.viewRecord(rowData);
+            }
+          );
+
+          wrapper.appendChild(view);
+
+        }
 
 
         /*
@@ -1651,6 +1680,24 @@ function openRowActionMenu(
 
   const serial =
     rowData['Serial Number'] || '';
+
+
+  if (
+    currentRecordDefinition &&
+    typeof currentRecordDefinition.viewRecord === 'function'
+  ) {
+
+    menu.appendChild(
+      createActionMenuItem(
+        'fa-eye',
+        'View Details',
+        function() {
+          currentRecordDefinition.viewRecord(rowData);
+        }
+      )
+    );
+
+  }
 
 
   if (

@@ -782,10 +782,21 @@ function renderIntegrationCard(integration) {
             : ''
         }
 
-        ${
-          integration.hasOperationalPage &&
-          integration.pageKey &&
-          integration.enabled
+        ${integration.serviceUrl
+          ? `
+              <a
+                class="${secondaryActionClass}"
+                href="${escapeAttribute(integration.serviceUrl)}"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <i class="fa-solid fa-arrow-up-right-from-square me-2"></i>
+                Open
+              </a>
+            `
+          : integration.hasOperationalPage && integration.pageKey && integration.enabled &&
+              appBootstrap && appBootstrap.pages &&
+              appBootstrap.pages.some(page => page.key === integration.pageKey)
             ? `
               <button
                 type="button"
@@ -919,13 +930,9 @@ function formatOAuthRefreshTimestamp_(
   const text = String(value || '').trim();
   if (!text) return 'Never';
 
-  const date = new Date(text);
-  if (Number.isNaN(date.getTime())) return 'Unknown';
-
-  return new Intl.DateTimeFormat('en-US', {
-    dateStyle: 'long',
-    timeStyle: 'short'
-  }).format(date);
+  return parseAppTimestamp_(text)
+    ? formatAppDate_(text, true)
+    : 'Unknown';
 }
 
 
@@ -1043,11 +1050,9 @@ function formatIntegrationTimestamp_(
     return 'Never';
   }
 
-  try {
-    return new Date(text).toLocaleString();
-  } catch (error) {
-    return text;
-  }
+  return parseAppTimestamp_(text)
+    ? formatAppDate_(text, true)
+    : text;
 }
 
 

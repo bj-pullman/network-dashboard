@@ -32,6 +32,7 @@ function getNetworkDashboardSchema_() {
         'Stack Info',
         'Port Capacity (Active)',
         'Campus',
+        'Closet ID',
         'Location',
         'Notes',
         'Last Sync'
@@ -48,7 +49,8 @@ function getNetworkDashboardSchema_() {
         'Management Mode',
         'Stack Info',
         'Port Capacity (Active)',
-        'Campus'
+        'Campus',
+        'Closet ID'
       ],
       frozenRows: 1,
       tabColor: '#2563eb'
@@ -74,6 +76,7 @@ function getNetworkDashboardSchema_() {
         'Type',
         'Status',
         'Location',
+        'Closet ID',
         'Operating System',
         'ThreatDown Installed',
         'Wazuh Installed',
@@ -83,7 +86,8 @@ function getNetworkDashboardSchema_() {
         'Server Name',
         'IP Address',
         'Type',
-        'Status'
+        'Status',
+        'Closet ID'
       ],
       frozenRows: 1,
       tabColor: '#2563eb'
@@ -99,6 +103,7 @@ function getNetworkDashboardSchema_() {
         'Type',
         'Status',
         'Location',
+        'Closet ID',
         'Offline Since',
         'Notes'
       ],
@@ -106,10 +111,87 @@ function getNetworkDashboardSchema_() {
         'Server Name',
         'IP Address',
         'Type',
-        'Status'
+        'Status',
+        'Closet ID'
       ],
       frozenRows: 1,
       tabColor: '#2563eb'
+    },
+
+    'Network Closets': {
+      type: 'operational',
+      category: 'Infrastructure',
+      headers: [
+        'Closet ID',
+        'Campus',
+        'Closet / Room Name',
+        'Room Number',
+        'Type',
+        'Location Description',
+        'Map / Floor Plan URL',
+        'Map / Marker Notes',
+        'Electrical Circuit / Panel',
+        'Outlet / Connector Type',
+        'Redundant Power Available',
+        'Power Notes',
+        'Notes'
+      ],
+      requiredHeaders: [
+        'Closet ID',
+        'Campus',
+        'Closet / Room Name',
+        'Room Number',
+        'Type',
+        'Location Description',
+        'Map / Floor Plan URL',
+        'Map / Marker Notes',
+        'Electrical Circuit / Panel',
+        'Outlet / Connector Type',
+        'Redundant Power Available',
+        'Power Notes',
+        'Notes'
+      ],
+      frozenRows: 1,
+      tabColor: '#0f766e'
+    },
+
+    'Network Closet UPS': {
+      type: 'operational',
+      category: 'Infrastructure',
+      headers: [
+        'UPS ID',
+        'Closet ID',
+        'Manufacturer',
+        'Model',
+        'Asset Tag',
+        'Serial Number',
+        'Capacity / VA',
+        'Network Managed',
+        'Management IP',
+        'Input Connector Type',
+        'Output / Receptacle Type',
+        'Battery Replacement Date',
+        'Last Service Date',
+        'Notes'
+      ],
+      requiredHeaders: [
+        'UPS ID',
+        'Closet ID',
+        'Manufacturer',
+        'Model',
+        'Asset Tag',
+        'Serial Number',
+        'Capacity / VA',
+        'Network Managed',
+        'Management IP',
+        'Input Connector Type',
+        'Output / Receptacle Type',
+        'Battery Replacement Date',
+        'Last Service Date',
+        'Notes'
+      ],
+      frozenRows: 1,
+      tabColor: '#0f766e'
     },
 
     'IP Route Tables': {
@@ -2734,6 +2816,11 @@ function getNetworkDashboardSchemaMigrations_() {
     {
       from: 7,
       to: 8,
+      run: function() {}
+    },
+    {
+      from: 8,
+      to: 9,
       run: function() {}
     }
   ];

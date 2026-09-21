@@ -1,5 +1,5 @@
 var NETWORK_DASHBOARD_VERSION = '1.2.0';
-var NETWORK_DASHBOARD_SCHEMA_VERSION = '8';
+var NETWORK_DASHBOARD_SCHEMA_VERSION = '9';
 var NETWORK_DASHBOARD_APP_NAME = 'Network Dashboard';
 var NETWORK_DASHBOARD_SETTINGS_SHEET = 'App Settings';
 var NETWORK_DASHBOARD_BREAK_GLASS_ADMINS_PROPERTY =
@@ -316,6 +316,12 @@ function getAppSettingDefinitions_() {
 function getDefaultTimezone_() {
 
   try {
+    const projectTimezone = Session.getScriptTimeZone();
+    if (projectTimezone) return projectTimezone;
+  } catch (error) {}
+
+
+  try {
 
     const spreadsheet =
       SpreadsheetApp.getActiveSpreadsheet();
@@ -329,12 +335,7 @@ function getDefaultTimezone_() {
 
   } catch (error) {}
 
-
-  try {
-    return Session.getScriptTimeZone() || 'Etc/UTC';
-  } catch (error) {
-    return 'Etc/UTC';
-  }
+  return 'Etc/UTC';
 }
 
 
@@ -1125,6 +1126,9 @@ var AppConfig = (function() {
     const values =
       getAll();
 
+    const regional =
+      getNetworkDashboardRegionalPreferences_();
+
     return {
       appName:
         values['app.name'] ||
@@ -1171,14 +1175,7 @@ var AppConfig = (function() {
         headerFontColor:
           values['branding.header_font_color'] || '#0d2342'
       },
-      regional: {
-        timezone:
-          values['regional.timezone'] || getDefaultTimezone_(),
-        dateFormat:
-          values['regional.date_format'] || 'MM/dd/yyyy',
-        timeFormat:
-          values['regional.time_format'] || 'h:mm a'
-      },
+      regional: regional,
       userPolicy: {
         domainRestrictionEnabled:
           String(

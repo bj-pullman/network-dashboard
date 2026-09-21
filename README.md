@@ -1054,7 +1054,7 @@ Current application version:
 Current schema version:
 
 ```text
-8
+9
 ```
 
 The source release and schema constants define the expected versions. App Settings records the versions successfully installed by Setup or Update / Repair; Validation reports installed and expected values separately.

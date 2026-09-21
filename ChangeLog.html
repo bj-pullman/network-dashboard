@@ -24,10 +24,11 @@ RECORD_PAGE_DEFINITIONS.changeLog = {
         return escapeHtml(formatAppDate_(cell.getValue(), false));
       },
       sorter: function(left, right) {
-        const leftTime = Date.parse(String(left || ''));
-        const rightTime = Date.parse(String(right || ''));
-        return (Number.isFinite(leftTime) ? leftTime : 0) -
-          (Number.isFinite(rightTime) ? rightTime : 0);
+        const leftParts = parseAppDateOnly_(left);
+        const rightParts = parseAppDateOnly_(right);
+        const leftValue = leftParts ? leftParts.year * 10000 + leftParts.month * 100 + leftParts.day : 0;
+        const rightValue = rightParts ? rightParts.year * 10000 + rightParts.month * 100 + rightParts.day : 0;
+        return leftValue - rightValue;
       }
     },
     'Change Name': { minWidth: 190 },
@@ -205,12 +206,8 @@ function renderChangeLogImportPreview_(preview) {
 
 
 function toHtmlDateValue_(value) {
-  const parsed = parseAppDate_(value);
-  if (!parsed) return '';
-  const year = parsed.date.getFullYear();
-  const month = String(parsed.date.getMonth() + 1).padStart(2, '0');
-  const day = String(parsed.date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  const parts = parseAppDateOnly_(value);
+  return parts ? formatAppDateParts_(parts, 'yyyy-MM-dd') : '';
 }
 
 

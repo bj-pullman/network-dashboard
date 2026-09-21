@@ -106,6 +106,7 @@ const structuredTables =
 const PAGE_RENDERER_FUNCTIONS = {
   dashboard: 'renderDashboard', switches: 'renderSwitchesPage',
   accessPoints: 'renderAccessPointsPage', servers: 'renderServersPage',
+  networkClosets: 'renderNetworkClosetsPage',
   routes: 'renderRoutesPage', securityCameras: 'renderSecurityCamerasPage',
   ssids: 'renderSsidsPage',
   changeLog: 'renderChangeLogPage',
@@ -137,46 +138,110 @@ const SCRIPT_RUN_TIMEOUT_MS =
   60000;
 
 
-function parseAppDate_(value) {
+function getClientRegionalPreferences_() {
+  const regional = appBootstrap && appBootstrap.config && appBootstrap.config.regional || {};
+  const dateFormat = ['yyyy-MM-dd', 'MM/dd/yyyy', 'dd/MM/yyyy'].includes(regional.dateFormat)
+    ? regional.dateFormat : 'MM/dd/yyyy';
+  const timeFormat = ['HH:mm', 'h:mm a'].includes(regional.timeFormat)
+    ? regional.timeFormat : 'h:mm a';
+  return { timezone: regional.timezone || 'Etc/UTC', dateFormat, timeFormat };
+}
+
+
+function parseAppDateOnly_(value) {
   if (value === null || value === undefined || value === '') return null;
-  if (value instanceof Date) return isNaN(value.getTime()) ? null : { date: value, dateOnly: false };
+  if (value instanceof Date) {
+    return isNaN(value.getTime()) ? null : {
+      year: value.getFullYear(), month: value.getMonth() + 1, day: value.getDate()
+    };
+  }
+  if (typeof value === 'object') {
+    const parts = { year: Number(value.year), month: Number(value.month), day: Number(value.day) };
+    return isValidAppDateParts_(parts.year, parts.month, parts.day) ? parts : null;
+  }
   const text = String(value).trim();
   if (!text) return null;
   let match = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-  if (match) return {
-    date: new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])),
-    dateOnly: true, year: Number(match[1]), month: Number(match[2]), day: Number(match[3])
-  };
+  if (match) return makeAppDateParts_(match[1], match[2], match[3]);
   match = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (match) return {
-    date: new Date(Number(match[3]), Number(match[1]) - 1, Number(match[2])),
-    dateOnly: true, year: Number(match[3]), month: Number(match[1]), day: Number(match[2])
-  };
+  if (!match) return null;
+  const first = Number(match[1]);
+  const second = Number(match[2]);
+  const dayFirst = getClientRegionalPreferences_().dateFormat === 'dd/MM/yyyy';
+  const month = first > 12 ? second : second > 12 ? first : dayFirst ? second : first;
+  const day = first > 12 ? first : second > 12 ? second : dayFirst ? first : second;
+  return makeAppDateParts_(match[3], month, day);
+}
+
+
+function makeAppDateParts_(year, month, day) {
+  const parts = { year: Number(year), month: Number(month), day: Number(day) };
+  return isValidAppDateParts_(parts.year, parts.month, parts.day) ? parts : null;
+}
+
+
+function isValidAppDateParts_(year, month, day) {
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return false;
+  if (month < 1 || month > 12 || day < 1) return false;
+  return day <= new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+
+function parseAppTimestamp_(value) {
+  if (value === null || value === undefined || value === '') return null;
+  if (value instanceof Date) return isNaN(value.getTime()) ? null : value;
+  const text = String(value).trim();
+  if (!text || parseAppDateOnly_(text)) return null;
   const date = new Date(text);
-  return isNaN(date.getTime()) ? null : { date: date, dateOnly: false };
+  return isNaN(date.getTime()) ? null : date;
+}
+
+
+function parseAppDate_(value) {
+  const dateOnly = parseAppDateOnly_(value);
+  if (dateOnly) return Object.assign({ dateOnly: true }, dateOnly);
+  const timestamp = parseAppTimestamp_(value);
+  return timestamp ? { date: timestamp, dateOnly: false } : null;
+}
+
+
+function formatAppDateParts_(parts, format) {
+  const year = String(parts.year).padStart(4, '0');
+  const month = String(parts.month).padStart(2, '0');
+  const day = String(parts.day).padStart(2, '0');
+  if (format === 'yyyy-MM-dd') return `${year}-${month}-${day}`;
+  if (format === 'dd/MM/yyyy') return `${day}/${month}/${year}`;
+  return `${month}/${day}/${year}`;
 }
 
 
 function formatAppDate_(value, includeTime) {
-  const parsed = parseAppDate_(value);
-  if (!parsed) return String(value == null ? '' : value).trim();
-  if (parsed.dateOnly) {
-    return String(parsed.month).padStart(2, '0') + '/' +
-      String(parsed.day).padStart(2, '0') + '/' + parsed.year;
+  const regional = getClientRegionalPreferences_();
+  if (!includeTime) {
+    const parts = parseAppDateOnly_(value);
+    return parts ? formatAppDateParts_(parts, regional.dateFormat) : String(value == null ? '' : value).trim();
   }
-  const options = {
-    year: 'numeric', month: '2-digit', day: '2-digit'
-  };
-  if (includeTime && !parsed.dateOnly) {
-    options.hour = 'numeric';
-    options.minute = '2-digit';
-    options.hour12 = true;
-    const timezone = appBootstrap && appBootstrap.config &&
-      appBootstrap.config.regional && appBootstrap.config.regional.timezone;
-    if (timezone) options.timeZone = timezone;
-  }
+  const timestamp = parseAppTimestamp_(value);
+  if (!timestamp) return String(value == null ? '' : value).trim();
   try {
-    return new Intl.DateTimeFormat('en-US', options).format(parsed.date);
+    const options = {
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit',
+      hour12: regional.timeFormat === 'h:mm a',
+      hourCycle: regional.timeFormat === 'HH:mm' ? 'h23' : undefined,
+      timeZone: regional.timezone
+    };
+    const parts = {};
+    new Intl.DateTimeFormat('en-US', options).formatToParts(timestamp)
+      .forEach(part => { if (part.type !== 'literal') parts[part.type] = part.value; });
+    const dateText = formatAppDateParts_({
+      year: Number(parts.year), month: Number(parts.month), day: Number(parts.day)
+    }, regional.dateFormat);
+    const hour = regional.timeFormat === 'HH:mm'
+      ? String(parts.hour).padStart(2, '0')
+      : String(Number(parts.hour));
+    return `${dateText} ${hour}:${parts.minute}` +
+      (regional.timeFormat === 'h:mm a' ? ` ${parts.dayPeriod}` : '');
   } catch (error) {
     return String(value);
   }
@@ -184,10 +249,9 @@ function formatAppDate_(value, includeTime) {
 
 
 function formatAppDateTimeInput_(value) {
-  const parsed = parseAppDate_(value);
-  if (!parsed) return '';
-  const timezone = appBootstrap && appBootstrap.config &&
-    appBootstrap.config.regional && appBootstrap.config.regional.timezone;
+  const timestamp = parseAppTimestamp_(value);
+  if (!timestamp) return '';
+  const timezone = getClientRegionalPreferences_().timezone;
   const options = {
     year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
@@ -195,7 +259,7 @@ function formatAppDateTimeInput_(value) {
   if (timezone) options.timeZone = timezone;
   try {
     const parts = {};
-    new Intl.DateTimeFormat('en-CA', options).formatToParts(parsed.date)
+    new Intl.DateTimeFormat('en-CA', options).formatToParts(timestamp)
       .forEach(part => { if (part.type !== 'literal') parts[part.type] = part.value; });
     return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
   } catch (error) {
@@ -2673,11 +2737,8 @@ function openRecordModal(
         input.value =
           input.type === 'date' && recordValue
             ? (function() {
-                const parsed = parseAppDate_(recordValue);
-                if (!parsed) return '';
-                return parsed.date.getFullYear() + '-' +
-                  String(parsed.date.getMonth() + 1).padStart(2, '0') + '-' +
-                  String(parsed.date.getDate()).padStart(2, '0');
+                const parts = parseAppDateOnly_(recordValue);
+                return parts ? formatAppDateParts_(parts, 'yyyy-MM-dd') : '';
               })()
             : recordValue;
 

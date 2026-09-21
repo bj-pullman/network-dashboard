@@ -104,6 +104,24 @@ const APP_PAGE_CONFIG = {
     ]
   },
 
+  networkClosets: {
+    key: 'networkClosets',
+    label: 'Network Closets',
+    sheet: 'Network Closets',
+    upsSheet: 'Network Closet UPS',
+    type: 'table',
+    icon: 'fa-door-closed',
+    group: 'Infrastructure',
+    defaultColumns: [
+      'Campus',
+      'Closet / Room Name',
+      'Room Number',
+      'Type',
+      'Equipment Count',
+      'UPS Count'
+    ]
+  },
+
   routes: {
     key: 'routes',
     label: 'VLANs & Routing',
@@ -365,6 +383,20 @@ const APP_MODULE_REGISTRY = {
       'Offline Servers'
     ],
     permissionKey: 'servers'
+  },
+
+  networkClosets: {
+    id: 'networkClosets',
+    name: 'Network Closets',
+    description: 'Document network rooms, electrical details, UPS units and assigned infrastructure.',
+    classification: 'core',
+    enabledByDefault: true,
+    pageKey: 'networkClosets',
+    requiredSheets: [
+      'Network Closets',
+      'Network Closet UPS'
+    ],
+    permissionKey: 'networkClosets'
   },
 
   routes: {
@@ -1962,6 +1994,7 @@ function appGetPageData(pageKey, forceRefresh) {
     const loaders = {
       dashboard: getAppDashboardData_, workflow: getDepartmentWorkflowData_,
       internetWan: getInternetWanPageData_, outages: getOutagesPageData_,
+      networkClosets: getNetworkClosetsPageData_,
       users: getAppUsers_, settings: getSettingsPageData_
     };
     const result = measureAppReadStep_('pageData', function() {
@@ -2181,7 +2214,25 @@ function readNetworkDashboardSheetValues_(
 function readConfiguredPageValues_(sheet, config) {
   // Display values preserve formulas, dates, IPs and leading zeros.
   // Actual headers retain installation-specific extra columns.
-  return readSheetDisplayBatch_(sheet);
+  const displayValues = readSheetDisplayBatch_(sheet);
+  if (!displayValues.length) return displayValues;
+
+  const temporalColumns = displayValues[0]
+    .map((header, index) =>
+      isDateOnlyHeader_(header) || isDateTimeHeader_(header) ? index : -1)
+    .filter(index => index >= 0);
+  if (!temporalColumns.length) return displayValues;
+
+  // Raw Date values preserve timestamp instants. All non-temporal cells retain
+  // their display values so formulas, custom number formats and leading zeros
+  // keep their existing behavior.
+  const rawValues = readSheetValueBatch_(sheet);
+  return displayValues.map((row, rowIndex) => row.map((value, columnIndex) =>
+    rowIndex > 0 && temporalColumns.includes(columnIndex) &&
+      rawValues[rowIndex] && rawValues[rowIndex][columnIndex] !== ''
+      ? rawValues[rowIndex][columnIndex]
+      : value
+  ));
 }
 
 
@@ -2541,6 +2592,577 @@ function getAppTableData_(
     pageKey,
     config
   );
+}
+
+
+function getNetworkClosetsPageData_(
+  forceRefresh
+) {
+
+  const result =
+    getAppTableData_(
+      'networkClosets',
+      forceRefresh
+    );
+
+  const inventory =
+    getNetworkClosetEquipmentInventory_();
+
+  const upsByCloset =
+    getNetworkClosetUpsByCloset_();
+
+  const equipmentByCloset = {};
+
+  inventory.forEach(item => {
+    const closetId =
+      String(item.closetId || '').trim();
+
+    if (!closetId) return;
+
+    if (!equipmentByCloset[closetId]) {
+      equipmentByCloset[closetId] = [];
+    }
+
+    equipmentByCloset[closetId].push(item);
+  });
+
+  result.headers =
+    (result.headers || [])
+      .concat([
+        'Equipment Count',
+        'UPS Count'
+      ]);
+
+  result.defaultColumns =
+    APP_PAGE_CONFIG.networkClosets.defaultColumns.slice();
+
+  result.rows.forEach(row => {
+    const closetId =
+      String(row['Closet ID'] || '').trim();
+
+    row['Equipment Count'] =
+      String((equipmentByCloset[closetId] || []).length);
+
+    row['UPS Count'] =
+      String((upsByCloset[closetId] || []).length);
+  });
+
+  result.inventory = inventory;
+  result.upsByCloset = upsByCloset;
+  result.equipmentByCloset = equipmentByCloset;
+  result.suggestedOptions = {
+    Campus: uniqueNetworkClosetValues_(
+      result.rows
+        .map(row => row.Campus)
+        .concat(
+          inventory.map(item => item.campus)
+        )
+    )
+  };
+
+  return result;
+}
+
+
+function uniqueNetworkClosetValues_(
+  values
+) {
+
+  const seen = {};
+
+  return (values || [])
+    .map(value => String(value || '').trim())
+    .filter(value => {
+      const key = value.toLowerCase();
+      if (!key || seen[key]) return false;
+      seen[key] = true;
+      return true;
+    })
+    .sort();
+}
+
+
+function getNetworkClosetEquipmentInventory_() {
+
+  const definitions = [
+    {
+      sheet: 'Switches',
+      type: 'Switch',
+      name: 'Device Label'
+    },
+    {
+      sheet: 'Servers',
+      type: 'Server',
+      name: 'Server Name'
+    },
+    {
+      sheet: 'Offline Servers',
+      type: 'Server',
+      name: 'Server Name'
+    }
+  ];
+
+  const inventory = [];
+
+  definitions.forEach(definition => {
+    const sheet = getReadSheet_(definition.sheet);
+    if (!sheet) return;
+
+    const values = readSheetDisplayBatch_(sheet);
+    if (values.length < 2) return;
+
+    const headers = values[0]
+      .map(value => String(value || '').trim());
+
+    const indexes = mapHeaders_(headers);
+
+    if (
+      indexes['Closet ID'] === undefined ||
+      indexes[definition.name] === undefined
+    ) {
+      return;
+    }
+
+    for (let index = 1; index < values.length; index++) {
+      const row = values[index] || [];
+      const name =
+        String(row[indexes[definition.name]] || '').trim();
+
+      if (!name) continue;
+
+      inventory.push({
+        sheet: definition.sheet,
+        row: index + 1,
+        type: definition.type,
+        name: name,
+        ipAddress:
+          indexes['IP Address'] === undefined
+            ? ''
+            : String(row[indexes['IP Address']] || '').trim(),
+        campus:
+          indexes.Campus === undefined
+            ? ''
+            : String(row[indexes.Campus] || '').trim(),
+        location:
+          indexes.Location === undefined
+            ? ''
+            : String(row[indexes.Location] || '').trim(),
+        status:
+          indexes.Status === undefined
+            ? ''
+            : String(row[indexes.Status] || '').trim(),
+        closetId:
+          String(row[indexes['Closet ID']] || '').trim()
+      });
+    }
+  });
+
+  return inventory;
+}
+
+
+function getNetworkClosetUpsByCloset_() {
+
+  const result = {};
+  const sheet = getReadSheet_('Network Closet UPS');
+
+  if (!sheet) return result;
+
+  const values = readConfiguredPageValues_(sheet, {
+    sheet: 'Network Closet UPS'
+  });
+
+  if (values.length < 2) return result;
+
+  const headers = values[0]
+    .map(value => String(value || '').trim());
+
+  const indexes = mapHeaders_(headers);
+
+  for (let index = 1; index < values.length; index++) {
+    const source = values[index] || [];
+    const closetId =
+      String(source[indexes['Closet ID']] || '').trim();
+
+    if (!closetId) continue;
+
+    const record = { _row: index + 1 };
+
+    headers.forEach((header, column) => {
+      if (header) {
+        record[header] =
+          formatNetworkDashboardField_(
+            header,
+            source[column]
+          );
+      }
+    });
+
+    if (!result[closetId]) result[closetId] = [];
+    result[closetId].push(record);
+  }
+
+  return result;
+}
+
+
+function appSaveNetworkCloset(
+  payload
+) {
+
+  requirePagePermission_(
+    'networkClosets',
+    'edit'
+  );
+
+  payload = payload || {};
+
+  const record = payload.record || {};
+  const campus = String(record.Campus || '').trim();
+  const roomName =
+    String(record['Closet / Room Name'] || '').trim();
+
+  if (!campus) throw new Error('Campus is required.');
+  if (!roomName) {
+    throw new Error('Closet / Room Name is required.');
+  }
+
+  validateNetworkClosetUps_(payload.ups || []);
+
+  const lock = LockService.getDocumentLock();
+  lock.waitLock(30000);
+
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('Network Closets');
+    const upsSheet = ss.getSheetByName('Network Closet UPS');
+
+    if (!sheet || !upsSheet) {
+      throw new Error(
+        'Network Closet sheets were not found. Run Update / Repair.'
+      );
+    }
+
+    const headers = sheet.getRange(
+      1, 1, 1, sheet.getLastColumn()
+    ).getDisplayValues()[0]
+      .map(value => String(value || '').trim());
+
+    const closetIdColumn = headers.indexOf('Closet ID') + 1;
+    if (!closetIdColumn) {
+      throw new Error(
+        'Network Closets is missing Closet ID. Run Update / Repair.'
+      );
+    }
+
+    let rowNumber = Number(payload.rowNumber);
+    const editing =
+      Number.isInteger(rowNumber) &&
+      rowNumber >= 2 &&
+      rowNumber <= sheet.getLastRow();
+
+    let closetId =
+      editing
+        ? String(
+            sheet.getRange(
+              rowNumber,
+              closetIdColumn
+            ).getDisplayValue() || ''
+          ).trim()
+        : '';
+
+    if (!closetId) {
+      closetId = generateNetworkClosetId_(sheet, headers);
+    }
+
+    const normalized = Object.assign({}, record, {
+      'Closet ID': closetId,
+      Type: normalizeControlledOption_(
+        'closetType',
+        record.Type || 'MDF',
+        'Type',
+        true
+      ),
+      'Redundant Power Available':
+        normalizeControlledOption_(
+          'yesNo',
+          record['Redundant Power Available'],
+          'Redundant Power Available',
+          false
+        )
+    });
+
+    const output = headers.map(header =>
+      Object.prototype.hasOwnProperty.call(normalized, header)
+        ? normalizeNetworkDashboardSheetValue_(
+            header,
+            normalized[header]
+          )
+        : ''
+    );
+
+    if (editing) {
+      sheet.getRange(
+        rowNumber, 1, 1, output.length
+      ).setValues([output]);
+    } else {
+      sheet.appendRow(output);
+      rowNumber = sheet.getLastRow();
+    }
+
+    replaceNetworkClosetUps_(
+      upsSheet,
+      closetId,
+      payload.ups || []
+    );
+
+    saveNetworkClosetEquipmentAssignments_(
+      closetId,
+      payload.equipment || []
+    );
+
+    invalidateAppPage_('networkClosets');
+    invalidateAppPage_('switches');
+    invalidateAppPage_('servers');
+
+    return {
+      status: 'success',
+      closetId: closetId,
+      rowNumber: rowNumber
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+
+function validateNetworkClosetUps_(
+  units
+) {
+
+  (units || []).forEach(unit => {
+    unit = unit || {};
+
+    normalizeControlledOption_(
+      'yesNo',
+      unit['Network Managed'],
+      'Network Managed',
+      false
+    );
+
+    const managementIp =
+      String(unit['Management IP'] || '').trim();
+
+    if (managementIp && !isValidIpAddress_(managementIp)) {
+      throw new Error(
+        'UPS Management IP must be a valid IPv4 or IPv6 address.'
+      );
+    }
+  });
+}
+
+
+function generateNetworkClosetId_(
+  sheet,
+  headers
+) {
+
+  const index = headers.indexOf('Closet ID');
+  if (index === -1) {
+    throw new Error('Network Closets is missing Closet ID.');
+  }
+
+  let maximum = 0;
+
+  if (sheet.getLastRow() >= 2) {
+    sheet.getRange(
+      2, index + 1, sheet.getLastRow() - 1, 1
+    ).getDisplayValues().forEach(row => {
+      const match =
+        String(row[0] || '').match(/^CLOSET-(\d+)$/i);
+      if (match) maximum = Math.max(maximum, Number(match[1]));
+    });
+  }
+
+  return 'CLOSET-' +
+    String(maximum + 1).padStart(4, '0');
+}
+
+
+function replaceNetworkClosetUps_(
+  sheet,
+  closetId,
+  units
+) {
+
+  const headers = sheet.getRange(
+    1, 1, 1, sheet.getLastColumn()
+  ).getDisplayValues()[0]
+    .map(value => String(value || '').trim());
+
+  const closetIndex = headers.indexOf('Closet ID');
+
+  if (closetIndex === -1) {
+    throw new Error(
+      'Network Closet UPS is missing Closet ID. Run Update / Repair.'
+    );
+  }
+
+  const outputRows = [];
+  let sequence = 0;
+
+  (units || []).forEach(unit => {
+    unit = unit || {};
+
+    const hasData = Object.keys(unit).some(key =>
+      !['UPS ID', 'Closet ID'].includes(key) &&
+      String(unit[key] || '').trim()
+    );
+
+    if (!hasData) return;
+
+    sequence += 1;
+
+    const normalized = Object.assign({}, unit, {
+      'UPS ID': closetId + '-UPS-' +
+        String(sequence).padStart(2, '0'),
+      'Closet ID': closetId,
+      'Network Managed': normalizeControlledOption_(
+        'yesNo',
+        unit['Network Managed'],
+        'Network Managed',
+        false
+      )
+    });
+
+    const managementIp =
+      String(normalized['Management IP'] || '').trim();
+
+    if (managementIp && !isValidIpAddress_(managementIp)) {
+      throw new Error(
+        'UPS Management IP must be a valid IPv4 or IPv6 address.'
+      );
+    }
+
+    outputRows.push(headers.map(header =>
+      normalizeNetworkDashboardSheetValue_(
+        header,
+        normalized[header] || ''
+      )
+    ));
+  });
+
+  for (let row = sheet.getLastRow(); row >= 2; row--) {
+    if (
+      String(
+        sheet.getRange(row, closetIndex + 1).getDisplayValue() || ''
+      ).trim() === closetId
+    ) {
+      sheet.deleteRow(row);
+    }
+  }
+
+  if (outputRows.length) {
+    sheet.getRange(
+      sheet.getLastRow() + 1,
+      1,
+      outputRows.length,
+      headers.length
+    ).setValues(outputRows);
+  }
+}
+
+
+function saveNetworkClosetEquipmentAssignments_(
+  closetId,
+  assignments
+) {
+
+  const allowedSheets = [
+    'Switches',
+    'Servers',
+    'Offline Servers'
+  ];
+
+  const selected = {};
+
+  (assignments || []).forEach(item => {
+    const sheetName = String(item && item.sheet || '');
+    const rowNumber = Number(item && item.row);
+
+    if (
+      allowedSheets.includes(sheetName) &&
+      Number.isInteger(rowNumber) &&
+      rowNumber >= 2
+    ) {
+      selected[sheetName + ':' + rowNumber] = true;
+    }
+  });
+
+  allowedSheets.forEach(sheetName => {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet()
+      .getSheetByName(sheetName);
+
+    if (!sheet || sheet.getLastRow() < 2) return;
+
+    const headers = sheet.getRange(
+      1, 1, 1, sheet.getLastColumn()
+    ).getDisplayValues()[0]
+      .map(value => String(value || '').trim());
+
+    const column = headers.indexOf('Closet ID') + 1;
+    if (!column) return;
+
+    const range = sheet.getRange(
+      2, column, sheet.getLastRow() - 1, 1
+    );
+    const values = range.getValues();
+
+    values.forEach((row, index) => {
+      const key = sheetName + ':' + (index + 2);
+      const current = String(row[0] || '').trim();
+
+      if (selected[key]) {
+        row[0] = closetId;
+      } else if (current === closetId) {
+        row[0] = '';
+      }
+    });
+
+    range.setValues(values);
+  });
+}
+
+
+function deleteNetworkClosetRelationships_(
+  closetId
+) {
+
+  if (!closetId) return;
+
+  const upsSheet = SpreadsheetApp.getActiveSpreadsheet()
+    .getSheetByName('Network Closet UPS');
+
+  if (upsSheet && upsSheet.getLastRow() >= 2) {
+    const headers = upsSheet.getRange(
+      1, 1, 1, upsSheet.getLastColumn()
+    ).getDisplayValues()[0]
+      .map(value => String(value || '').trim());
+    const column = headers.indexOf('Closet ID') + 1;
+
+    if (column) {
+      for (let row = upsSheet.getLastRow(); row >= 2; row--) {
+        if (
+          String(upsSheet.getRange(row, column).getDisplayValue())
+            .trim() === closetId
+        ) {
+          upsSheet.deleteRow(row);
+        }
+      }
+    }
+  }
+
+  saveNetworkClosetEquipmentAssignments_(closetId, []);
 }
 
 
@@ -7956,6 +8578,10 @@ function getRequiredRecordFieldsForPage_(
     servers: [
       'Server Name'
     ],
+    networkClosets: [
+      'Campus',
+      'Closet / Room Name'
+    ],
     routes: [
       'Network / CIDR'
     ],
@@ -8010,27 +8636,11 @@ function compareChangeLogRowsNewestFirst_(
   right
 ) {
 
-  const leftTime =
-    Date.parse(
-      String(left && left['Change Date'] || '')
-    );
-
-  const rightTime =
-    Date.parse(
-      String(right && right['Change Date'] || '')
-    );
-
-  const safeLeft =
-    Number.isFinite(leftTime)
-      ? leftTime
-      : 0;
-
-  const safeRight =
-    Number.isFinite(rightTime)
-      ? rightTime
-      : 0;
-
-  return safeRight - safeLeft ||
+  return getNetworkDashboardDateOnlySortValue_(
+    right && right['Change Date']
+  ) - getNetworkDashboardDateOnlySortValue_(
+    left && left['Change Date']
+  ) ||
     Number(right && right._row || 0) -
       Number(left && left._row || 0);
 }
@@ -8136,6 +8746,22 @@ function appDeleteRecord(
   }
 
 
+  if (pageKey === 'networkClosets') {
+    const headers = sheet.getRange(
+      1, 1, 1, sheet.getLastColumn()
+    ).getDisplayValues()[0]
+      .map(value => String(value || '').trim());
+    const closetIdColumn = headers.indexOf('Closet ID') + 1;
+    const closetId = closetIdColumn
+      ? String(
+          sheet.getRange(rowNumber, closetIdColumn)
+            .getDisplayValue() || ''
+        ).trim()
+      : '';
+
+    deleteNetworkClosetRelationships_(closetId);
+  }
+
   sheet.deleteRow(
     rowNumber
   );
@@ -8144,6 +8770,11 @@ function appDeleteRecord(
   invalidateAppPage_(
     pageKey
   );
+
+  if (pageKey === 'networkClosets') {
+    invalidateAppPage_('switches');
+    invalidateAppPage_('servers');
+  }
 
 
   return {

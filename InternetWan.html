@@ -315,14 +315,8 @@ function internetWanHealthStamp_(
     return '';
   }
 
-  try {
-    return 'Health ' +
-      new Date(
-        monitoring.fetchedAt
-      ).toLocaleString();
-  } catch (error) {
-    return 'Health refreshed';
-  }
+  const formatted = formatAppDate_(monitoring.fetchedAt, true);
+  return formatted ? 'Health ' + formatted : 'Health refreshed';
 }
 
 

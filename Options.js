@@ -71,6 +71,14 @@ function getControlledOptionDefinitions_() {
       'Yes',
       'No'
     ],
+    closetType: [
+      'MDF',
+      'IDF',
+      'Server Room',
+      'Demarc',
+      'Telecom Room',
+      'Other'
+    ],
     changeStatus: [
       'Implemented',
       'Monitoring',
@@ -288,6 +296,15 @@ function getControlledOptionsForSheet_(
       );
   }
 
+  if (sheetName === 'Network Closets') {
+    map.Type = getControlledOptions_('closetType');
+    map['Redundant Power Available'] = getControlledOptions_('yesNo');
+  }
+
+  if (sheetName === 'Network Closet UPS') {
+    map['Network Managed'] = getControlledOptions_('yesNo');
+  }
+
   if (sheetName === 'App Users') {
     map.Role =
       getControlledOptions_(
@@ -372,6 +389,18 @@ function getControlledOptionKeyForSheetField_(
     field === 'Status'
   ) {
     return 'changeStatus';
+  }
+
+  if (sheetName === 'Network Closets') {
+    if (field === 'Type') return 'closetType';
+    if (field === 'Redundant Power Available') return 'yesNo';
+  }
+
+  if (
+    sheetName === 'Network Closet UPS' &&
+    field === 'Network Managed'
+  ) {
+    return 'yesNo';
   }
 
   if (sheetName === 'App Users') {

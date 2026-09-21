@@ -141,7 +141,7 @@ Open **Help -> About Network Dashboard** in the production web app and confirm:
 
 ```text
 Application Version: 1.2.0
-Schema Version: 8
+Schema Version: 9
 ```
 
 Then test the functionality affected by the release.
@@ -202,8 +202,8 @@ Expected: 1.2.0
 Status: Current
 
 SCHEMA VERSION
-Installed: 8
-Expected: 8
+Installed: 9
+Expected: 9
 Status: Current
 ```
 
@@ -216,8 +216,8 @@ It also separates:
 Counters show passed versus expected checks, for example:
 
 ```text
-Required Sheets: 17 / 17
-Header Protections: 21 / 21
+Required Sheets: 19 / 19
+Header Protections: 23 / 23
 App Settings Protections: 10 / 10
 Required Triggers: 1 / 1
 ```
@@ -240,7 +240,7 @@ After validation, open the configured production dashboard from the Google Sheet
 
 * the Dashboard and navigation load;
 * organization branding and settings remain intact;
-* **About Network Dashboard** reports application version `1.2.0` and schema `8`;
+* **About Network Dashboard** reports application version `1.2.0` and schema `9`;
 * the features changed by the release work as expected;
 * affected integrations work where applicable;
 * affected RBAC behavior works with an appropriate non-admin account;
@@ -364,7 +364,7 @@ For example, application and schema versions may advance independently:
 
 ```text
 Application 1.2.0
-Schema 8
+Schema 9
 ```
 
 A patch release does not automatically require a new schema version. The schema version changes only when the data structure requires a new migration boundary.
@@ -376,6 +376,8 @@ Schema 6 separates SSID `Security` from `Authentication` and renames `Scope / Lo
 Schema 7 migrates SSIDs to the Aruba-oriented inventory model and adds the managed Change Log sheet. The SSID migration maps legacy `Type`, `Security`, and `Authentication` values into Primary Usage, Security Level, and Key Management; retains passwords, VLANs, availability, notes, formulas, and organization-specific columns; applies safe defaults for new status/boolean fields; and creates a verified backup before rewriting populated SSID data.
 
 Schema 8 additively appends `Documentation File ID`, `Imported At`, and `Import Source` to Change Log and seeds configurable Change Log category/system lists plus future folder-import placeholders. Existing rows, columns, settings, and source records are preserved. Run **Update / Repair** after deploying this release; no separate migration function is required.
+
+Schema 9 adds the managed Network Closets and Network Closet UPS sheets and appends a `Closet ID` relationship column to Switches, Servers, and Offline Servers. The update is additive: existing equipment and Aruba Central-managed fields are preserved, while Update / Repair creates the new sheets, validations, and managed header protections automatically.
 
 ## Schema migrations
 
@@ -469,7 +471,7 @@ Never place API keys, secrets, refresh tokens, private keys, or organization cre
 ```text
 [ ] Open Dashboard loads the production GUI
 [ ] About reports Application Version 1.2.0
-[ ] About reports Schema Version 8
+[ ] About reports Schema Version 9
 [ ] Affected functionality tested
 [ ] Affected integrations tested where applicable
 [ ] Managed protections verified where applicable

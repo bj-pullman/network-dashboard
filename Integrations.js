@@ -156,6 +156,7 @@ function getIntegrationRegistry_() {
       localDatasetSheets: [
         'UptimeRobot'
       ],
+      serviceUrl: 'https://uptimerobot.com/',
       pageKey: 'uptimeRobot',
       hasOperationalPage: true,
       providesDashboardWidgets: true,
@@ -674,6 +675,8 @@ function getIntegrationStatusList_(onlyId, includeLiveCounts) {
           !!definition.hasOperationalPage,
         pageKey:
           definition.pageKey || '',
+        serviceUrl:
+          definition.serviceUrl || '',
         providesDashboardWidgets:
           !!definition.providesDashboardWidgets,
         enrichesModules:

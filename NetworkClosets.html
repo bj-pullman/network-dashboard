@@ -1,0 +1,376 @@
+<style>
+  .closet-section + .closet-section { margin-top: 1.5rem; }
+  .closet-section-title {
+    align-items: center;
+    border-bottom: 1px solid var(--bs-border-color);
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+    padding-bottom: .65rem;
+  }
+  .closet-section-title h6 { margin: 0; }
+  .closet-ups-list { display: grid; gap: .85rem; }
+  .closet-ups-card {
+    background: var(--bs-tertiary-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: .75rem;
+    padding: 1rem;
+  }
+  .closet-equipment-list {
+    border: 1px solid var(--bs-border-color);
+    border-radius: .65rem;
+    max-height: 19rem;
+    overflow: auto;
+  }
+  .closet-equipment-option {
+    align-items: flex-start;
+    border-bottom: 1px solid var(--bs-border-color);
+    display: flex;
+    gap: .75rem;
+    padding: .75rem;
+  }
+  .closet-equipment-option:last-child { border-bottom: 0; }
+  .closet-detail-grid {
+    display: grid;
+    gap: .85rem;
+    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  }
+  .closet-detail-grid > div {
+    background: var(--bs-tertiary-bg);
+    border-radius: .55rem;
+    padding: .75rem;
+  }
+  .closet-detail-grid span {
+    color: var(--bs-secondary-color);
+    display: block;
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    margin-bottom: .2rem;
+    text-transform: uppercase;
+  }
+  @media (max-width: 575.98px) {
+    .closet-ups-card { padding: .75rem; }
+  }
+</style>
+
+<script>
+const NETWORK_CLOSET_FIELDS = [
+  'Campus',
+  'Closet / Room Name',
+  'Room Number',
+  'Type',
+  'Location Description',
+  'Map / Floor Plan URL',
+  'Map / Marker Notes',
+  'Electrical Circuit / Panel',
+  'Outlet / Connector Type',
+  'Redundant Power Available',
+  'Power Notes',
+  'Notes'
+];
+
+const NETWORK_CLOSET_UPS_FIELDS = [
+  'Manufacturer',
+  'Model',
+  'Asset Tag',
+  'Serial Number',
+  'Capacity / VA',
+  'Network Managed',
+  'Management IP',
+  'Input Connector Type',
+  'Output / Receptacle Type',
+  'Battery Replacement Date',
+  'Last Service Date',
+  'Notes'
+];
+
+RECORD_PAGE_DEFINITIONS.networkClosets = {
+  defaultColumns: [
+    'Campus',
+    'Closet / Room Name',
+    'Room Number',
+    'Type',
+    'Equipment Count',
+    'UPS Count'
+  ],
+  requiredColumns: ['Campus', 'Closet / Room Name'],
+  hiddenEditorColumns: ['Closet ID', 'Equipment Count', 'UPS Count'],
+  columns: {
+    'Campus': { minWidth: 120 },
+    'Closet / Room Name': { minWidth: 150 },
+    'Room Number': { minWidth: 100 },
+    'Type': { minWidth: 110 },
+    'Equipment Count': { minWidth: 120, hozAlign: 'center' },
+    'UPS Count': { minWidth: 90, hozAlign: 'center' }
+  },
+  buildColumns: function(data) {
+    return buildRecordColumns_(data, RECORD_PAGE_DEFINITIONS.networkClosets);
+  },
+  header: function(data) {
+    setPageHeader('Network Closets', data.totalCount + ' documented room' +
+      (data.totalCount === 1 ? '' : 's'));
+  },
+  actions: function(data) {
+    renderRecordActions_(data);
+  },
+  addTitle: 'Add Network Closet',
+  editTitle: 'Edit Network Closet',
+  openEditor: openNetworkClosetEditor_,
+  viewRecord: viewNetworkClosetDetails_
+};
+
+function renderNetworkClosetsPage(data) {
+  renderRecordTable_(data, RECORD_PAGE_DEFINITIONS.networkClosets);
+}
+
+function openNetworkClosetEditor_(record) {
+  record = record || {};
+
+  const saveButton = document.getElementById('saveRecordButton');
+  saveButton.style.display = '';
+  saveButton.onclick = saveNetworkClosetFromModal_;
+
+  document.getElementById('recordModalTitle').textContent =
+    record._row ? 'Edit Network Closet' : 'Add Network Closet';
+
+  const closetId = String(record['Closet ID'] || '').trim();
+  const assigned = new Set(
+    ((currentPageData && currentPageData.equipmentByCloset || {})[closetId] || [])
+      .map(item => item.sheet + ':' + item.row)
+  );
+  const units =
+    ((currentPageData && currentPageData.upsByCloset || {})[closetId] || []);
+
+  const body = document.getElementById('recordModalBody');
+  body.innerHTML = `
+    <div class="form-required-note mb-3"><span class="required-marker">*</span> Required</div>
+    <section class="closet-section">
+      <div class="closet-section-title"><h6>Room & Location</h6></div>
+      <div class="row g-3">
+        ${networkClosetField_('Campus', record.Campus, { required: true, list: 'networkClosetCampusOptions' })}
+        ${networkClosetField_('Closet / Room Name', record['Closet / Room Name'], { required: true })}
+        ${networkClosetField_('Room Number', record['Room Number'])}
+        ${networkClosetSelect_('Type', record.Type || 'MDF', ['MDF', 'IDF', 'Server Room', 'Demarc', 'Telecom Room', 'Other'])}
+        ${networkClosetField_('Location Description', record['Location Description'], { textarea: true })}
+        ${networkClosetField_('Map / Floor Plan URL', record['Map / Floor Plan URL'], { placeholder: 'https:// or document reference' })}
+        ${networkClosetField_('Map / Marker Notes', record['Map / Marker Notes'], { textarea: true })}
+        ${networkClosetField_('Notes', record.Notes, { textarea: true })}
+      </div>
+      ${networkClosetCampusDatalist_()}
+    </section>
+
+    <section class="closet-section">
+      <div class="closet-section-title"><h6>Power & Electrical</h6></div>
+      <div class="row g-3">
+        ${networkClosetField_('Electrical Circuit / Panel', record['Electrical Circuit / Panel'])}
+        ${networkClosetField_('Outlet / Connector Type', record['Outlet / Connector Type'])}
+        ${networkClosetSelect_('Redundant Power Available', record['Redundant Power Available'], ['', 'Yes', 'No'])}
+        ${networkClosetField_('Power Notes', record['Power Notes'], { textarea: true })}
+      </div>
+    </section>
+
+    <section class="closet-section">
+      <div class="closet-section-title">
+        <h6>Assigned Equipment</h6>
+        <small class="text-body-secondary">Uses existing inventory records</small>
+      </div>
+      ${networkClosetEquipmentEditor_(assigned)}
+    </section>
+
+    <section class="closet-section">
+      <div class="closet-section-title">
+        <h6>UPS / Battery Backup</h6>
+        <button type="button" class="btn btn-sm btn-light border" onclick="addNetworkClosetUpsEditor_()">
+          <i class="fa-solid fa-plus me-1"></i>Add UPS
+        </button>
+      </div>
+      <div id="networkClosetUpsList" class="closet-ups-list"></div>
+    </section>
+  `;
+
+  if (units.length) {
+    units.forEach(unit => addNetworkClosetUpsEditor_(unit));
+  }
+
+  recordModal.show();
+}
+
+function networkClosetField_(label, value, options) {
+  options = options || {};
+  const fieldClass = options.textarea ? 'col-12' : 'col-md-6';
+  const attributes = `data-closet-field="${escapeAttribute(label)}" ` +
+    `${options.required ? 'required aria-required="true"' : ''} ` +
+    `${options.list ? 'list="' + escapeAttribute(options.list) + '"' : ''}`;
+  const control = options.textarea
+    ? `<textarea class="form-control" rows="3" ${attributes}>${escapeHtml(value || '')}</textarea>`
+    : `<input class="form-control" type="${escapeAttribute(options.type || 'text')}" ${attributes} value="${escapeAttribute(value || '')}" placeholder="${escapeAttribute(options.placeholder || '')}">`;
+  return `<div class="${fieldClass}"><label class="form-label">${escapeHtml(label.toUpperCase())}${options.required ? ' <span class="required-marker">*</span>' : ''}</label>${control}</div>`;
+}
+
+function networkClosetSelect_(label, value, options) {
+  return `<div class="col-md-6"><label class="form-label">${escapeHtml(label.toUpperCase())}</label><select class="form-select" data-closet-field="${escapeAttribute(label)}">${options.map(option => `<option value="${escapeAttribute(option)}" ${String(value || '') === option ? 'selected' : ''}>${escapeHtml(option || 'Not specified')}</option>`).join('')}</select></div>`;
+}
+
+function networkClosetCampusDatalist_() {
+  const options = currentPageData && currentPageData.suggestedOptions &&
+    currentPageData.suggestedOptions.Campus || [];
+  return `<datalist id="networkClosetCampusOptions">${options.map(option => `<option value="${escapeAttribute(option)}"></option>`).join('')}</datalist>`;
+}
+
+function networkClosetEquipmentEditor_(assigned) {
+  const inventory = currentPageData && currentPageData.inventory || [];
+  if (!inventory.length) {
+    return '<div class="text-body-secondary small">No switches or servers are available to assign.</div>';
+  }
+  return `<div class="closet-equipment-list">${inventory.map(item => {
+    const key = item.sheet + ':' + item.row;
+    const detail = [item.ipAddress, item.campus, item.location, item.status]
+      .filter(Boolean).join(' · ');
+    return `<label class="closet-equipment-option"><input class="form-check-input mt-1" type="checkbox" data-equipment-sheet="${escapeAttribute(item.sheet)}" data-equipment-row="${escapeAttribute(item.row)}" ${assigned.has(key) ? 'checked' : ''}><span><strong>${escapeHtml(item.name)}</strong> <span class="badge text-bg-light">${escapeHtml(item.type)}</span><small class="d-block text-body-secondary">${escapeHtml(detail || item.sheet)}</small></span></label>`;
+  }).join('')}</div>`;
+}
+
+function addNetworkClosetUpsEditor_(unit) {
+  unit = unit || {};
+  const list = document.getElementById('networkClosetUpsList');
+  if (!list) return;
+  const card = document.createElement('div');
+  card.className = 'closet-ups-card';
+  card.innerHTML = `
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <strong>UPS Unit</strong>
+      <button type="button" class="btn btn-sm btn-link text-danger" onclick="this.closest('.closet-ups-card').remove()"><i class="fa-solid fa-trash me-1"></i>Remove</button>
+    </div>
+    <div class="row g-3">
+      ${networkClosetUpsField_('Manufacturer', unit.Manufacturer)}
+      ${networkClosetUpsField_('Model', unit.Model)}
+      ${networkClosetUpsField_('Asset Tag', unit['Asset Tag'])}
+      ${networkClosetUpsField_('Serial Number', unit['Serial Number'])}
+      ${networkClosetUpsField_('Capacity / VA', unit['Capacity / VA'])}
+      ${networkClosetUpsSelect_('Network Managed', unit['Network Managed'], ['', 'Yes', 'No'])}
+      ${networkClosetUpsField_('Management IP', unit['Management IP'])}
+      ${networkClosetUpsField_('Input Connector Type', unit['Input Connector Type'])}
+      ${networkClosetUpsField_('Output / Receptacle Type', unit['Output / Receptacle Type'])}
+      ${networkClosetUpsField_('Battery Replacement Date', unit['Battery Replacement Date'], 'date')}
+      ${networkClosetUpsField_('Last Service Date', unit['Last Service Date'], 'date')}
+      ${networkClosetUpsField_('Notes', unit.Notes, 'textarea')}
+    </div>`;
+  list.appendChild(card);
+}
+
+function networkClosetUpsField_(label, value, type) {
+  let normalized = value || '';
+  if (type === 'date' && normalized) {
+    const parts = parseAppDateOnly_(normalized);
+    normalized = parts ? formatAppDateParts_(parts, 'yyyy-MM-dd') : '';
+  }
+  const control = type === 'textarea'
+    ? `<textarea class="form-control" rows="2" data-ups-field="${escapeAttribute(label)}">${escapeHtml(normalized)}</textarea>`
+    : `<input class="form-control" type="${type === 'date' ? 'date' : 'text'}" data-ups-field="${escapeAttribute(label)}" value="${escapeAttribute(normalized)}">`;
+  return `<div class="${type === 'textarea' ? 'col-12' : 'col-md-6'}"><label class="form-label">${escapeHtml(label.toUpperCase())}</label>${control}</div>`;
+}
+
+function networkClosetUpsSelect_(label, value, options) {
+  return `<div class="col-md-6"><label class="form-label">${escapeHtml(label.toUpperCase())}</label><select class="form-select" data-ups-field="${escapeAttribute(label)}">${options.map(option => `<option value="${escapeAttribute(option)}" ${String(value || '') === option ? 'selected' : ''}>${escapeHtml(option || 'Not specified')}</option>`).join('')}</select></div>`;
+}
+
+function saveNetworkClosetFromModal_() {
+  const fields = document.querySelectorAll('#recordModalBody [data-closet-field]');
+  for (const field of fields) {
+    if (!field.checkValidity()) {
+      field.reportValidity();
+      return;
+    }
+  }
+
+  const record = {};
+  fields.forEach(field => { record[field.dataset.closetField] = field.value; });
+
+  const equipment = Array.from(document.querySelectorAll(
+    '#recordModalBody [data-equipment-sheet]:checked'
+  )).map(input => ({
+    sheet: input.dataset.equipmentSheet,
+    row: Number(input.dataset.equipmentRow)
+  }));
+
+  const ups = Array.from(document.querySelectorAll(
+    '#networkClosetUpsList .closet-ups-card'
+  )).map(card => {
+    const unit = {};
+    card.querySelectorAll('[data-ups-field]').forEach(field => {
+      unit[field.dataset.upsField] = field.value;
+    });
+    return unit;
+  });
+
+  const button = setActionWorking(
+    document.getElementById('saveRecordButton'),
+    editingRow ? 'Updating...' : 'Creating...'
+  );
+
+  scriptRunPromise_('appSaveNetworkCloset', runner =>
+    runner.appSaveNetworkCloset({
+      rowNumber: editingRow && editingRow._row || 0,
+      record: record,
+      equipment: equipment,
+      ups: ups
+    })
+  ).then(function() {
+    setActionSuccess(button, 'Saved');
+    recordModal.hide();
+    invalidateClientPage('networkClosets');
+    invalidateClientPage('switches');
+    invalidateClientPage('servers');
+    loadPage('networkClosets', true);
+    showToast('Network closet saved.');
+  }).catch(function(error) {
+    setActionError(button, 'Save Failed');
+    handleFailure(error, 'save network closet');
+  });
+}
+
+function viewNetworkClosetDetails_(record) {
+  const closetId = String(record['Closet ID'] || '').trim();
+  const equipment = (currentPageData.equipmentByCloset || {})[closetId] || [];
+  const units = (currentPageData.upsByCloset || {})[closetId] || [];
+  const url = String(record['Map / Floor Plan URL'] || '').trim();
+  const safeUrl = /^https?:\/\/[^\s]+$/i.test(url) ? url : '';
+
+  document.getElementById('recordModalTitle').textContent =
+    record['Closet / Room Name'] || 'Network Closet Details';
+  document.getElementById('saveRecordButton').style.display = 'none';
+  document.getElementById('recordModalBody').innerHTML = `
+    <section class="closet-section">
+      <div class="closet-section-title"><h6>Room & Location</h6>${safeUrl ? `<a class="btn btn-sm btn-light border" href="${escapeAttribute(safeUrl)}" target="_blank" rel="noopener noreferrer"><i class="fa-solid fa-map me-1"></i>Open Map / Floor Plan</a>` : ''}</div>
+      ${networkClosetDetailGrid_(record, ['Campus', 'Room Number', 'Type', 'Location Description', 'Map / Floor Plan URL', 'Map / Marker Notes', 'Notes'])}
+    </section>
+    <section class="closet-section">
+      <div class="closet-section-title"><h6>Power & Electrical</h6></div>
+      ${networkClosetDetailGrid_(record, ['Electrical Circuit / Panel', 'Outlet / Connector Type', 'Redundant Power Available', 'Power Notes'])}
+    </section>
+    <section class="closet-section">
+      <div class="closet-section-title"><h6>Assigned Equipment <span class="badge text-bg-light">${equipment.length}</span></h6></div>
+      ${networkClosetEquipmentDetails_(equipment)}
+    </section>
+    <section class="closet-section">
+      <div class="closet-section-title"><h6>UPS / Battery Backup <span class="badge text-bg-light">${units.length}</span></h6></div>
+      ${networkClosetUpsDetails_(units)}
+    </section>`;
+  recordModal.show();
+}
+
+function networkClosetDetailGrid_(record, fields) {
+  return `<div class="closet-detail-grid">${fields.map(field => `<div><span>${escapeHtml(field)}</span><strong>${escapeHtml(record[field] || 'Not documented')}</strong></div>`).join('')}</div>`;
+}
+
+function networkClosetEquipmentDetails_(equipment) {
+  if (!equipment.length) return '<p class="text-body-secondary mb-0">No equipment is assigned to this closet.</p>';
+  return `<div class="table-responsive"><table class="table table-sm align-middle mb-0"><thead><tr><th>Type</th><th>Name</th><th>IP Address</th><th>Status</th></tr></thead><tbody>${equipment.map(item => `<tr><td>${escapeHtml(item.type)}</td><td>${escapeHtml(item.name)}</td><td>${escapeHtml(item.ipAddress || '')}</td><td>${escapeHtml(item.status || '')}</td></tr>`).join('')}</tbody></table></div>`;
+}
+
+function networkClosetUpsDetails_(units) {
+  if (!units.length) return '<p class="text-body-secondary mb-0">No UPS units are documented for this closet.</p>';
+  return `<div class="closet-ups-list">${units.map(unit => `<div class="closet-ups-card"><div class="d-flex justify-content-between gap-3 mb-2"><strong>${escapeHtml([unit.Manufacturer, unit.Model].filter(Boolean).join(' ') || 'UPS Unit')}</strong><span class="badge text-bg-light">${escapeHtml(unit['Capacity / VA'] || 'Capacity not listed')}</span></div>${networkClosetDetailGrid_(unit, ['Asset Tag', 'Serial Number', 'Network Managed', 'Management IP', 'Input Connector Type', 'Output / Receptacle Type', 'Battery Replacement Date', 'Last Service Date', 'Notes'])}</div>`).join('')}</div>`;
+}
+</script>

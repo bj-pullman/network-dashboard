@@ -47,6 +47,17 @@ function readSheetDisplayBatch_(sheet) {
   return values;
 }
 
+function readSheetValueBatch_(sheet) {
+  if (!sheet) return [];
+  const batches = APP_READ_CONTEXT && (APP_READ_CONTEXT.valueBatches || (APP_READ_CONTEXT.valueBatches = new Map()));
+  if (batches && batches.has(sheet)) return batches.get(sheet);
+  const range = measureAppReadStep_('dataRange', function() { return sheet.getDataRange(); });
+  if (APP_READ_CONTEXT) APP_READ_CONTEXT.sheetReads += 1;
+  const values = measureAppReadStep_('sheetRead', function() { return range.getValues(); });
+  if (batches) batches.set(sheet, values);
+  return values;
+}
+
 function finishAppReadPerformance_(context, status) {
   const timing = Object.assign({}, context.timings, {
     serverTotal: Date.now() - context.started
