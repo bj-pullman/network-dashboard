@@ -63,7 +63,10 @@ function openSsidRecordEditor_(record) {
           oninput: 'updateSsidSecurityFields_()'
         })}
         <div data-ssid-security="secured">
-          ${ssidTextField_('Key Management', record['Key Management'], { suggestions: ssidSuggestions_('Key Management') })}
+          ${ssidTextField_('Key Management', record['Key Management'], {
+            suggestions: ssidSuggestions_('Key Management'),
+            oninput: 'updateSsidSecurityFields_()'
+          })}
         </div>
         <div data-ssid-security="personal">
           ${ssidTextField_('Password', '', {
@@ -71,7 +74,7 @@ function openSsidRecordEditor_(record) {
             autocomplete: 'new-password',
             placeholder: editingRow ? 'Leave blank to keep current password' : 'Optional PSK / password',
             label: 'PSK / Password',
-            help: editingRow ? 'Leave blank to keep the saved password.' : 'Used only for Personal/PSK networks.'
+            help: editingRow ? 'Leave blank to keep the saved password.' : 'Used for Personal/PSK or other shared-key networks.'
           })}
         </div>
         <div data-ssid-security="enterprise">
@@ -117,11 +120,41 @@ function ssidSuggestions_(field) {
 function ssidTextField_(field, value, options) {
   options = options || {};
   const listId = 'ssidSuggestions_' + field.replace(/[^a-z0-9]+/gi, '_');
+  const inputId = 'ssidField_' + field.replace(/[^a-z0-9]+/gi, '_');
   const suggestions = options.suggestions || [];
+
+  if (options.type === 'password') {
+    return `
+      <div class="ssid-field">
+        <label for="${escapeAttribute(inputId)}">${escapeHtml(options.label || field)}</label>
+        <div class="ssid-password-input">
+          <input
+            id="${escapeAttribute(inputId)}"
+            class="form-control"
+            type="password"
+            data-header="${escapeAttribute(field)}"
+            value="${escapeAttribute(value || '')}"
+            autocomplete="${escapeAttribute(options.autocomplete || 'new-password')}"
+            ${options.placeholder ? `placeholder="${escapeAttribute(options.placeholder)}"` : ''}
+          >
+          <button
+            type="button"
+            class="credential-icon-button password-eye-button ssid-password-toggle"
+            title="Show password"
+            aria-label="Show password"
+            onclick="toggleSsidPasswordVisibility_(this)"
+          ><i class="fa-solid fa-eye"></i></button>
+        </div>
+        ${options.help ? `<small>${escapeHtml(options.help)}</small>` : ''}
+      </div>
+    `;
+  }
+
   return `
     <label class="ssid-field">
       <span>${escapeHtml(options.label || field)}${options.required ? ' <span class="required-marker">*</span>' : ''}</span>
       <input
+        id="${escapeAttribute(inputId)}"
         class="form-control"
         type="${escapeAttribute(options.type || 'text')}"
         data-header="${escapeAttribute(field)}"
@@ -168,16 +201,62 @@ function ssidTextareaField_(field, value) {
 }
 
 function updateSsidSecurityFields_() {
-  const input = document.querySelector('[data-header="Security Level"]');
-  const level = String(input && input.value || '').trim().toLowerCase();
+  const levelInput = document.querySelector('[data-header="Security Level"]');
+  const keyManagementInput = document.querySelector('[data-header="Key Management"]');
+  const mode = getSsidSecurityMode_(
+    levelInput && levelInput.value,
+    keyManagementInput && keyManagementInput.value
+  );
+
   document.querySelectorAll('[data-ssid-security]').forEach(container => {
     const kind = container.dataset.ssidSecurity;
     const visible = kind === 'secured'
-      ? level !== 'open'
+      ? mode !== 'open'
       : kind === 'personal'
-        ? level === 'personal'
-        : level === 'enterprise';
+        ? mode === 'personal' || mode === 'other'
+        : mode === 'enterprise' || mode === 'other';
     container.hidden = !visible;
   });
+}
+
+function getSsidSecurityMode_(securityLevel, keyManagement) {
+  const level = String(securityLevel || '').trim().toLowerCase();
+  const key = String(keyManagement || '').trim().toLowerCase();
+
+  // An explicit Security Level wins when the user changes modes. Key
+  // Management then classifies the configurable detailed WPA/PSK value.
+  if (level === 'open') {
+    return 'open';
+  }
+  if (/802\.?1x|enterprise|radius|peap|(?:^|[^a-z])eap(?:[^a-z]|$)/i.test(level)) {
+    return 'enterprise';
+  }
+  if (/psk|personal|pre[\s-]*shared|passphrase|wep/i.test(level)) {
+    return 'personal';
+  }
+  if (/802\.?1x|enterprise|radius|peap|(?:^|[^a-z])eap(?:[^a-z]|$)/i.test(key)) {
+    return 'enterprise';
+  }
+  if (/psk|personal|pre[\s-]*shared|passphrase|wep/i.test(key)) {
+    return 'personal';
+  }
+  if (!level && key === 'open') {
+    return 'open';
+  }
+  return 'other';
+}
+
+function toggleSsidPasswordVisibility_(button) {
+  const wrapper = button && button.closest('.ssid-password-input');
+  const input = wrapper && wrapper.querySelector('input[data-header="Password"]');
+  if (!input) return;
+
+  const reveal = input.type === 'password';
+  input.type = reveal ? 'text' : 'password';
+  button.title = reveal ? 'Hide password' : 'Show password';
+  button.setAttribute('aria-label', button.title);
+  button.innerHTML = reveal
+    ? '<i class="fa-solid fa-eye-slash"></i>'
+    : '<i class="fa-solid fa-eye"></i>';
 }
 </script>

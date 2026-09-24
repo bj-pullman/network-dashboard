@@ -100,7 +100,8 @@ const APP_PAGE_CONFIG = {
       'Status',
       'IP Address',
       'Type',
-      'Location'
+      'Location',
+      'Serial Number'
     ]
   },
 

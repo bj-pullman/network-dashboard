@@ -74,6 +74,7 @@ function getNetworkDashboardSchema_() {
         'Server Name',
         'IP Address',
         'Type',
+        'Serial Number',
         'Status',
         'Location',
         'Closet ID',
@@ -86,6 +87,7 @@ function getNetworkDashboardSchema_() {
         'Server Name',
         'IP Address',
         'Type',
+        'Serial Number',
         'Status',
         'Closet ID'
       ],
@@ -101,6 +103,7 @@ function getNetworkDashboardSchema_() {
         'Server Name',
         'IP Address',
         'Type',
+        'Serial Number',
         'Status',
         'Location',
         'Closet ID',
@@ -111,6 +114,7 @@ function getNetworkDashboardSchema_() {
         'Server Name',
         'IP Address',
         'Type',
+        'Serial Number',
         'Status',
         'Closet ID'
       ],
@@ -2849,6 +2853,11 @@ function getNetworkDashboardSchemaMigrations_() {
     {
       from: 8,
       to: 9,
+      run: function() {}
+    },
+    {
+      from: 9,
+      to: 10,
       run: function() {}
     }
   ];

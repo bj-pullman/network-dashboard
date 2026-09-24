@@ -5193,7 +5193,8 @@ textarea {
   gap: 6px;
 }
 
-.ssid-field > span {
+.ssid-field > span,
+.ssid-field > label {
   color: #485565;
   font-size: 10px;
   font-weight: 750;
@@ -5203,6 +5204,22 @@ textarea {
 .ssid-field > small {
   color: var(--muted);
   font-size: 0.74rem;
+}
+
+.ssid-password-input {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.ssid-password-input .form-control {
+  min-width: 0;
+}
+
+.ssid-password-toggle {
+  width: 38px;
+  height: 38px;
+  flex-basis: 38px;
 }
 
 .ssid-field-full {

@@ -1050,13 +1050,13 @@ Network HQ tracks application and schema versions independently.
 Current application version:
 
 ```text
-1.2.0
+1.3.0
 ```
 
 Current schema version:
 
 ```text
-9
+10
 ```
 
 The source release and schema constants define the expected versions. App Settings records the versions successfully installed by Setup or Update / Repair; Validation reports installed and expected values separately.

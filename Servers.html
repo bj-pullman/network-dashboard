@@ -2,11 +2,12 @@
 let currentServerView = 'active';
 
 RECORD_PAGE_DEFINITIONS.servers = {
-  defaultColumns: ["Server Name","Status","IP Address","Type","Location"],
+  defaultColumns: ["Server Name","Status","IP Address","Type","Location","Serial Number"],
   requiredColumns: ["Server Name"],
   columns: {
     "Server Name": { minWidth: 120 },
     "IP Address": { minWidth: 115 },
+    "Serial Number": { minWidth: 125 },
     "Status": { minWidth: 100 },
     "Notes": { minWidth: 130 }
   },

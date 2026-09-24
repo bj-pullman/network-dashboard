@@ -142,8 +142,8 @@ Network HQ
 Open **Help -> About Network HQ** in the production web app and confirm:
 
 ```text
-Application Version: 1.2.0
-Schema Version: 9
+Application Version: 1.3.0
+Schema Version: 10
 ```
 
 Then test the functionality affected by the release.
@@ -199,13 +199,13 @@ Validation reports expected and installed versions separately:
 
 ```text
 APPLICATION VERSION
-Installed: 1.2.0
-Expected: 1.2.0
+Installed: 1.3.0
+Expected: 1.3.0
 Status: Current
 
 SCHEMA VERSION
-Installed: 9
-Expected: 9
+Installed: 10
+Expected: 10
 Status: Current
 ```
 
@@ -242,7 +242,7 @@ After validation, open the configured production dashboard from the Google Sheet
 
 * the Dashboard and navigation load;
 * organization branding and settings remain intact;
-* **About Network HQ** reports application version `1.2.0` and schema `9`;
+* **About Network HQ** reports application version `1.3.0` and schema `10`;
 * the features changed by the release work as expected;
 * affected integrations work where applicable;
 * affected RBAC behavior works with an appropriate non-admin account;
@@ -365,8 +365,8 @@ Organization-owned data structure revision.
 For example, application and schema versions may advance independently:
 
 ```text
-Application 1.2.0
-Schema 9
+Application 1.3.0
+Schema 10
 ```
 
 A patch release does not automatically require a new schema version. The schema version changes only when the data structure requires a new migration boundary.
@@ -380,6 +380,8 @@ Schema 7 migrates SSIDs to the Aruba-oriented inventory model and adds the manag
 Schema 8 additively appends `Documentation File ID`, `Imported At`, and `Import Source` to Change Log and seeds configurable Change Log category/system lists plus future folder-import placeholders. Existing rows, columns, settings, and source records are preserved. Run **Update / Repair** after deploying this release; no separate migration function is required.
 
 Schema 9 adds the managed Network Closets and Network Closet UPS sheets and appends a `Closet ID` relationship column to Switches, Servers, and Offline Servers. The update is additive: existing equipment and Aruba Central-managed fields are preserved, while Update / Repair creates the new sheets, validations, and managed header protections automatically.
+
+Schema 10 additively appends `Serial Number` to Servers and Offline Servers. Existing rows and organization-specific columns retain their positions and values; Update / Repair adds the header once, and repeated reconciliation is idempotent.
 
 ## Schema migrations
 
@@ -472,8 +474,8 @@ Never place API keys, secrets, refresh tokens, private keys, or organization cre
 
 ```text
 [ ] Open Dashboard loads the production GUI
-[ ] About reports Application Version 1.2.0
-[ ] About reports Schema Version 9
+[ ] About reports Application Version 1.3.0
+[ ] About reports Schema Version 10
 [ ] Affected functionality tested
 [ ] Affected integrations tested where applicable
 [ ] Managed protections verified where applicable
