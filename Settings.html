@@ -84,7 +84,7 @@ function renderSettingsPage(data) {
           <div>
             <h2 class="card-title-clean">Documentation</h2>
             <div class="settings-card-subtitle">
-              Help links used throughout Network Dashboard.
+              Help links used throughout Network HQ.
             </div>
           </div>
         </div>
@@ -195,7 +195,7 @@ function renderSettingsPage(data) {
                   id="settingsPreviewTitle"
                   class="settings-preview-title"
                 >
-                  ${escapeHtml(values['organization.short_name'] || values['app.name'] || 'Network Dashboard')}
+                  ${escapeHtml(values['organization.short_name'] || values['app.name'] || 'Network HQ')}
                 </div>
                 <div class="settings-preview-subtitle">
                   INFRASTRUCTURE
@@ -229,7 +229,7 @@ function renderSettingsPage(data) {
                 ></i>
               </span>
               <span id="settingsPreviewBrowserTitle">
-                ${escapeHtml(values['app.name'] || 'Network Dashboard')}
+                ${escapeHtml(values['app.name'] || 'Network HQ')}
               </span>
             </div>
 
@@ -238,7 +238,7 @@ function renderSettingsPage(data) {
                 id="settingsPreviewEyebrow"
                 class="settings-preview-eyebrow"
               >
-                ${escapeHtml(values['organization.name'] || values['app.name'] || 'Network Dashboard')}
+                ${escapeHtml(values['organization.name'] || values['app.name'] || 'Network HQ')}
               </div>
               <div class="settings-preview-title-line">
                 <span>/</span>
@@ -1146,7 +1146,7 @@ function updateSettingsBrandPreview_() {
   const title =
     values['organization.short_name'] ||
     values['app.name'] ||
-    'Network Dashboard';
+    'Network HQ';
 
   const subtitle =
     values['organization.name'] ||
@@ -1296,7 +1296,7 @@ function updateSettingsBrandPreview_() {
   if (browserTitle) {
     browserTitle.textContent =
       values['app.name'] ||
-      'Network Dashboard';
+      'Network HQ';
   }
 
   const favicon =

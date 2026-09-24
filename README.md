@@ -1,18 +1,20 @@
-# Network Dashboard
+# Network HQ
 
-Network Dashboard is a self-hosted Google Sheets + Google Apps Script application for managing network infrastructure, physical systems, integrations, operational reference data and technology department workflows.
+Network HQ is a self-hosted Google Sheets + Google Apps Script application for managing network infrastructure, physical systems, integrations, operational reference data and technology department workflows.
 
 It combines the simplicity and ownership of Google Sheets with a purpose-built web interface for viewing and managing infrastructure information.
 
-Each organization operates its own Network Dashboard installation and retains ownership of its Google Sheet, Apps Script project, operational data, credentials, users and web app deployment.
+Each organization operates its own Network HQ installation and retains ownership of its Google Sheet, Apps Script project, operational data, credentials, users and web app deployment.
 
 The public Git repository contains the application source. It does not contain organization-specific data or credentials.
+
+**Naming note:** **Network HQ** is the product name. The Git repository, remote URL, and local project directory may retain legacy names such as `network-dashboard` or `network_dashboard_template`; those technical names do not change the application branding.
 
 ---
 
 ## Features
 
-Network Dashboard provides a centralized interface for documenting and managing technology infrastructure, including:
+Network HQ provides a centralized interface for documenting and managing technology infrastructure, including:
 
 * Network switches
 * Wireless access points
@@ -96,7 +98,7 @@ Technical information covering application rendering, caching, page loading, ins
 
 ## Architecture
 
-Network Dashboard is separated into four primary layers.
+Network HQ is separated into four primary layers.
 
 ### Core Application
 
@@ -133,11 +135,11 @@ Examples include:
 * enabled modules
 * non-secret integration configuration
 
-The core application should not require source-code changes to deploy Network Dashboard for another organization.
+The core application should not require source-code changes to deploy Network HQ for another organization.
 
 ### Integrations
 
-Network Dashboard uses a common integration model for external providers.
+Network HQ uses a common integration model for external providers.
 
 Current integration work includes:
 
@@ -164,12 +166,12 @@ Secrets must never be committed to Git or stored in public application source.
 
 ## Installation Model
 
-The GitHub repository is the canonical Network Dashboard application source.
+The GitHub repository is the canonical Network HQ application source.
 
 Each organization owns a separate installation:
 
 ```text
-Network Dashboard Git Repository
+Network HQ Git Repository
           |
           v
 Local installation folder
@@ -184,7 +186,7 @@ Organization-owned Apps Script project
 Organization-owned Google Sheet
           |
           v
-Network Dashboard Web App
+Network HQ Web App
 ```
 
 Each installation has its own:
@@ -208,11 +210,11 @@ The same canonical application source is deployed into separate organization-own
 
 ## Quick Start
 
-For complete instructions, use the **[Network Dashboard Setup Guide](SETUP.md)**.
+For complete instructions, use the **[Network HQ Setup Guide](SETUP.md)**.
 
 The high-level installation process is:
 
-### 1. Clone Network Dashboard
+### 1. Clone Network HQ
 
 ```powershell
 mkdir C:\automation\projects\network_dashboard
@@ -246,7 +248,7 @@ Project Settings
 
 ### 4. Create `.clasp.json`
 
-In the local Network Dashboard directory:
+In the local Network HQ directory:
 
 ```json
 {
@@ -266,12 +268,12 @@ clasp push
 
 Always verify the target Apps Script project before pushing.
 
-### 6. Initialize Network Dashboard
+### 6. Initialize Network HQ
 
 Reload the Google Sheet and select:
 
 ```text
-Network Dashboard
+Network HQ
 → Setup / Initialize
 ```
 
@@ -303,7 +305,7 @@ app.web_app_url
 Then use:
 
 ```text
-Network Dashboard
+Network HQ
 → Open Dashboard
 ```
 
@@ -313,7 +315,7 @@ For permission testing, production validation and integration configuration, con
 
 ## Data Ownership
 
-Network Dashboard is designed around organization-owned infrastructure.
+Network HQ is designed around organization-owned infrastructure.
 
 The organization retains control of its:
 
@@ -326,17 +328,17 @@ The organization retains control of its:
 * integrations
 * deployment
 
-Network Dashboard is not dependent on a centrally hosted Network Dashboard database.
+Network HQ is not dependent on a centrally hosted Network HQ database.
 
 Operational data remains in the organization's Google environment.
 
-The public Git repository distributes application source code and does not provide the project maintainer access to an organization's Network Dashboard data through the standard installation model.
+The public Git repository distributes application source code and does not provide the project maintainer access to an organization's Network HQ data through the standard installation model.
 
 ---
 
 ## Google Sheets as the Data Layer
 
-The Google Sheet is the persistent data store for a Network Dashboard installation.
+The Google Sheet is the persistent data store for a Network HQ installation.
 
 Application-managed sheets contain operational datasets such as:
 
@@ -360,7 +362,7 @@ Application-controlled structure is protected to reduce accidental schema change
 
 ## Web Application Architecture
 
-Network Dashboard uses a lightweight application shell.
+Network HQ uses a lightweight application shell.
 
 Page renderers are included in the shell and selected by page key. The deployed `/exec` URL opens Dashboard by default, and major pages switch internally without changing the browser URL or reloading the application shell.
 
@@ -471,7 +473,7 @@ Disabling a module does not delete its existing Sheet data.
 
 ## User Management and RBAC
 
-Network Dashboard includes its own application authorization layer.
+Network HQ includes its own application authorization layer.
 
 Users are maintained in `App Users`.
 
@@ -494,19 +496,19 @@ Per-page permission overrides can further control access.
 
 Authorization is enforced server-side for protected application operations.
 
-Administrators receive full Network Dashboard administrative access.
+Administrators receive full Network HQ administrative access.
 
 Non-admin users only see pages they are authorized to access.
 
 ---
 
-## Network Dashboard Permissions vs. Google Permissions
+## Network HQ Permissions vs. Google Permissions
 
-Google Workspace permissions and Network Dashboard application permissions are separate security layers.
+Google Workspace permissions and Network HQ application permissions are separate security layers.
 
-Giving someone access to the underlying Google Sheet does not automatically authorize that person to use Network Dashboard.
+Giving someone access to the underlying Google Sheet does not automatically authorize that person to use Network HQ.
 
-Likewise, a Network Dashboard user does not necessarily require direct Editor access to the underlying Sheet.
+Likewise, a Network HQ user does not necessarily require direct Editor access to the underlying Sheet.
 
 When the web application is deployed using:
 
@@ -514,7 +516,7 @@ When the web application is deployed using:
 Execute as: Me
 ```
 
-backend operations use the deployment owner's authorization while Network Dashboard independently evaluates the authenticated user's application permissions.
+backend operations use the deployment owner's authorization while Network HQ independently evaluates the authenticated user's application permissions.
 
 This allows organizations to expose the application to authorized users without exposing the underlying Sheet to every dashboard user.
 
@@ -522,7 +524,7 @@ This allows organizations to expose the application to authorized users without 
 
 ## Google Sheet Protection
 
-Network Dashboard protects application-managed structure such as:
+Network HQ protects application-managed structure such as:
 
 * canonical headers
 * App Settings metadata
@@ -543,13 +545,13 @@ Normal operational data remains editable where appropriate.
 
 Google Sheets always grants the spreadsheet owner ultimate administrative authority over the file.
 
-As a result, the Sheet owner can edit or remove protected ranges even while Network Dashboard protections are enabled.
+As a result, the Sheet owner can edit or remove protected ranges even while Network HQ protections are enabled.
 
-This behavior is controlled by Google Sheets and cannot be overridden by Network Dashboard.
+This behavior is controlled by Google Sheets and cannot be overridden by Network HQ.
 
-For normal Sheet editors, Network Dashboard-managed protections are enforced.
+For normal Sheet editors, Network HQ-managed protections are enforced.
 
-Network Dashboard does not intentionally whitelist the administrator who runs Setup.
+Network HQ does not intentionally whitelist the administrator who runs Setup.
 
 If the installer is also the Sheet owner, that user's ability to modify protected ranges comes from Google's ownership model.
 
@@ -558,17 +560,17 @@ If the installer is also the Sheet owner, that user's ability to modify protecte
 For intentional maintenance, use:
 
 ```text
-Network Dashboard
+Network HQ
 → Protection
 → Disable Protection (15 Minutes)
 ```
 
-Network Dashboard temporarily removes only its own managed protections.
+Network HQ temporarily removes only its own managed protections.
 
 Protections are automatically restored after the maintenance window or can be restored immediately using:
 
 ```text
-Network Dashboard
+Network HQ
 → Protection
 → Enable Protection
 ```
@@ -613,7 +615,7 @@ See [SETUP.md](SETUP.md) for the complete installation workflow.
 
 ## Update / Repair
 
-Network Dashboard separates application source updates from organization data.
+Network HQ separates application source updates from organization data.
 
 The standard update process is:
 
@@ -628,7 +630,7 @@ clasp push
 Then, from the Google Sheet:
 
 ```text
-Network Dashboard
+Network HQ
 → Update / Repair
 ```
 
@@ -657,7 +659,7 @@ For the complete update procedure and safety model, see [SETUP.md](SETUP.md).
 
 ## Schema Migrations and Backups
 
-Network Dashboard uses explicit schema versions.
+Network HQ uses explicit schema versions.
 
 A migration chain may look like:
 
@@ -675,12 +677,12 @@ If an existing populated application structure genuinely needs to be rebuilt, th
 Migration backup sheets use names similar to:
 
 ```text
-Network Dashboard Backup - <Sheet> - <timestamp>
+Network HQ Backup - <Sheet> - <timestamp>
 ```
 
 Migration backups are not automatically deleted.
 
-Network Dashboard migration backups are not a replacement for an organization's normal Google Workspace backup and retention strategy.
+Network HQ migration backups are not a replacement for an organization's normal Google Workspace backup and retention strategy.
 
 ---
 
@@ -689,7 +691,7 @@ Network Dashboard migration backups are not a replacement for an organization's 
 Use:
 
 ```text
-Network Dashboard
+Network HQ
 → Validate Installation
 ```
 
@@ -738,7 +740,7 @@ Settings include areas such as:
 
 System-controlled settings include application and schema version metadata.
 
-Editable settings should normally be managed through the Network Dashboard Settings interface.
+Editable settings should normally be managed through the Network HQ Settings interface.
 
 Application definitions may update setting metadata during Update / Repair while preserving existing organization-owned values.
 
@@ -746,7 +748,7 @@ Application definitions may update setting metadata during Update / Repair while
 
 ## Branding
 
-Network Dashboard supports organization-specific branding without source-code changes.
+Network HQ supports organization-specific branding without source-code changes.
 
 Configurable branding includes:
 
@@ -766,11 +768,11 @@ Branding belongs in application configuration rather than the canonical Git sour
 
 ## Integrations
 
-Network Dashboard separates integration configuration, secrets, synchronization and local operational datasets.
+Network HQ separates integration configuration, secrets, synchronization and local operational datasets.
 
 Integration definitions are registered in the application source.
 
-Non-secret configuration and runtime status are managed through Network Dashboard.
+Non-secret configuration and runtime status are managed through Network HQ.
 
 Secrets are stored in Apps Script Script Properties.
 
@@ -798,7 +800,7 @@ ARUBA_CLIENT_SECRET
 ARUBA_REFRESH_TOKEN
 ```
 
-Aruba Central must also be enabled through Network Dashboard's integration settings.
+Aruba Central must also be enabled through Network HQ's integration settings.
 
 ### ThreatDown
 
@@ -825,7 +827,7 @@ Full ThreatDown asset management, alerting, reporting and policy administration 
 
 UptimeRobot provides external health information for monitored infrastructure, particularly Internet/WAN circuits.
 
-Network Dashboard:
+Network HQ:
 
 * reads provider monitor information,
 * stores synchronized monitor information locally,
@@ -839,7 +841,7 @@ Required Script Property:
 UPTIMEROBOT_API_KEY
 ```
 
-Network Dashboard does not create, edit or delete UptimeRobot monitors.
+Network HQ does not create, edit or delete UptimeRobot monitors.
 
 Provider data is synchronized into the organization-owned Sheet so normal page rendering does not depend on live external API calls.
 
@@ -905,7 +907,7 @@ Organizations can adapt these definitions to their own technology department pro
 
 ## Sensitive Data
 
-Network Dashboard may contain infrastructure information that should be treated as sensitive operational data.
+Network HQ may contain infrastructure information that should be treated as sensitive operational data.
 
 API secrets, refresh tokens and similar credentials must be stored in Script Properties rather than normal Sheet cells.
 
@@ -913,7 +915,7 @@ Credential fields that are intentionally supported by operational modules are ha
 
 For example, sensitive password columns can remain hidden from normal tables and require appropriate server-side permissions for reveal operations.
 
-Administrators should apply their organization's normal access-control, retention and security policies to the Network Dashboard Google Sheet and Apps Script project.
+Administrators should apply their organization's normal access-control, retention and security policies to the Network HQ Google Sheet and Apps Script project.
 
 ---
 
@@ -939,7 +941,7 @@ The configured email addresses are installation-specific security configuration.
 
 ## Development with clasp
 
-Git is the canonical source for Network Dashboard application code.
+Git is the canonical source for Network HQ application code.
 
 Useful commands include:
 
@@ -978,7 +980,7 @@ Never commit:
 
 Development/test seed tooling is intentionally separated from production application behavior.
 
-Development seed/reset actions are not included in the production Network Dashboard menu.
+Development seed/reset actions are not included in the production Network HQ menu.
 
 Production deployments should never require fictional seed data or development reset functions.
 
@@ -991,7 +993,7 @@ Any local development helpers should remain excluded from normal public/producti
 The Google Sheet production menu provides:
 
 ```text
-Network Dashboard
+Network HQ
 ├── Setup / Initialize
 ├── Update / Repair
 ├── Validate Installation
@@ -1012,7 +1014,7 @@ Common installation and administration issues are documented in **[FAQ.md](FAQ.m
 
 Examples include:
 
-* missing Network Dashboard menu
+* missing Network HQ menu
 * missing `.clasp.json`
 * incorrect clasp target
 * non-empty Git clone directory
@@ -1043,7 +1045,7 @@ Never include passwords, client secrets, API keys, refresh tokens or other crede
 
 ## Versioning
 
-Network Dashboard tracks application and schema versions independently.
+Network HQ tracks application and schema versions independently.
 
 Current application version:
 
@@ -1061,7 +1063,7 @@ The source release and schema constants define the expected versions. App Settin
 
 Schema versions control data-structure migrations.
 
-Application versions identify the installed Network Dashboard software release.
+Application versions identify the installed Network HQ software release.
 
 ---
 
@@ -1083,27 +1085,27 @@ PERFORMANCE.md
     Rendering, caching and performance architecture
 ```
 
-The Git repository is the canonical source for Network Dashboard application code.
+The Git repository is the canonical source for Network HQ application code.
 
-Organization-specific configuration belongs in the organization's Network Dashboard installation rather than the public repository.
+Organization-specific configuration belongs in the organization's Network HQ installation rather than the public repository.
 
 ---
 
 ## Recommended Next Steps
 
-### Installing Network Dashboard
+### Installing Network HQ
 
 Start with:
 
-**[Network Dashboard Setup Guide →](SETUP.md)**
+**[Network HQ Setup Guide →](SETUP.md)**
 
-### Already Running Network Dashboard
+### Already Running Network HQ
 
 For administration, security, updates or troubleshooting:
 
-**[Network Dashboard FAQ →](FAQ.md)**
+**[Network HQ FAQ →](FAQ.md)**
 
-### Developing Network Dashboard
+### Developing Network HQ
 
 Review:
 
@@ -1113,6 +1115,6 @@ and the application source before making architectural changes.
 
 ---
 
-Network Dashboard is designed around a simple principle:
+Network HQ is designed around a simple principle:
 
 **The application can evolve while each organization retains ownership of its data, configuration, credentials and deployment.**

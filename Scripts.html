@@ -524,7 +524,7 @@ function buildGlobalHelpMenu_() {
     ${admin ? helpExternalItem_('Update & Maintenance Guide', docs.updateGuideUrl) : ''}
     ${admin ? helpExternalItem_('Setup & Deployment Guide', docs.setupGuideUrl) : ''}
     ${admin ? '<div class="dropdown-divider"></div>' : ''}
-    <button class="dropdown-item" type="button" onclick="showNetworkDashboardAbout_()">About Network Dashboard</button>
+    <button class="dropdown-item" type="button" onclick="showNetworkDashboardAbout_()">About Network HQ</button>
   `;
 }
 
@@ -546,7 +546,7 @@ function showNetworkDashboardAbout_() {
   if (!body) return;
   body.innerHTML = `
     <dl class="about-details">
-      <dt>Application Name</dt><dd>${escapeHtml(config.appName || 'Network Dashboard')}</dd>
+      <dt>Application Name</dt><dd>${escapeHtml(config.appName || 'Network HQ')}</dd>
       <dt>Application Version</dt><dd>${escapeHtml(config.applicationVersion || '')}</dd>
       <dt>Schema Version</dt><dd>${escapeHtml(config.schemaVersion || '')}</dd>
       <dt>Organization Name</dt><dd>${escapeHtml(organization.name || 'Not configured')}</dd>
@@ -628,7 +628,7 @@ function applyBranding(
 
   document.title =
     config.appName ||
-    'Network Dashboard';
+    'Network HQ';
 
 
   const brandTitle =
@@ -641,7 +641,7 @@ function applyBranding(
       (
         organization.shortName ||
         config.appName ||
-        'Network Dashboard'
+        'Network HQ'
       ).toUpperCase();
   }
 
@@ -667,7 +667,7 @@ function applyBranding(
       (
         organization.name ||
         config.appName ||
-        'Network Dashboard'
+        'Network HQ'
       ).toUpperCase();
   }
 
@@ -2224,11 +2224,11 @@ function showBootstrapError(
 
   setPageHeader(
     'Unable to Start',
-    'Network Dashboard could not initialize.'
+    'Network HQ could not initialize.'
   );
 
   showPageErrorPanel_(
-    'Unable to load Network Dashboard',
+    'Unable to load Network HQ',
     error,
     'location.reload()'
   );
@@ -2286,7 +2286,7 @@ function showPageErrorPanel_(
       <div class="page-error-body">
         <h2>${escapeHtml(title)}</h2>
         <p>
-          Network Dashboard could not retrieve the requested information.
+          Network HQ could not retrieve the requested information.
         </p>
         <div class="page-error-detail">
           ${escapeHtml(getSafeErrorMessage_(error))}
@@ -3340,7 +3340,7 @@ function handleFailure(
 ) {
 
   console.error(
-    'Network Dashboard request failed:',
+    'Network HQ request failed:',
     context || 'unknown operation',
     error
   );

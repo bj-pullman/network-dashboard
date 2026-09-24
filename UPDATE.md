@@ -1,12 +1,14 @@
-# Network Dashboard Update & Maintenance Guide
+# Network HQ Update & Maintenance Guide
 
-This guide describes the normal production update process for an existing Network Dashboard installation. GitHub remains the canonical application source, while each organization retains its existing Google Sheet, Apps Script project, web app deployment, settings, users, data, and Script Properties.
+This guide describes the normal production update process for an existing Network HQ installation. GitHub remains the canonical application source, while each organization retains its existing Google Sheet, Apps Script project, web app deployment, settings, users, data, and Script Properties.
 
 The standard workflow advances the existing installation. It does not create a new Sheet, Apps Script project, or independent web app deployment.
 
+**Naming note:** **Network HQ** is the product name. Existing repository URLs and local project directories may still use legacy technical names such as `network-dashboard` or `network_dashboard_template`; updates do not require renaming them.
+
 ---
 
-# 1. How Network Dashboard Updates Work
+# 1. How Network HQ Updates Work
 
 A production update has four separate layers:
 
@@ -37,7 +39,7 @@ clasp push does not update the version served by an existing /exec deployment.
 Update / Repair does not deploy a new production web app version.
 ```
 
-Because most Network Dashboard releases affect web application source, advancing the existing web app deployment is a standard update step.
+Because most Network HQ releases affect web application source, advancing the existing web app deployment is a standard update step.
 
 ---
 
@@ -100,7 +102,7 @@ In Apps Script:
 ```text
 Deploy
 -> Manage deployments
--> Select the existing Network Dashboard Web App deployment
+-> Select the existing Network HQ Web App deployment
 -> Edit
 -> Version: New version
 -> Deploy
@@ -113,7 +115,7 @@ Confirm that the existing production `/exec` URL remains unchanged. Do not creat
 Reload the existing Google Sheet, then run:
 
 ```text
-Network Dashboard
+Network HQ
 -> Update / Repair
 ```
 
@@ -122,7 +124,7 @@ Allow reconciliation to finish before users resume normal dashboard activity.
 ## Step 8 - Validate
 
 ```text
-Network Dashboard
+Network HQ
 -> Validate Installation
 ```
 
@@ -131,13 +133,13 @@ Review Application Health separately from Action Required and Advisory configura
 ## Step 9 - Open production
 
 ```text
-Network Dashboard
+Network HQ
 -> Open Dashboard
 ```
 
 ## Step 10 - Verify the release
 
-Open **Help -> About Network Dashboard** in the production web app and confirm:
+Open **Help -> About Network HQ** in the production web app and confirm:
 
 ```text
 Application Version: 1.2.0
@@ -158,7 +160,7 @@ Always update the existing production deployment:
 Apps Script
 -> Deploy
 -> Manage deployments
--> Existing Network Dashboard Web App
+-> Existing Network HQ Web App
 -> Edit
 -> New version
 -> Deploy
@@ -166,9 +168,9 @@ Apps Script
 
 Do not use **New deployment** for a routine update. Advancing the existing deployment preserves its deployment identity and stable `/exec` URL.
 
-A new web app deployment version should be assumed necessary for every normal Network Dashboard release. This avoids requiring administrators to determine whether changes to `Code.js`, `App.js`, `Config.js`, HTML, styles, client scripts, or another `doGet` dependency affect production execution.
+A new web app deployment version should be assumed necessary for every normal Network HQ release. This avoids requiring administrators to determine whether changes to `Code.js`, `App.js`, `Config.js`, HTML, styles, client scripts, or another `doGet` dependency affect production execution.
 
-Network Dashboard cannot reliably query Apps Script for the source version actually selected by an external production deployment. The reliable verification is to open the production `/exec` application after deployment and inspect its runtime version in **About Network Dashboard**.
+Network HQ cannot reliably query Apps Script for the source version actually selected by an external production deployment. The reliable verification is to open the production `/exec` application after deployment and inspect its runtime version in **About Network HQ**.
 
 ---
 
@@ -185,7 +187,7 @@ Update / Repair reconciles the existing organization-owned installation. Dependi
 * update installed application/schema metadata;
 * invalidate applicable caches.
 
-The installed `app.version` is written only at the successful end of reconciliation. If the update fails after that final write begins, Network Dashboard attempts to restore the previously installed application version rather than falsely reporting the release as installed.
+The installed `app.version` is written only at the successful end of reconciliation. If the update fails after that final write begins, Network HQ attempts to restore the previously installed application version rather than falsely reporting the release as installed.
 
 Update / Repair does not update the web app deployment and does not claim that deployment occurred.
 
@@ -227,7 +229,7 @@ An integration-specific trigger that is not needed is shown as **Not applicable*
 Routine discrepancies should normally be repaired with:
 
 ```text
-Network Dashboard -> Update / Repair
+Network HQ -> Update / Repair
 ```
 
 Setup / Initialize remains the initial-installation and recovery entry point.
@@ -240,7 +242,7 @@ After validation, open the configured production dashboard from the Google Sheet
 
 * the Dashboard and navigation load;
 * organization branding and settings remain intact;
-* **About Network Dashboard** reports application version `1.2.0` and schema `9`;
+* **About Network HQ** reports application version `1.2.0` and schema `9`;
 * the features changed by the release work as expected;
 * affected integrations work where applicable;
 * affected RBAC behavior works with an appropriate non-admin account;
@@ -344,7 +346,7 @@ Do not use `clasp pull` as the normal update mechanism. Do not replace organizat
 
 # 9. Application and Schema Versions
 
-Network Dashboard uses semantic application versions:
+Network HQ uses semantic application versions:
 
 * **Patch** (`1.0.1` -> `1.0.2`) for backward-compatible fixes, documentation, and reliability improvements;
 * **Minor** (`1.0.2` -> `1.1.0`) for meaningful backward-compatible functionality;
@@ -354,7 +356,7 @@ The two installed version fields have different meanings:
 
 ```text
 Application Version
-Network Dashboard software release.
+Network HQ software release.
 
 Schema Version
 Organization-owned data structure revision.
@@ -391,7 +393,7 @@ Existing integration credentials remain in the organization's Script Properties.
 
 Aruba Central OAuth maintenance is required only when Aruba Central is enabled and fully configured. Setup / Initialize and Update / Repair reconcile the daily trigger in that state. When Aruba Central is disabled, validation reports the maintenance trigger as **Not applicable**.
 
-Update / Repair reconciles Network Dashboard-managed protections. Validation identifies the Sheet/tab and range for missing protection findings, for example:
+Update / Repair reconciles Network HQ-managed protections. Validation identifies the Sheet/tab and range for missing protection findings, for example:
 
 ```text
 App Settings -> Key [A2:A1000] - Protection missing.
@@ -414,7 +416,7 @@ Confirm `clasp push` completed, advance the existing web app deployment, reload 
 
 ## About shows the old application version
 
-Open Apps Script **Deploy -> Manage deployments**, edit the existing Network Dashboard Web App, select **New version**, and deploy. Confirm you are opening the existing configured `/exec` URL.
+Open Apps Script **Deploy -> Manage deployments**, edit the existing Network HQ Web App, select **New version**, and deploy. Confirm you are opening the existing configured `/exec` URL.
 
 ## Production dashboard does not load
 
@@ -430,7 +432,7 @@ Never place API keys, secrets, refresh tokens, private keys, or organization cre
 
 ---
 
-# 12. Network Dashboard Update Checklist
+# 12. Network HQ Update Checklist
 
 ## Before Update
 

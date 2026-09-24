@@ -100,7 +100,7 @@ function onOpen() {
     SpreadsheetApp.getUi();
 
   const menu =
-    ui.createMenu('Network Dashboard')
+    ui.createMenu('Network HQ')
     .addItem(
       'Setup / Initialize',
       'setupNetworkDashboard'
@@ -195,7 +195,7 @@ function seedNetworkDashboardTestDataFromMenu() {
       .getActive()
       .toast(
         'Test data seeded successfully.',
-        'Network Dashboard',
+        'Network HQ',
         8
       );
 
@@ -206,7 +206,7 @@ function seedNetworkDashboardTestDataFromMenu() {
       .getActive()
       .toast(
         'Test data seed failed. Check execution logs.',
-        'Network Dashboard',
+        'Network HQ',
         8
       );
     throw error;
@@ -217,7 +217,7 @@ function seedNetworkDashboardTestDataFromMenu() {
 function resetDevelopmentEnvironmentFromMenuMessage_() {
 
   return [
-    'This will reset the Network Dashboard development environment.',
+    'This will reset the Network HQ development environment.',
     '',
     'Only DevSeed-managed sheets, test data and manifest records will be reset.',
     'Non-DevSeed-owned data and Script Properties are preserved by the existing reset safeguards.'
@@ -253,7 +253,7 @@ function resetNetworkDashboardDevEnvironmentFromMenu() {
       .getActive()
       .toast(
         'Development reset canceled.',
-        'Network Dashboard',
+        'Network HQ',
         5
       );
     return;
@@ -270,7 +270,7 @@ function resetNetworkDashboardDevEnvironmentFromMenu() {
       .getActive()
       .toast(
         'Development environment reset successfully.',
-        'Network Dashboard',
+        'Network HQ',
         8
       );
 
@@ -281,7 +281,7 @@ function resetNetworkDashboardDevEnvironmentFromMenu() {
       .getActive()
       .toast(
         'Development reset failed. Check execution logs.',
-        'Network Dashboard',
+        'Network HQ',
         8
       );
     throw error;
@@ -322,7 +322,7 @@ function openNetworkDashboardFromMenu() {
   if (!url) {
 
     ui.alert(
-      'Network Dashboard web app URL is not configured. Deploy the Apps Script web app, then save the deployment URL in Settings or App Settings key app.web_app_url.'
+      'Network HQ web app URL is not configured. Deploy the Apps Script web app, then save the deployment URL in Settings or App Settings key app.web_app_url.'
     );
 
     return;
@@ -332,7 +332,7 @@ function openNetworkDashboardFromMenu() {
   if (!isAppsScriptWebAppUrl_(url)) {
 
     ui.alert(
-      'The configured Network Dashboard web app URL is not a valid Apps Script /exec deployment URL. Deploy the Apps Script project as a web app, copy its /exec URL, and save it as App Settings key app.web_app_url.'
+      'The configured Network HQ web app URL is not a valid Apps Script /exec deployment URL. Deploy the Apps Script project as a web app, copy its /exec URL, and save it as App Settings key app.web_app_url.'
     );
 
     return;
@@ -343,7 +343,7 @@ function openNetworkDashboardFromMenu() {
     HtmlService
       .createHtmlOutput(
         '<div style="font-family:Arial,sans-serif;padding:16px;">' +
-        '<h2 style="margin:0 0 10px;">Open Network Dashboard</h2>' +
+        '<h2 style="margin:0 0 10px;">Open Network HQ</h2>' +
         '<p style="margin:0 0 14px;color:#4b5563;">Use the configured deployment URL below.</p>' +
         '<a href="' +
         escapeHtmlServer_(url) +
@@ -355,7 +355,7 @@ function openNetworkDashboardFromMenu() {
 
   ui.showModalDialog(
     html,
-    'Network Dashboard'
+    'Network HQ'
   );
 }
 

@@ -1304,9 +1304,37 @@ function isNetworkDashboardManagedProtection_(
       protection.getDescription() || ''
     );
 
-  return description.indexOf(
+  return isNetworkDashboardManagedProtectionDescription_(
+    description
+  );
+}
+
+
+function isNetworkDashboardManagedProtectionDescription_(
+  description
+) {
+
+  const value = String(description || '');
+
+  return [
+    'Network HQ - ',
+    // Retained so protections created before the rebrand remain managed.
     'Network Dashboard - '
-  ) === 0;
+  ].some(prefix => value.indexOf(prefix) === 0);
+}
+
+
+function isManagedHeaderProtectionDescription_(
+  description
+) {
+
+  const value = String(description || '');
+
+  return [
+    'Network HQ - Managed Headers',
+    // Retained so Update / Repair migrates legacy descriptions in place.
+    'Network Dashboard - Managed Headers'
+  ].some(prefix => value.indexOf(prefix) === 0);
 }
 
 
@@ -1435,8 +1463,8 @@ function showDisableNetworkDashboardProtectionDialog() {
     HtmlService
       .createHtmlOutput(
         '<div style="font-family:Arial,sans-serif;padding:16px;line-height:1.45;">' +
-        '<h2 style="margin:0 0 12px;">Temporarily disable Network Dashboard protections?</h2>' +
-        '<p>Protected headers and system-managed ranges will become editable for 15 minutes. Use this only when intentionally modifying Network Dashboard structure.</p>' +
+        '<h2 style="margin:0 0 12px;">Temporarily disable Network HQ protections?</h2>' +
+        '<p>Protected headers and system-managed ranges will become editable for 15 minutes. Use this only when intentionally modifying Network HQ structure.</p>' +
         '<p><strong>Protections will automatically be restored.</strong></p>' +
         '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px;">' +
         '<button onclick="google.script.host.close()">Cancel</button>' +
@@ -1450,7 +1478,7 @@ function showDisableNetworkDashboardProtectionDialog() {
     .getUi()
     .showModalDialog(
       html,
-      'Network Dashboard Protection'
+      'Network HQ Protection'
     );
 }
 
@@ -1501,7 +1529,7 @@ function disableNetworkDashboardProtectionConfirmed() {
   }
 
   showNetworkDashboardToast_(
-    'Network Dashboard protections are disabled for 15 minutes.',
+    'Network HQ protections are disabled for 15 minutes.',
     8
   );
 
@@ -1613,7 +1641,7 @@ function restoreNetworkDashboardProtections(
 
   if (validation.errors.length) {
     throw new Error(
-      'Network Dashboard protections could not be fully enforced: ' +
+      'Network HQ protections could not be fully enforced: ' +
       validation.errors.join(' ')
     );
   }
@@ -1625,7 +1653,7 @@ function restoreNetworkDashboardProtections(
 
   if (!options.silent) {
     showNetworkDashboardToast_(
-      'Network Dashboard protections are enabled.',
+      'Network HQ protections are enabled.',
       8
     );
   }
@@ -1862,7 +1890,7 @@ function reconcileNetworkDashboard_(
 
 
   console.log(
-    'Network Dashboard ' +
+    'Network HQ ' +
     mode +
     ' reconciliation result: ' +
     JSON.stringify(
@@ -2094,7 +2122,7 @@ function validateNetworkDashboard(options) {
 
 
   console.log(
-    'Network Dashboard validation result: ' +
+    'Network HQ validation result: ' +
     JSON.stringify(
       result,
       null,
@@ -2156,8 +2184,8 @@ function finalizeValidationSeverity_(result) {
       critical ? 'critical' : 'action',
       message,
       critical
-        ? 'Run Network Dashboard -> Update / Repair. If the issue remains, review the reported Sheet structure before using the application.'
-        : 'Run Network Dashboard -> Update / Repair to reconcile the reported installation component.'
+        ? 'Run Network HQ -> Update / Repair. If the issue remains, review the reported Sheet structure before using the application.'
+        : 'Run Network HQ -> Update / Repair to reconcile the reported installation component.'
     );
   });
 
@@ -3745,7 +3773,7 @@ function createMigrationBackup_(
   const backupName =
     getUniqueSheetName_(
       ss,
-      'Network Dashboard Backup - ' +
+      'Network HQ Backup - ' +
       sheetName
     );
 
@@ -4499,8 +4527,9 @@ function protectManagedHeaderRanges_(
           protections.filter(protection =>
             protection.getRange().getA1Notation() ===
               range.getA1Notation() &&
-            String(protection.getDescription() || '')
-              .indexOf('Network Dashboard - Managed Headers') === 0
+            isManagedHeaderProtectionDescription_(
+              protection.getDescription()
+            )
           );
 
         let protection =
@@ -4649,7 +4678,7 @@ function getManagedProtectionDescription_(
 ) {
 
   return [
-    'Network Dashboard - Managed Headers',
+    'Network HQ - Managed Headers',
     sheetName,
     key
   ].join(' - ');
@@ -4710,7 +4739,21 @@ function isManagedProtectionEnforced_(
 
 function getAppSettingsProtectionPrefix_() {
 
-  return 'Network Dashboard - App Settings - ';
+  return 'Network HQ - App Settings - ';
+}
+
+
+function isAppSettingsProtectionDescription_(
+  description
+) {
+
+  const value = String(description || '');
+
+  return [
+    getAppSettingsProtectionPrefix_(),
+    // Retained so Update / Repair reuses and relabels legacy protections.
+    'Network Dashboard - App Settings - '
+  ].some(prefix => value.indexOf(prefix) === 0);
 }
 
 
@@ -4878,8 +4921,9 @@ function protectAppSettingsRanges_(
         protections.filter(protection =>
           protection.getRange().getA1Notation() ===
             range.getA1Notation() &&
-          String(protection.getDescription() || '')
-            .indexOf(getAppSettingsProtectionPrefix_()) === 0
+          isAppSettingsProtectionDescription_(
+            protection.getDescription()
+          )
         );
 
       let protection =
@@ -4936,9 +4980,7 @@ function protectAppSettingsRanges_(
 
     if (
       !description ||
-      description.indexOf(
-        getAppSettingsProtectionPrefix_()
-      ) !== 0
+      !isAppSettingsProtectionDescription_(description)
     ) {
       return;
     }
@@ -5719,7 +5761,7 @@ function validateInactiveAndObsoleteSheets_(
     });
 
     result.warnings.push(
-      'Replacement Switches exists but is no longer a managed Network Dashboard sheet.'
+      'Replacement Switches exists but is no longer a managed Network HQ sheet.'
     );
 
   }
@@ -5868,7 +5910,7 @@ function validateProtections_(
           sheetName + ' -> Managed headers [' +
             range.getA1Notation() +
             '] - Protection missing.',
-          'Run Network Dashboard -> Update / Repair to reconcile managed protections.'
+          'Run Network HQ -> Update / Repair to reconcile managed protections.'
         );
       }
 
@@ -5967,7 +6009,7 @@ function validateSettings_(result) {
           result,
           'action',
           'App Settings -> ' + definition.key + ' - Setting missing.',
-          'Run Network Dashboard -> Update / Repair to create missing App Settings definitions.'
+          'Run Network HQ -> Update / Repair to create missing App Settings definitions.'
         );
       }
 
@@ -6025,7 +6067,7 @@ function validateSettings_(result) {
         (installedAppVersion || 'Not installed') +
         '; Expected: ' + NETWORK_DASHBOARD_VERSION +
         '; Status: Update required.',
-      'Run Network Dashboard -> Update / Repair after deploying the current release.'
+      'Run Network HQ -> Update / Repair after deploying the current release.'
     );
   }
 
@@ -6039,8 +6081,8 @@ function validateSettings_(result) {
         '; Status: ' +
         (schemaIsNewer ? 'Source update required.' : 'Update required.'),
       schemaIsNewer
-        ? 'Update the Network Dashboard source before running reconciliation; this source does not support the installed schema.'
-        : 'Run Network Dashboard -> Update / Repair to apply required schema reconciliation.'
+        ? 'Update the Network HQ source before running reconciliation; this source does not support the installed schema.'
+        : 'Run Network HQ -> Update / Repair to apply required schema reconciliation.'
     );
   }
 
@@ -6137,7 +6179,7 @@ function validateAppSettingsProtections_(
           'App Settings -> ' + definition.key +
             ' [' + range.getA1Notation() +
             '] - Protection missing.',
-          'Run Network Dashboard -> Update / Repair to reconcile managed App Settings protections.'
+          'Run Network HQ -> Update / Repair to reconcile managed App Settings protections.'
         );
       }
 
@@ -6194,7 +6236,7 @@ function validateRequiredTriggers_(result) {
         'action',
         'Required Trigger -> ' + definition.description +
           ' - Missing.',
-        'Run Network Dashboard -> Update / Repair to create the required maintenance trigger.'
+        'Run Network HQ -> Update / Repair to create the required maintenance trigger.'
       );
     } else if (definition.required && count > 1) {
       addValidationIssue_(
@@ -6202,7 +6244,7 @@ function validateRequiredTriggers_(result) {
         'action',
         'Required Trigger -> ' + definition.description +
           ' - ' + count + ' copies found.',
-        'Run Network Dashboard -> Update / Repair to retain one maintenance trigger.'
+        'Run Network HQ -> Update / Repair to retain one maintenance trigger.'
       );
     }
 
@@ -6385,7 +6427,7 @@ function formatSetupSummary_(result) {
     result.validation || {};
 
   return [
-    'NETWORK DASHBOARD SETUP',
+    'NETWORK HQ SETUP',
     '',
     'Sheets',
     result.sheets.created.length +
@@ -6463,7 +6505,7 @@ function formatValidationSummary_(result) {
   }
 
   return [
-    'NETWORK DASHBOARD VALIDATION',
+    'NETWORK HQ VALIDATION',
     '',
     'APPLICATION VERSION',
     'Installed: ' +
@@ -6552,8 +6594,8 @@ function buildReconciliationToastMessage_(result) {
 
   return [
     result.mode === 'update'
-      ? 'Network Dashboard Update Complete'
-      : 'Network Dashboard Setup Complete',
+      ? 'Network HQ Update Complete'
+      : 'Network HQ Setup Complete',
     'Application Version: ' + NETWORK_DASHBOARD_VERSION,
     'Schema Version: ' + NETWORK_DASHBOARD_SCHEMA_VERSION,
     sheetCount + ' sheets reconciled',
@@ -6584,11 +6626,11 @@ function showNetworkDashboardUpdateResultDialog_(details) {
       .getUi()
       .showModalDialog(
         output,
-        'Network Dashboard Update / Repair'
+        'Network HQ Update / Repair'
       );
   } catch (dialogError) {
     console.log(
-      'Could not show the Network Dashboard Update / Repair result dialog: ' +
+      'Could not show the Network HQ Update / Repair result dialog: ' +
       dialogError.message
     );
   }
@@ -6664,7 +6706,7 @@ function buildNetworkDashboardUpdateDialogModel_(details) {
   }
 
   return {
-    title: 'Network Dashboard Update / Repair',
+    title: 'Network HQ Update / Repair',
     status: status,
     state: state,
     applicationVersion:
@@ -6795,7 +6837,7 @@ function showNetworkDashboardToast_(
       .getActiveSpreadsheet()
       .toast(
         message,
-        'Network Dashboard',
+        'Network HQ',
         timeoutSeconds || 5
       );
   } catch (error) {}
@@ -6805,14 +6847,14 @@ function showNetworkDashboardToast_(
 function getSetupNextSteps_() {
 
   return [
-    'Open Network Dashboard Settings.',
+    'Open Network HQ Settings.',
     'Configure organization, branding, regional and user-domain policy.',
     'Optionally configure break-glass administrators in Script Properties.',
     'Add Script Properties for desired integrations.',
     'Add users and permissions.',
     'Deploy the Apps Script project as a web app executing as the owner.',
     'Save the deployment /exec URL as app.web_app_url.',
-    'Use Network Dashboard -> Open Dashboard to verify the deployment.'
+    'Use Network HQ -> Open Dashboard to verify the deployment.'
   ];
 }
 

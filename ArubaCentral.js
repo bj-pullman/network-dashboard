@@ -117,7 +117,7 @@ function getArubaCentralToken_(options) {
         props.setProperty('ARUBA_REFRESH_TOKEN', rotatedRefreshToken);
       } catch (propertyError) {
         throw new Error(
-          'Aruba Central returned a rotated refresh token, but Network Dashboard could not persist it securely.'
+          'Aruba Central returned a rotated refresh token, but Network HQ could not persist it securely.'
         );
       }
     }
@@ -134,7 +134,7 @@ function getArubaCentralToken_(options) {
       );
     } catch (cacheError) {
       throw new Error(
-        'Aruba Central refreshed successfully, but Network Dashboard could not cache the access token.'
+        'Aruba Central refreshed successfully, but Network HQ could not cache the access token.'
       );
     }
 

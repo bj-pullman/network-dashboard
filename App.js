@@ -1,5 +1,5 @@
 /*******************************************************
- * NETWORK DASHBOARD
+ * NETWORK HQ
  * Application / RBAC / Data Layer
  *******************************************************/
 
@@ -1013,8 +1013,8 @@ function requirePageModuleEnabled_(
     module &&
     module.classification === 'optional'
       ? module.name +
-        ' is disabled for this Network Dashboard.'
-      : 'This Network Dashboard page is not enabled.'
+        ' is disabled for this Network HQ.'
+      : 'This Network HQ page is not enabled.'
   );
 }
 
@@ -1774,7 +1774,7 @@ function withPerformanceTiming_(
     return callback();
   } finally {
     console.log(
-      '[Network Dashboard timing] ' +
+      '[Network HQ timing] ' +
       label +
       ': ' +
       (Date.now() - start) +

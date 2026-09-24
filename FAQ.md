@@ -1,6 +1,6 @@
-# Network Dashboard FAQ
+# Network HQ FAQ
 
-This document answers common questions about installing, managing, securing and updating Network Dashboard.
+This document answers common questions about installing, managing, securing and updating Network HQ.
 
 For complete installation instructions, see `SETUP.md`.
 
@@ -8,9 +8,9 @@ For complete installation instructions, see `SETUP.md`.
 
 # General
 
-## What is Network Dashboard?
+## What is Network HQ?
 
-Network Dashboard is a Google Sheets + Google Apps Script application for documenting and managing network infrastructure, operational systems, integrations and related technology information.
+Network HQ is a Google Sheets + Google Apps Script application for documenting and managing network infrastructure, operational systems, integrations and related technology information.
 
 The Google Sheet acts as the installation's persistent data store.
 
@@ -24,11 +24,11 @@ Operational data is stored in the Google Sheet owned by your organization.
 
 Secrets such as API client secrets and refresh tokens are stored in Apps Script Script Properties.
 
-Network Dashboard's public Git repository contains application source code and should not contain organization-specific secrets.
+Network HQ's public Git repository contains application source code and should not contain organization-specific secrets.
 
 ---
 
-## Does the Network Dashboard developer have access to my data?
+## Does the Network HQ developer have access to my data?
 
 Not through the standard installation model.
 
@@ -49,7 +49,7 @@ Your organization controls its own installation and updates.
 
 ---
 
-## Is Network Dashboard SaaS?
+## Is Network HQ SaaS?
 
 No.
 
@@ -81,17 +81,17 @@ clasp push
 Then run:
 
 ```text
-Network Dashboard
+Network HQ
 → Update / Repair
 ```
 
 ---
 
-## Why does Network Dashboard use clasp?
+## Why does Network HQ use clasp?
 
 `clasp` is Google's command-line tool for Apps Script projects.
 
-It allows the Network Dashboard source maintained in Git to be pushed into an organization's Apps Script project.
+It allows the Network HQ source maintained in Git to be pushed into an organization's Apps Script project.
 
 This provides a repeatable update model without requiring users to manually copy dozens of Apps Script files.
 
@@ -101,7 +101,7 @@ This provides a repeatable update model without requiring users to manually copy
 
 Normally, no.
 
-Network Dashboard treats the Git repository as the canonical application source.
+Network HQ treats the Git repository as the canonical application source.
 
 Running `clasp pull` into the production source directory can overwrite newer Git-managed source with whatever currently exists in Apps Script.
 
@@ -153,7 +153,7 @@ clasp push
 run:
 
 ```text
-Network Dashboard
+Network HQ
 → Update / Repair
 ```
 
@@ -211,7 +211,7 @@ clasp push
 then:
 
 ```text
-Network Dashboard
+Network HQ
 → Update / Repair
 ```
 
@@ -219,7 +219,7 @@ This ensures the Sheet schema and runtime configuration match the newly deployed
 
 ---
 
-## Can Network Dashboard update itself automatically?
+## Can Network HQ update itself automatically?
 
 Not currently.
 
@@ -238,11 +238,11 @@ into a helper script.
 
 # Google Sheet Protection
 
-## Why are Network Dashboard headers protected?
+## Why are Network HQ headers protected?
 
 Headers define application schema.
 
-Changing a header may prevent Network Dashboard from correctly locating data.
+Changing a header may prevent Network HQ from correctly locating data.
 
 Protections reduce accidental structural changes such as:
 
@@ -259,7 +259,7 @@ changing App Settings metadata
 
 Yes.
 
-Network Dashboard-managed protections are intended to protect application structure, not normal operational data entry.
+Network HQ-managed protections are intended to protect application structure, not normal operational data entry.
 
 ---
 
@@ -267,11 +267,11 @@ Network Dashboard-managed protections are intended to protect application struct
 
 Google Sheets always gives the file owner ultimate administrative authority.
 
-The Sheet owner can therefore modify or remove protected ranges even when Network Dashboard protections are enabled.
+The Sheet owner can therefore modify or remove protected ranges even when Network HQ protections are enabled.
 
-This is a Google Sheets platform rule, not a Network Dashboard permission.
+This is a Google Sheets platform rule, not a Network HQ permission.
 
-Other Sheet editors remain subject to Network Dashboard-managed protections.
+Other Sheet editors remain subject to Network HQ-managed protections.
 
 ---
 
@@ -279,9 +279,9 @@ Other Sheet editors remain subject to Network Dashboard-managed protections.
 
 No.
 
-Network Dashboard does not intentionally whitelist the person who runs Setup.
+Network HQ does not intentionally whitelist the person who runs Setup.
 
-If that person is the Google Sheet owner, Google's ownership model gives them ultimate edit authority regardless of Network Dashboard protection settings.
+If that person is the Google Sheet owner, Google's ownership model gives them ultimate edit authority regardless of Network HQ protection settings.
 
 ---
 
@@ -290,7 +290,7 @@ If that person is the Google Sheet owner, Google's ownership model gives them ul
 Use:
 
 ```text
-Network Dashboard
+Network HQ
 → Protection
 → Disable Protection (15 Minutes)
 ```
@@ -310,7 +310,7 @@ Protection
 
 # Users and Permissions
 
-## Does someone need access to the Google Sheet to use Network Dashboard?
+## Does someone need access to the Google Sheet to use Network HQ?
 
 Not necessarily.
 
@@ -322,17 +322,17 @@ Execute as: Me
 
 the backend accesses the Sheet using the deployment owner's authorization.
 
-Network Dashboard users therefore do not necessarily need direct Editor access to the underlying Sheet.
+Network HQ users therefore do not necessarily need direct Editor access to the underlying Sheet.
 
 ---
 
-## Does giving someone access to the Sheet give them Network Dashboard access?
+## Does giving someone access to the Sheet give them Network HQ access?
 
 No.
 
-Google Sheet permissions and Network Dashboard application permissions are separate.
+Google Sheet permissions and Network HQ application permissions are separate.
 
-Network Dashboard evaluates users through `App Users` and server-side RBAC.
+Network HQ evaluates users through `App Users` and server-side RBAC.
 
 ---
 
@@ -359,11 +359,11 @@ as default or per-page permissions.
 
 ## What happens if someone is not in App Users?
 
-They receive the Network Dashboard Access Denied page.
+They receive the Network HQ Access Denied page.
 
-Google may still show its own Apps Script/Workspace authorization flow before Network Dashboard code can perform the application authorization check.
+Google may still show its own Apps Script/Workspace authorization flow before Network HQ code can perform the application authorization check.
 
-That platform-level authorization occurs outside Network Dashboard.
+That platform-level authorization occurs outside Network HQ.
 
 ---
 
@@ -394,7 +394,7 @@ Me
 
 Use the organization/domain access option appropriate for the Google Workspace environment.
 
-Network Dashboard then applies its own RBAC after Google authenticates the user.
+Network HQ then applies its own RBAC after Google authenticates the user.
 
 ---
 
@@ -409,7 +409,7 @@ app.web_app_url
 Then:
 
 ```text
-Network Dashboard
+Network HQ
 → Open Dashboard
 ```
 
@@ -423,7 +423,7 @@ Confirm that `app.web_app_url` contains the Apps Script production `/exec` URL.
 
 Do not use an Apps Script editor URL or development URL.
 
-If the setting was recently changed, current Network Dashboard versions force a fresh configuration read for the Open Dashboard action.
+If the setting was recently changed, current Network HQ versions force a fresh configuration read for the Open Dashboard action.
 
 ---
 
@@ -463,9 +463,9 @@ See the README for current implementation status.
 
 Aruba Central uses OAuth.
 
-Network Dashboard exchanges the stored refresh token for access tokens used to call Aruba APIs.
+Network HQ exchanges the stored refresh token for access tokens used to call Aruba APIs.
 
-When Aruba returns a replacement refresh token, Network Dashboard stores the new token back into Script Properties.
+When Aruba returns a replacement refresh token, Network HQ stores the new token back into Script Properties.
 
 A scheduled maintenance trigger periodically refreshes OAuth so the refresh token does not become stale during normal operation.
 
@@ -473,19 +473,19 @@ A scheduled maintenance trigger periodically refreshes OAuth so the refresh toke
 
 ## Why does Central show one of my switches as Offline?
 
-Network Dashboard normalizes Central's reported monitoring state.
+Network HQ normalizes Central's reported monitoring state.
 
 Older Aruba switch families or Monitor Mode devices may expose status differently than newer Central-managed devices.
 
-Network Dashboard does not intentionally assume that a switch is online merely based on model.
+Network HQ does not intentionally assume that a switch is online merely based on model.
 
-If a known-working device appears Offline, compare the actual Central status payload with the normalized Network Dashboard result.
+If a known-working device appears Offline, compare the actual Central status payload with the normalized Network HQ result.
 
 ---
 
 ## How is Campus populated for Aruba devices?
 
-Network Dashboard uses Aruba Central's **Site** assignment as the preferred Campus source for synchronized switches and access points.
+Network HQ uses Aruba Central's **Site** assignment as the preferred Campus source for synchronized switches and access points.
 
 Central Group is considered separate management metadata and is not automatically treated as Campus.
 
@@ -525,7 +525,7 @@ Exports and normal page payloads should not automatically include sensitive pass
 
 # Troubleshooting
 
-## The Network Dashboard menu does not appear.
+## The Network HQ menu does not appear.
 
 Reload the Google Sheet.
 
@@ -555,7 +555,7 @@ If the folder contains an older installation, preserve or rename it before cloni
 
 The local folder and current GitHub repository have unrelated Git histories.
 
-Do not normally use `--allow-unrelated-histories` for a Network Dashboard production installation.
+Do not normally use `--allow-unrelated-histories` for a Network HQ production installation.
 
 Preserve the old directory and create a clean clone of the canonical repository instead.
 
@@ -567,7 +567,7 @@ That is expected.
 
 `.claspignore` prevents development/documentation files from being pushed into Apps Script.
 
-Only Network Dashboard runtime source should be listed as tracked.
+Only Network HQ runtime source should be listed as tracked.
 
 ---
 
@@ -575,12 +575,12 @@ Only Network Dashboard runtime source should be listed as tracked.
 
 Refresh the dashboard.
 
-Current Network Dashboard versions invalidate configuration/data caches when managed settings change.
+Current Network HQ versions invalidate configuration/data caches when managed settings change.
 
 If the problem remains, run:
 
 ```text
-Network Dashboard
+Network HQ
 → Update / Repair
 ```
 
@@ -593,7 +593,7 @@ and then Validate Installation.
 Run:
 
 ```text
-Network Dashboard
+Network HQ
 → Protection
 → Enable Protection
 ```
@@ -601,7 +601,7 @@ Network Dashboard
 or:
 
 ```text
-Network Dashboard
+Network HQ
 → Update / Repair
 ```
 
@@ -619,7 +619,7 @@ ARUBA_REFRESH_TOKEN
 
 in Script Properties.
 
-Once a valid token is restored, Network Dashboard's scheduled token maintenance should normally keep it rotating automatically.
+Once a valid token is restored, Network HQ's scheduled token maintenance should normally keep it rotating automatically.
 
 ---
 
@@ -641,7 +641,7 @@ Make application source changes in the Git-managed local repository instead.
 
 # Backups and Recovery
 
-## Does Network Dashboard automatically back up the entire Sheet?
+## Does Network HQ automatically back up the entire Sheet?
 
 No.
 
@@ -674,7 +674,7 @@ If a migration-specific backup was created, preserve it until the problem is res
 When asking for assistance, include:
 
 ```text
-Network Dashboard application version
+Network HQ application version
 Schema version
 Apps Script error
 Browser console error

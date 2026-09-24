@@ -1,6 +1,6 @@
 var NETWORK_DASHBOARD_VERSION = '1.2.0';
 var NETWORK_DASHBOARD_SCHEMA_VERSION = '9';
-var NETWORK_DASHBOARD_APP_NAME = 'Network Dashboard';
+var NETWORK_DASHBOARD_APP_NAME = 'Network HQ';
 var NETWORK_DASHBOARD_SETTINGS_SHEET = 'App Settings';
 var NETWORK_DASHBOARD_BREAK_GLASS_ADMINS_PROPERTY =
   'NETWORK_DASHBOARD_BREAK_GLASS_ADMINS';
@@ -1053,6 +1053,31 @@ var AppConfig = (function() {
             updatedBy || 'reconcile'
           );
           return;
+        }
+
+        const existingValue =
+          String(
+            sheet
+              .getRange(existingRow, 2)
+              .getDisplayValue() || ''
+          ).trim();
+
+        // Migrate only the former stock product name. Any administrator-defined
+        // application name remains untouched.
+        if (
+          definition.key === 'app.name' &&
+          existingValue === 'Network Dashboard'
+        ) {
+          sheet
+            .getRange(existingRow, 2)
+            .setValue(NETWORK_DASHBOARD_APP_NAME);
+
+          sheet
+            .getRange(existingRow, 7, 1, 2)
+            .setValues([[
+              now,
+              updatedBy || 'reconcile'
+            ]]);
         }
 
         const desiredMetadata = [

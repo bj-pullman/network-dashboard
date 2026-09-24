@@ -1,14 +1,14 @@
-# Network Dashboard Setup & Deployment Guide
+# Network HQ Setup & Deployment Guide
 
-This guide walks through a complete Network Dashboard installation, from installing the required local tools to deploying and validating a production web application.
+This guide walks through a complete Network HQ installation, from installing the required local tools to deploying and validating a production web application.
 
-Network Dashboard uses:
+Network HQ uses:
 
 * **Google Sheets** for persistent organization data and configuration
 * **Google Apps Script** for the application backend and web interface
 * **Git** for source distribution and version control
 * **Node.js / npm** for installing development dependencies
-* **clasp** for deploying Network Dashboard source code into Google Apps Script
+* **clasp** for deploying Network HQ source code into Google Apps Script
 
 Each organization owns its own:
 
@@ -21,16 +21,18 @@ Each organization owns its own:
 * API credentials
 * web app deployment
 
-The public Network Dashboard Git repository contains the application source only.
+The public Network HQ Git repository contains the application source only.
+
+**Naming note:** **Network HQ** is the product name. The Git repository, remote URL, and local project directory may retain legacy names such as `network-dashboard` or `network_dashboard_template`. Keep those technical names unchanged when following commands that reference them.
 
 ---
 
 # 1. Installation Architecture
 
-A Network Dashboard installation follows this model:
+A Network HQ installation follows this model:
 
 ```text
-Network Dashboard Git Repository
+Network HQ Git Repository
           |
           v
 Local installation folder
@@ -45,20 +47,20 @@ Organization-owned Apps Script project
 Organization-owned Google Sheet
           |
           v
-Network Dashboard Web App
+Network HQ Web App
 ```
 
 Application source updates come from Git.
 
 Organization data remains in the organization's Google Sheet and Apps Script Script Properties.
 
-Updating Network Dashboard should never require replacing the organization's Google Sheet.
+Updating Network HQ should never require replacing the organization's Google Sheet.
 
 ---
 
 # 2. Prerequisites & Dependency Installation
 
-The computer used to install and maintain Network Dashboard needs:
+The computer used to install and maintain Network HQ needs:
 
 * Git
 * Node.js
@@ -67,7 +69,7 @@ The computer used to install and maintain Network Dashboard needs:
 * a supported web browser
 * a Google account with permission to create and manage the Google Sheet and Apps Script project
 
-For Google Workspace organizations, the account performing the installation should normally be an administrator or another organizational account that will remain responsible for the Network Dashboard installation.
+For Google Workspace organizations, the account performing the installation should normally be an administrator or another organizational account that will remain responsible for the Network HQ installation.
 
 ## 2.1 Verify Existing Tools
 
@@ -90,7 +92,7 @@ If a command is not recognized, install the corresponding dependency below.
 
 ## 2.2 Install Git
 
-Git is used to download Network Dashboard and retrieve future application updates.
+Git is used to download Network HQ and retrieve future application updates.
 
 ### Windows — winget
 
@@ -116,7 +118,7 @@ https://git-scm.com/download/win
 
 Run the installer.
 
-The default installation options are appropriate for most Network Dashboard installations.
+The default installation options are appropriate for most Network HQ installations.
 
 After installation, close and reopen PowerShell.
 
@@ -224,7 +226,7 @@ clasp login
 
 A browser window should open and ask you to authenticate with Google.
 
-Sign in using the Google account that will own or administer the Network Dashboard Apps Script project.
+Sign in using the Google account that will own or administer the Network HQ Apps Script project.
 
 Complete the requested Google authorization.
 
@@ -247,9 +249,9 @@ All four commands should return version information.
 
 ---
 
-# 3. Create the Local Network Dashboard Folder
+# 3. Create the Local Network HQ Folder
 
-Choose a permanent directory for this Network Dashboard installation.
+Choose a permanent directory for this Network HQ installation.
 
 Example:
 
@@ -266,9 +268,9 @@ Each organization has its own Apps Script project and therefore its own `.clasp.
 
 ---
 
-# 4. Clone Network Dashboard
+# 4. Clone Network HQ
 
-From the empty Network Dashboard directory, run:
+From the empty Network HQ directory, run:
 
 ```powershell
 git clone https://github.com/bj-pullman/network-dashboard.git .
@@ -295,18 +297,18 @@ https://github.com/bj-pullman/network-dashboard.git
 
 # 5. Create the Google Sheet
 
-Create a new blank Google Sheet using the Google account that will own or administer the Network Dashboard installation.
+Create a new blank Google Sheet using the Google account that will own or administer the Network HQ installation.
 
 The Sheet does not need any manually created tabs, headers, formulas or data.
 
-Network Dashboard will create its required structure during Setup / Initialize.
+Network HQ will create its required structure during Setup / Initialize.
 
 Give the Sheet an organization-specific name.
 
 Example:
 
 ```text
-Example School District Network Dashboard
+Example School District Network HQ
 ```
 
 ---
@@ -327,10 +329,10 @@ Rename the Apps Script project to something meaningful.
 Example:
 
 ```text
-Example School District Network Dashboard
+Example School District Network HQ
 ```
 
-The Apps Script project and Google Sheet belong to this specific Network Dashboard installation.
+The Apps Script project and Google Sheet belong to this specific Network HQ installation.
 
 ---
 
@@ -358,7 +360,7 @@ The Script ID identifies the Apps Script project that clasp will update.
 
 # 8. Connect clasp to the Apps Script Project
 
-Return to the local Network Dashboard directory:
+Return to the local Network HQ directory:
 
 ```powershell
 cd C:\automation\projects\network_dashboard
@@ -401,7 +403,7 @@ Run:
 clasp status
 ```
 
-Network Dashboard application files should appear under:
+Network HQ application files should appear under:
 
 ```text
 Tracked files:
@@ -427,7 +429,7 @@ tests
 
 ---
 
-# 9. Push Network Dashboard to Apps Script
+# 9. Push Network HQ to Apps Script
 
 Once the clasp target has been verified, run:
 
@@ -439,7 +441,7 @@ If clasp asks whether existing remote files should be overwritten, confirm only 
 
 When the push completes, return to the Apps Script editor.
 
-Network Dashboard application files should now be present.
+Network HQ application files should now be present.
 
 Examples include:
 
@@ -458,7 +460,7 @@ Settings.html
 Styles.html
 ```
 
-The exact application file list may change between Network Dashboard releases.
+The exact application file list may change between Network HQ releases.
 
 ---
 
@@ -471,13 +473,13 @@ Reload the browser page.
 After Apps Script initializes, a new menu should appear:
 
 ```text
-Network Dashboard
+Network HQ
 ```
 
 The production menu includes:
 
 ```text
-Network Dashboard
+Network HQ
 ├── Setup / Initialize
 ├── Update / Repair
 ├── Validate Installation
@@ -488,7 +490,7 @@ Network Dashboard
 └── About
 ```
 
-If the Network Dashboard menu does not appear, reload the Sheet again and confirm that the clasp push completed successfully.
+If the Network HQ menu does not appear, reload the Sheet again and confirm that the clasp push completed successfully.
 
 ---
 
@@ -497,15 +499,15 @@ If the Network Dashboard menu does not appear, reload the Sheet again and confir
 From the Google Sheet, select:
 
 ```text
-Network Dashboard
+Network HQ
 → Setup / Initialize
 ```
 
-Google may request authorization the first time Network Dashboard runs.
+Google may request authorization the first time Network HQ runs.
 
 Complete the requested authorization using the installation owner/administrator account.
 
-Setup / Initialize reconciles the required Network Dashboard structure.
+Setup / Initialize reconciles the required Network HQ structure.
 
 This includes items such as:
 
@@ -526,7 +528,7 @@ Setup is designed to be idempotent.
 
 Running Setup again should repair or reconcile missing application structure rather than erase existing organization data.
 
-Setup / Initialize also finishes by restoring Network Dashboard-managed protections.
+Setup / Initialize also finishes by restoring Network HQ-managed protections.
 
 ---
 
@@ -535,7 +537,7 @@ Setup / Initialize also finishes by restoring Network Dashboard-managed protecti
 Immediately after Setup / Initialize completes, run:
 
 ```text
-Network Dashboard
+Network HQ
 → Validate Installation
 ```
 
@@ -570,7 +572,7 @@ The underlying installation should otherwise validate successfully before contin
 
 # 13. Configure Initial Organization Settings
 
-Network Dashboard stores non-secret organization configuration in `App Settings`.
+Network HQ stores non-secret organization configuration in `App Settings`.
 
 Initial configuration should include applicable values such as:
 
@@ -589,7 +591,7 @@ Time Format
 Allowed User Domain
 ```
 
-Do not store API passwords, client secrets, refresh tokens or other credentials in normal App Settings values unless Network Dashboard specifically identifies the field as appropriate for that purpose.
+Do not store API passwords, client secrets, refresh tokens or other credentials in normal App Settings values unless Network HQ specifically identifies the field as appropriate for that purpose.
 
 Secrets belong in Apps Script Script Properties.
 
@@ -599,7 +601,7 @@ Secrets belong in Apps Script Script Properties.
 
 Setup / Initialize attempts to create the initial administrator using the Google account performing the installation.
 
-Network Dashboard currently supports application roles including:
+Network HQ currently supports application roles including:
 
 ```text
 Admin
@@ -614,15 +616,15 @@ Edit
 None
 ```
 
-Google Sheet permissions and Network Dashboard application permissions are separate systems.
+Google Sheet permissions and Network HQ application permissions are separate systems.
 
-Giving someone access to the underlying Google Sheet does not automatically give that person Network Dashboard application access.
+Giving someone access to the underlying Google Sheet does not automatically give that person Network HQ application access.
 
-Likewise, a Network Dashboard user does not necessarily need direct Editor access to the underlying Google Sheet.
+Likewise, a Network HQ user does not necessarily need direct Editor access to the underlying Google Sheet.
 
 ---
 
-# 15. Deploy Network Dashboard as a Web App
+# 15. Deploy Network HQ as a Web App
 
 In Apps Script, select:
 
@@ -647,9 +649,9 @@ Select:
 Me
 ```
 
-This allows Network Dashboard backend operations to execute using the deployment owner's authorization.
+This allows Network HQ backend operations to execute using the deployment owner's authorization.
 
-Application users therefore do not need direct Google Sheet access merely for Network Dashboard to read and write its data.
+Application users therefore do not need direct Google Sheet access merely for Network HQ to read and write its data.
 
 ## Who has access
 
@@ -657,7 +659,7 @@ Choose the Google Workspace/domain access policy appropriate for the organizatio
 
 For a Google Workspace school district or similar organization, this will commonly be the option restricting the application to users within that organization.
 
-Network Dashboard's own application RBAC still determines whether an authenticated Google user is authorized to use the dashboard.
+Network HQ's own application RBAC still determines whether an authenticated Google user is authorized to use the dashboard.
 
 Click:
 
@@ -687,7 +689,7 @@ https://script.google.com/.../s/DEPLOYMENT_ID/exec
 
 Do not use an Apps Script editor URL or development/test URL.
 
-Save the production `/exec` URL in Network Dashboard using:
+Save the production `/exec` URL in Network HQ using:
 
 ```text
 app.web_app_url
@@ -695,7 +697,7 @@ app.web_app_url
 
 All pages use the same deployed `/exec` URL. Dashboard opens by default, and sidebar navigation switches pages inside the application without changing the browser URL or reloading the shell.
 
-The Change Log **Import Documentation** action reads Google Docs by file ID. The first use may request additional Google Docs authorization from the account under which the web app operation executes. Accept that authorization only for the intended Network Dashboard Apps Script project.
+The Change Log **Import Documentation** action reads Google Docs by file ID. The first use may request additional Google Docs authorization from the account under which the web app operation executes. Accept that authorization only for the intended Network HQ Apps Script project.
 
 ---
 
@@ -704,7 +706,7 @@ The Change Log **Import Documentation** action reads Google Docs by file ID. The
 After saving `app.web_app_url`, return to the Google Sheet and run:
 
 ```text
-Network Dashboard
+Network HQ
 → Validate Installation
 ```
 
@@ -734,11 +736,11 @@ This validation establishes that both the application structure and production d
 From the Google Sheet, select:
 
 ```text
-Network Dashboard
+Network HQ
 → Open Dashboard
 ```
 
-The production Network Dashboard web application should open using the configured `/exec` URL.
+The production Network HQ web application should open using the configured `/exec` URL.
 
 Verify:
 
@@ -751,7 +753,7 @@ Verify:
 
 ---
 
-# 19. Test Network Dashboard Access Control
+# 19. Test Network HQ Access Control
 
 Before entering significant production data, test the permission model using at least one additional Google account.
 
@@ -772,16 +774,16 @@ Authorized Edit User
 → Editing available only where granted
 
 Admin
-→ Full Network Dashboard administrative access
+→ Full Network HQ administrative access
 ```
 
-Network Dashboard authorization is enforced server-side for protected application operations.
+Network HQ authorization is enforced server-side for protected application operations.
 
 ---
 
 # 20. Test Google Sheet Protections
 
-Network Dashboard protects application-managed structure such as headers and system metadata.
+Network HQ protects application-managed structure such as headers and system metadata.
 
 For a proper test, use a **second Google account** with Editor access to the underlying Google Sheet.
 
@@ -792,7 +794,7 @@ canonical column headers
 App Settings keys
 App Settings metadata
 non-editable system values
-other Network Dashboard-managed protected ranges
+other Network HQ-managed protected ranges
 ```
 
 Normal operational data should remain editable where appropriate.
@@ -803,9 +805,9 @@ Google Sheets always gives the owner of a spreadsheet ultimate administrative co
 
 The spreadsheet owner may therefore still edit or remove protected ranges.
 
-This behavior is controlled by Google and cannot be overridden by Network Dashboard.
+This behavior is controlled by Google and cannot be overridden by Network HQ.
 
-The owner's ability to edit a protected range does **not** indicate that Network Dashboard protection failed.
+The owner's ability to edit a protected range does **not** indicate that Network HQ protection failed.
 
 Protection should be tested using a non-owner Google Sheet Editor.
 
@@ -816,12 +818,12 @@ Protection should be tested using a non-owner Google Sheet Editor.
 If intentional structural maintenance is required, use:
 
 ```text
-Network Dashboard
+Network HQ
 → Protection
 → Disable Protection (15 Minutes)
 ```
 
-Network Dashboard temporarily removes only Network Dashboard-managed protections.
+Network HQ temporarily removes only Network HQ-managed protections.
 
 Unrelated Google Sheet protections are not intentionally removed.
 
@@ -830,7 +832,7 @@ The managed protections are automatically restored after approximately 15 minute
 To restore them immediately:
 
 ```text
-Network Dashboard
+Network HQ
 → Protection
 → Enable Protection
 ```
@@ -847,13 +849,13 @@ or:
 Update / Repair
 ```
 
-also finishes with Network Dashboard-managed protections restored.
+also finishes with Network HQ-managed protections restored.
 
 ---
 
 # 22. Configure Integrations
 
-Network Dashboard currently includes integration work for:
+Network HQ currently includes integration work for:
 
 ```text
 Aruba Central
@@ -863,7 +865,7 @@ UptimeRobot
 
 Integration availability and maturity may vary by provider.
 
-Non-secret integration configuration is managed through Network Dashboard.
+Non-secret integration configuration is managed through Network HQ.
 
 Secrets must be stored in:
 
@@ -893,9 +895,9 @@ ARUBA_CLIENT_SECRET
 ARUBA_REFRESH_TOKEN
 ```
 
-After entering the required credentials, enable/configure Aruba Central through Network Dashboard and test synchronization.
+After entering the required credentials, enable/configure Aruba Central through Network HQ and test synchronization.
 
-Network Dashboard can maintain a rotating Aruba Central OAuth refresh token after a valid initial refresh token has been configured.
+Network HQ can maintain a rotating Aruba Central OAuth refresh token after a valid initial refresh token has been configured.
 
 ---
 
@@ -909,9 +911,9 @@ THREATDOWN_CLIENT_ID
 THREATDOWN_CLIENT_SECRET
 ```
 
-Configure the integration through Network Dashboard after adding the required credentials.
+Configure the integration through Network HQ after adding the required credentials.
 
-ThreatDown integration functionality may be more limited than Aruba Central depending on the current Network Dashboard release.
+ThreatDown integration functionality may be more limited than Aruba Central depending on the current Network HQ release.
 
 ---
 
@@ -923,15 +925,15 @@ UptimeRobot uses:
 UPTIMEROBOT_API_KEY
 ```
 
-Network Dashboard uses synchronized UptimeRobot data for applicable infrastructure health and Internet/WAN monitoring.
+Network HQ uses synchronized UptimeRobot data for applicable infrastructure health and Internet/WAN monitoring.
 
-Configure the integration through Network Dashboard after adding the API key.
+Configure the integration through Network HQ after adding the API key.
 
 ---
 
 # 23. Optional Break-Glass Administration
 
-Network Dashboard supports emergency administrative access through the Script Property:
+Network HQ supports emergency administrative access through the Script Property:
 
 ```text
 NETWORK_DASHBOARD_BREAK_GLASS_ADMINS
@@ -945,7 +947,7 @@ Example format:
 admin1@example.org,admin2@example.org
 ```
 
-Break-glass administrators receive Network Dashboard administrative access even if the normal `App Users` configuration becomes unavailable or incorrectly configured.
+Break-glass administrators receive Network HQ administrative access even if the normal `App Users` configuration becomes unavailable or incorrectly configured.
 
 This feature should be used sparingly and only for trusted administrative accounts.
 
@@ -955,7 +957,7 @@ Do not configure fictional or placeholder break-glass users in production.
 
 # 24. Production Readiness Checklist
 
-Before considering Network Dashboard production-ready, verify:
+Before considering Network HQ production-ready, verify:
 
 ```text
 [ ] Git is installed and working
@@ -999,15 +1001,15 @@ Before considering Network Dashboard production-ready, verify:
 [ ] Required integrations have been tested successfully
 ```
 
-Once these checks pass, the Network Dashboard installation is ready for normal production use.
+Once these checks pass, the Network HQ installation is ready for normal production use.
 
 ---
 
-# 25. Updating Network Dashboard
+# 25. Updating Network HQ
 
-Network Dashboard does not automatically replace an organization's production source.
+Network HQ does not automatically replace an organization's production source.
 
-The organization controls when it adopts a new Network Dashboard release.
+The organization controls when it adopts a new Network HQ release.
 
 Open PowerShell and return to the installation directory:
 
@@ -1023,7 +1025,7 @@ git status
 
 The working tree should normally be clean before performing an update.
 
-Retrieve the latest Network Dashboard source:
+Retrieve the latest Network HQ source:
 
 ```powershell
 git pull
@@ -1044,7 +1046,7 @@ clasp push
 Return to the Google Sheet and run:
 
 ```text
-Network Dashboard
+Network HQ
 → Update / Repair
 ```
 
@@ -1074,7 +1076,7 @@ Existing organization data and configuration should be preserved.
 After every production Update / Repair, run:
 
 ```text
-Network Dashboard
+Network HQ
 → Validate Installation
 ```
 
@@ -1102,7 +1104,7 @@ Open Dashboard / Verify
 
 # 27. Update Safety Model
 
-Network Dashboard intentionally separates:
+Network HQ intentionally separates:
 
 ```text
 Application Source
@@ -1114,7 +1116,7 @@ The responsibilities of each update step are:
 
 ```text
 git pull
-→ updates the local Network Dashboard application source
+→ updates the local Network HQ application source
 
 clasp push
 → updates the Apps Script application source
@@ -1123,7 +1125,7 @@ Update / Repair
 → reconciles the existing organization-owned Sheet with the current application schema
 ```
 
-Updating Network Dashboard does not require replacing the organization's Google Sheet.
+Updating Network HQ does not require replacing the organization's Google Sheet.
 
 Update / Repair is designed to preserve:
 
@@ -1144,13 +1146,13 @@ Versioned schema migrations run only when required.
 
 Additive and in-place migrations are preferred.
 
-When an existing populated structure must be destructively transformed, Network Dashboard should create and verify a timestamped migration backup before performing that transformation.
+When an existing populated structure must be destructively transformed, Network HQ should create and verify a timestamped migration backup before performing that transformation.
 
 ---
 
 # 28. Moving an Existing Installation to Another Computer
 
-A Network Dashboard installation can be administered from another computer without creating a new Google Sheet or Apps Script project.
+A Network HQ installation can be administered from another computer without creating a new Google Sheet or Apps Script project.
 
 On the new computer:
 
@@ -1158,7 +1160,7 @@ On the new computer:
 2. Install Node.js/npm.
 3. Install clasp.
 4. Authenticate clasp.
-5. Clone the Network Dashboard repository.
+5. Clone the Network HQ repository.
 6. Recreate `.clasp.json` using the **existing installation's Script ID**.
 7. Verify the clasp target.
 8. Continue normal administration.
@@ -1211,7 +1213,7 @@ clasp push
 
 # 29. Important Git and clasp Practices
 
-Network Dashboard treats Git as the canonical application source.
+Network HQ treats Git as the canonical application source.
 
 For normal production administration, use:
 
@@ -1250,7 +1252,7 @@ to the public Git repository.
 
 # 30. Troubleshooting
 
-## Network Dashboard Menu Does Not Appear
+## Network HQ Menu Does Not Appear
 
 Reload the Google Sheet.
 
@@ -1258,7 +1260,7 @@ If the menu still does not appear:
 
 1. confirm `clasp push` completed successfully,
 2. confirm the Apps Script project is bound to the correct Sheet,
-3. confirm Network Dashboard source files exist in Apps Script.
+3. confirm Network HQ source files exist in Apps Script.
 
 ---
 
@@ -1280,7 +1282,7 @@ Use an empty directory or preserve/rename the existing directory before cloning.
 
 ## Git Reports "Refusing to Merge Unrelated Histories"
 
-The local repository and current Network Dashboard repository do not share the same Git history.
+The local repository and current Network HQ repository do not share the same Git history.
 
 Do not normally solve this with:
 
@@ -1288,7 +1290,7 @@ Do not normally solve this with:
 --allow-unrelated-histories
 ```
 
-For a production installation, preserve the existing directory as a backup/reference and create a clean clone of the canonical Network Dashboard repository.
+For a production installation, preserve the existing directory as a backup/reference and create a clean clone of the canonical Network HQ repository.
 
 ---
 
@@ -1297,7 +1299,7 @@ For a production installation, preserve the existing directory as a backup/refer
 Run:
 
 ```text
-Network Dashboard
+Network HQ
 → Protection
 → Enable Protection
 ```
@@ -1305,14 +1307,14 @@ Network Dashboard
 Then run:
 
 ```text
-Network Dashboard
+Network HQ
 → Validate Installation
 ```
 
 If the issue remains, run:
 
 ```text
-Network Dashboard
+Network HQ
 → Update / Repair
 ```
 
@@ -1340,7 +1342,7 @@ Then run Validate Installation again.
 
 # 31. Getting Help
 
-Additional documentation is available in the Network Dashboard repository:
+Additional documentation is available in the Network HQ repository:
 
 * `README.md` — project overview, architecture and features
 * `FAQ.md` — common questions, administration and troubleshooting
@@ -1350,7 +1352,7 @@ Additional documentation is available in the Network Dashboard repository:
 When troubleshooting, useful diagnostic information includes:
 
 ```text
-Network Dashboard application version
+Network HQ application version
 Schema version
 Validate Installation result
 Apps Script execution error
@@ -1381,7 +1383,7 @@ Install Git / Node.js / npm / clasp
               ↓
 Authenticate clasp
               ↓
-Clone Network Dashboard
+Clone Network HQ
               ↓
 Create blank Google Sheet
               ↓
@@ -1436,4 +1438,4 @@ Validate Installation
 Open Dashboard / Verify
 ```
 
-Network Dashboard is designed so that the application can evolve while each organization retains ownership of its data, configuration, credentials and deployment.
+Network HQ is designed so that the application can evolve while each organization retains ownership of its data, configuration, credentials and deployment.
