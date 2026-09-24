@@ -8327,6 +8327,12 @@ function appUpdateRecord(
   const output =
     current.slice();
 
+  const explicitlyClearedCredentials = new Set(
+    Array.isArray(record && record._clearCredentialFields)
+      ? record._clearCredentialFields.map(field => String(field || '').trim())
+      : []
+  );
+
 
   headers.forEach(
     (header, index) => {
@@ -8363,6 +8369,8 @@ function appUpdateRecord(
         if (credentialValue) {
           output[index] =
             credentialValue;
+        } else if (explicitlyClearedCredentials.has(name)) {
+          output[index] = '';
         }
 
         return;
@@ -8374,13 +8382,29 @@ function appUpdateRecord(
         recordHasField
       ) {
 
+        const submittedValue = record[name];
+        const controlledOptionKey =
+          getControlledOptionKeyForSheetField_(
+            targetSheetName,
+            name
+          );
+
+        if (
+          controlledOptionKey &&
+          String(submittedValue == null ? '' : submittedValue).trim() ===
+            String(current[index] == null ? '' : current[index]).trim()
+        ) {
+          output[index] = current[index];
+          return;
+        }
+
         output[index] =
           normalizeNetworkDashboardSheetValue_(
             name,
             normalizeControlledSheetField_(
               targetSheetName,
               name,
-              record[name],
+              submittedValue,
               false
             )
           );

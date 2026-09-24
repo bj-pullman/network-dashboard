@@ -30,6 +30,36 @@ RECORD_PAGE_DEFINITIONS.ssids = {
   }
 };
 
+const SSID_FORM_SECTIONS = [
+  'General',
+  'Security',
+  'Network / VLAN',
+  'Other'
+];
+
+/*
+ * This is the single Add/Edit contract for the 15-column SSID inventory.
+ * The key is also the Sheet header and serialized payload property, so form
+ * rendering cannot silently drift from the data model again.
+ */
+const SSID_FORM_SCHEMA = [
+  { key: 'SSID', label: 'SSID', section: 'General', control: 'text', required: true, defaultValue: '' },
+  { key: 'Status', label: 'Status', section: 'General', control: 'select', optionsFrom: 'controlled', defaultValue: 'Enabled' },
+  { key: 'Primary Usage', label: 'Primary Usage', section: 'General', control: 'text', suggestionsFrom: 'suggested', defaultValue: '' },
+  { key: 'Bands / Radio Bands', label: 'Bands / Radio Bands', section: 'General', control: 'select', optionsFrom: 'suggested', allowBlank: true, defaultValue: '' },
+  { key: 'Hidden SSID', label: 'Hidden SSID', section: 'General', control: 'select', optionsFrom: 'controlled', defaultValue: 'No' },
+  { key: 'Security Level', label: 'Security Level', section: 'Security', control: 'select', optionsFrom: 'suggested', defaultValue: 'Open', onchange: "updateSsidSecurityFields_('Security Level')" },
+  { key: 'Key Management', label: 'Key Management', section: 'Security', control: 'select', optionsFrom: 'suggested', allowBlank: true, defaultValue: '', visibleWhen: 'secured', onchange: "updateSsidSecurityFields_('Key Management')" },
+  { key: 'Password', label: 'Password', section: 'Security', control: 'password', defaultValue: '', visibleWhen: 'personal', preserveBlankOnEdit: true },
+  { key: 'Authentication Server', label: 'Authentication Server', section: 'Security', control: 'text', defaultValue: '', visibleWhen: 'enterprise', placeholder: 'RADIUS server or service name' },
+  { key: 'MAC Authentication', label: 'MAC Authentication', section: 'Security', control: 'select', optionsFrom: 'controlled', defaultValue: 'No' },
+  { key: 'Client IP Assignment', label: 'Client IP Assignment', section: 'Network / VLAN', control: 'select', optionsFrom: 'suggested', allowBlank: true, defaultValue: '' },
+  { key: 'Client VLAN Assignment', label: 'Client VLAN Assignment', section: 'Network / VLAN', control: 'select', optionsFrom: 'suggested', allowBlank: true, defaultValue: '' },
+  { key: 'VLAN', label: 'VLAN', section: 'Network / VLAN', control: 'text', defaultValue: '', placeholder: 'VLAN name or ID' },
+  { key: 'Availability', label: 'Availability', section: 'Other', control: 'text', defaultValue: '', placeholder: 'Optional location or scope' },
+  { key: 'Notes', label: 'Notes', section: 'Other', control: 'textarea', defaultValue: '' }
+];
+
 function renderSsidsPage(data) {
   renderRecordTable_(data, RECORD_PAGE_DEFINITIONS.ssids);
 }
@@ -43,63 +73,65 @@ function openSsidRecordEditor_(record) {
   saveButton.style.display = '';
   saveButton.onclick = saveRecordFromModal;
 
+  const sections = SSID_FORM_SECTIONS.map(section =>
+    ssidFormSection_(section, SSID_FORM_SCHEMA
+      .filter(field => field.section === section)
+      .map(field => renderSsidFormField_(field, record))
+      .join(''))
+  ).join('');
+
   document.getElementById('recordModalBody').innerHTML = `
     <div class="ssid-form">
       <div class="form-required-note">
         <span class="required-marker">*</span> Required
       </div>
-
-      ${ssidFormSection_('General', `
-        ${ssidTextField_('SSID', record.SSID, { required: true })}
-        ${ssidSelectField_('Status', record.Status || 'Enabled', ['Enabled', 'Disabled'])}
-        ${ssidTextField_('Primary Usage', record['Primary Usage'], { suggestions: ssidSuggestions_('Primary Usage') })}
-        ${ssidTextField_('Bands / Radio Bands', record['Bands / Radio Bands'], { suggestions: ssidSuggestions_('Bands / Radio Bands') })}
-        ${ssidSelectField_('Hidden SSID', record['Hidden SSID'] || 'No', ['No', 'Yes'])}
-      `)}
-
-      ${ssidFormSection_('Security', `
-        ${ssidTextField_('Security Level', record['Security Level'] || 'Open', {
-          suggestions: ssidSuggestions_('Security Level'),
-          oninput: 'updateSsidSecurityFields_()'
-        })}
-        <div data-ssid-security="secured">
-          ${ssidTextField_('Key Management', record['Key Management'], {
-            suggestions: ssidSuggestions_('Key Management'),
-            oninput: 'updateSsidSecurityFields_()'
-          })}
-        </div>
-        <div data-ssid-security="personal">
-          ${ssidTextField_('Password', '', {
-            type: 'password',
-            autocomplete: 'new-password',
-            placeholder: editingRow ? 'Leave blank to keep current password' : 'Optional PSK / password',
-            label: 'PSK / Password',
-            help: editingRow ? 'Leave blank to keep the saved password.' : 'Used for Personal/PSK or other shared-key networks.'
-          })}
-        </div>
-        <div data-ssid-security="enterprise">
-          ${ssidTextField_('Authentication Server', record['Authentication Server'], {
-            placeholder: 'RADIUS server or service name'
-          })}
-        </div>
-        ${ssidSelectField_('MAC Authentication', record['MAC Authentication'] || 'No', ['No', 'Yes'])}
-      `)}
-
-      ${ssidFormSection_('Network / VLAN', `
-        ${ssidTextField_('Client IP Assignment', record['Client IP Assignment'], { suggestions: ssidSuggestions_('Client IP Assignment') })}
-        ${ssidTextField_('Client VLAN Assignment', record['Client VLAN Assignment'], { suggestions: ssidSuggestions_('Client VLAN Assignment') })}
-        ${ssidTextField_('VLAN', record.VLAN, { placeholder: 'VLAN name or ID' })}
-      `)}
-
-      ${ssidFormSection_('Other', `
-        ${ssidTextField_('Availability', record.Availability, { placeholder: 'Optional location or scope' })}
-        ${ssidTextareaField_('Notes', record.Notes)}
-      `)}
+      ${sections}
     </div>
   `;
 
   updateSsidSecurityFields_();
   recordModal.show();
+}
+
+function renderSsidFormField_(field, record) {
+  const hasValue = Object.prototype.hasOwnProperty.call(record, field.key);
+  const value = field.control === 'password'
+    ? ''
+    : hasValue
+      ? record[field.key]
+      : field.defaultValue;
+  let fieldMarkup = '';
+
+  if (field.control === 'select') {
+    fieldMarkup = ssidSelectField_(
+      field.key,
+      value,
+      ssidOptionsForField_(field),
+      field
+    );
+  } else if (field.control === 'textarea') {
+    fieldMarkup = ssidTextareaField_(field.key, value, field);
+  } else {
+    fieldMarkup = ssidTextField_(field.key, value, {
+      label: field.label,
+      required: field.required,
+      suggestions: field.suggestionsFrom ? ssidSuggestions_(field.key) : [],
+      placeholder: field.control === 'password'
+        ? (editingRow ? 'Leave blank to keep current password' : 'Optional password')
+        : field.placeholder,
+      type: field.control === 'password' ? 'password' : 'text',
+      autocomplete: field.control === 'password' ? 'new-password' : '',
+      help: field.control === 'password'
+        ? (editingRow
+          ? 'Leave blank to keep the saved password, or explicitly clear it below.'
+          : 'Used for Personal/PSK or other shared-key networks.')
+        : ''
+    });
+  }
+
+  return field.visibleWhen
+    ? `<div data-ssid-security="${escapeAttribute(field.visibleWhen)}" data-ssid-field="${escapeAttribute(field.key)}">${fieldMarkup}</div>`
+    : fieldMarkup;
 }
 
 function ssidFormSection_(title, content) {
@@ -114,6 +146,16 @@ function ssidFormSection_(title, content) {
 function ssidSuggestions_(field) {
   return currentPageData && currentPageData.suggestedOptions
     ? currentPageData.suggestedOptions[field] || []
+    : [];
+}
+
+function ssidOptionsForField_(field) {
+  const source = field.optionsFrom === 'controlled'
+    ? currentPageData && currentPageData.controlledOptions
+    : currentPageData && currentPageData.suggestedOptions;
+
+  return source && Array.isArray(source[field.key])
+    ? source[field.key].slice()
     : [];
 }
 
@@ -146,6 +188,12 @@ function ssidTextField_(field, value, options) {
           ><i class="fa-solid fa-eye"></i></button>
         </div>
         ${options.help ? `<small>${escapeHtml(options.help)}</small>` : ''}
+        ${editingRow ? `
+          <label class="ssid-password-clear">
+            <input type="checkbox" data-clear-credential="Password" onchange="toggleSsidPasswordClear_(this)">
+            <span>Clear saved password</span>
+          </label>
+        ` : ''}
       </div>
     `;
   }
@@ -175,15 +223,29 @@ function ssidTextField_(field, value, options) {
   `;
 }
 
-function ssidSelectField_(field, value, options) {
+function ssidSelectField_(field, value, options, definition) {
+  definition = definition || {};
   const selected = String(value || '');
+  const normalizedOptions = (options || []).map(option => String(option || ''));
+  const optionList = selected && !normalizedOptions.some(option =>
+    option.toLowerCase() === selected.toLowerCase())
+    ? [selected].concat(normalizedOptions)
+    : normalizedOptions;
+  if (definition.allowBlank && !optionList.includes('')) {
+    optionList.unshift('');
+  }
   return `
     <label class="ssid-field">
-      <span>${escapeHtml(field)}</span>
-      <select class="form-select" data-header="${escapeAttribute(field)}">
-        ${options.map(option => `
+      <span>${escapeHtml(definition.label || field)}${definition.required ? ' <span class="required-marker">*</span>' : ''}</span>
+      <select
+        class="form-select"
+        data-header="${escapeAttribute(field)}"
+        ${definition.required ? 'required aria-required="true"' : ''}
+        ${definition.onchange ? `onchange="${escapeAttribute(definition.onchange)}"` : ''}
+      >
+        ${optionList.map(option => `
           <option value="${escapeAttribute(option)}" ${option === selected ? 'selected' : ''}>
-            ${escapeHtml(option)}
+            ${escapeHtml(option || 'Select…')}
           </option>
         `).join('')}
       </select>
@@ -191,22 +253,30 @@ function ssidSelectField_(field, value, options) {
   `;
 }
 
-function ssidTextareaField_(field, value) {
+function ssidTextareaField_(field, value, definition) {
+  definition = definition || {};
   return `
     <label class="ssid-field ssid-field-full">
-      <span>${escapeHtml(field)}</span>
+      <span>${escapeHtml(definition.label || field)}</span>
       <textarea class="form-control" rows="3" data-header="${escapeAttribute(field)}">${escapeHtml(value || '')}</textarea>
     </label>
   `;
 }
 
-function updateSsidSecurityFields_() {
+function updateSsidSecurityFields_(changedField) {
   const levelInput = document.querySelector('[data-header="Security Level"]');
   const keyManagementInput = document.querySelector('[data-header="Key Management"]');
-  const mode = getSsidSecurityMode_(
-    levelInput && levelInput.value,
-    keyManagementInput && keyManagementInput.value
-  );
+  const levelMode = getSsidSecurityMode_(levelInput && levelInput.value, '');
+
+  if (keyManagementInput) {
+    refreshSsidKeyManagementOptions_(
+      levelMode,
+      changedField === 'Security Level'
+    );
+  }
+
+  const mode = getSsidSecurityMode_(levelInput && levelInput.value,
+    keyManagementInput && keyManagementInput.value);
 
   document.querySelectorAll('[data-ssid-security]').forEach(container => {
     const kind = container.dataset.ssidSecurity;
@@ -217,6 +287,44 @@ function updateSsidSecurityFields_() {
         : mode === 'enterprise' || mode === 'other';
     container.hidden = !visible;
   });
+}
+
+function refreshSsidKeyManagementOptions_(mode, resetIncompatible) {
+  const select = document.querySelector('[data-header="Key Management"]');
+  const definition = SSID_FORM_SCHEMA.find(field => field.key === 'Key Management');
+  if (!select || !definition) return;
+
+  const currentValue = String(select.value || '').trim();
+  let options = ssidOptionsForField_(definition);
+
+  if (mode === 'personal' || mode === 'enterprise') {
+    options = options.filter(option => {
+      const optionMode = getSsidSecurityMode_('', option);
+      return option === 'Other' || optionMode === mode;
+    });
+  } else if (mode === 'open') {
+    options = [];
+  }
+
+  const currentMode = getSsidSecurityMode_('', currentValue);
+  const retainCurrent = !!currentValue && !resetIncompatible &&
+    !options.some(option => option.toLowerCase() === currentValue.toLowerCase());
+  const compatibleCurrent = !currentValue || mode === 'other' ||
+    currentValue === 'Other' || currentMode === mode;
+  const nextValue = resetIncompatible && !compatibleCurrent ? '' : currentValue;
+  const visibleOptions = retainCurrent ? [currentValue].concat(options) : options;
+
+  select.replaceChildren();
+  appendSsidSelectOption_(select, '', 'Select…');
+  visibleOptions.forEach(option => appendSsidSelectOption_(select, option, option));
+  select.value = nextValue;
+}
+
+function appendSsidSelectOption_(select, value, label) {
+  const option = document.createElement('option');
+  option.value = value;
+  option.textContent = label;
+  select.appendChild(option);
 }
 
 function getSsidSecurityMode_(securityLevel, keyManagement) {
@@ -259,4 +367,16 @@ function toggleSsidPasswordVisibility_(button) {
     ? '<i class="fa-solid fa-eye-slash"></i>'
     : '<i class="fa-solid fa-eye"></i>';
 }
+
+function toggleSsidPasswordClear_(checkbox) {
+  const field = checkbox && checkbox.closest('[data-ssid-field="Password"]');
+  const input = field && field.querySelector('input[data-header="Password"]');
+  const toggle = field && field.querySelector('.ssid-password-toggle');
+  if (!input) return;
+
+  input.value = '';
+  input.disabled = !!checkbox.checked;
+  if (toggle) toggle.disabled = !!checkbox.checked;
+}
+
 </script>

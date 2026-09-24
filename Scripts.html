@@ -2861,6 +2861,16 @@ function saveRecordFromModal() {
       }
     );
 
+  const explicitlyClearedCredentials = Array.from(
+    document.querySelectorAll(
+      '#recordModalBody [data-clear-credential]:checked'
+    )
+  ).map(input => input.dataset.clearCredential);
+
+  if (explicitlyClearedCredentials.length) {
+    record._clearCredentialFields = explicitlyClearedCredentials;
+  }
+
 
   const pageKey =
     currentPageKey;

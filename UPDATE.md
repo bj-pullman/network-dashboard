@@ -383,6 +383,8 @@ Schema 9 adds the managed Network Closets and Network Closet UPS sheets and appe
 
 Schema 10 additively appends `Serial Number` to Servers and Offline Servers. Existing rows and organization-specific columns retain their positions and values; Update / Repair adds the header once, and repeated reconciliation is idempotent.
 
+The SSID Add and Edit workflow now renders from one 15-field form schema aligned to the SSIDs Sheet headers. Configured choice fields use dropdowns, Security Level filters compatible Key Management choices, and Open, Personal/PSK, and Enterprise fields respond from centralized classification logic. Passwords remain excluded from ordinary row payloads: a blank Edit preserves the saved credential, replacement writes a new value, and the explicit clear control is required to remove it. Unknown legacy dropdown values remain selectable and survive unrelated edits.
+
 ## Schema migrations
 
 Update / Repair runs only migrations needed by the installed schema version. Additive and in-place reconciliation is preferred. A destructive migration requires a verified backup before transforming populated organization data.
