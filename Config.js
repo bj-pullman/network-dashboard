@@ -160,7 +160,7 @@ function getAppSettingDefinitions_() {
       type: 'url',
       defaultValue: '',
       editable: true,
-      description: 'Public http or https image URL used for the browser tab icon.'
+      description: 'Public image URL or Google Drive image sharing link. Drive links are converted automatically; use a PNG image unless the URL specifies another image format. Reload the web app after saving to update the tab icon.'
     },
     {
       key: 'branding.primary_color',
@@ -694,6 +694,11 @@ var AppConfig = (function() {
     }
 
 
+    if (definition.key === 'branding.favicon_url') {
+      return normalizeFaviconUrl_(value);
+    }
+
+
     if (definition.type === 'domain') {
       value =
         value
@@ -1190,7 +1195,7 @@ var AppConfig = (function() {
         logoUrl:
           values['branding.logo_url'] || '',
         faviconUrl:
-          values['branding.favicon_url'] || '',
+          normalizeFaviconUrl_(values['branding.favicon_url']),
         primaryColor:
           values['branding.primary_color'] || '#17345f',
         secondaryColor:
@@ -1229,6 +1234,59 @@ var AppConfig = (function() {
   };
 
 })();
+
+
+function normalizeFaviconUrl_(value) {
+
+  const url = String(value || '').trim();
+
+  if (!/^https?:\/\//i.test(url)) {
+    return '';
+  }
+
+  // Apps Script does not provide the browser URL API. Only rewrite known
+  // Drive hosts, leaving other providers' URLs (including signatures) intact.
+  const drive = url.match(
+    /^https?:\/\/(?:drive\.google\.com|drive\.usercontent\.google\.com)(\/[^?#\s]*)?(?:\?([^#\s]*))?(?:#[^\s]*)?$/i
+  );
+
+  if (!drive) {
+    return url;
+  }
+
+  const params = {};
+  try {
+    String(drive[2] || '').split('&').forEach(part => {
+      const separator = part.indexOf('=');
+      if (separator < 0) return;
+      const key = decodeURIComponent(part.slice(0, separator)).toLowerCase();
+      params[key] = decodeURIComponent(part.slice(separator + 1));
+    });
+  } catch (error) {
+    return url;
+  }
+
+  const pathId = String(drive[1] || '').match(/^\/file\/d\/([\w-]+)(?:\/|$)/i);
+  const fileId = pathId ? pathId[1] : params.id;
+
+  if (!fileId || !/^[\w-]+$/.test(fileId)) {
+    return url;
+  }
+
+  // format is a hint for HtmlService, not an image conversion. Drive sharing
+  // links do not identify the image type, so use PNG unless explicitly supplied.
+  const format = String(params.format || 'png').toLowerCase();
+  if (!/^(png|ico|gif|jpg|jpeg)$/.test(format)) {
+    return url;
+  }
+
+  const resourceKey = params.resourcekey
+    ? '&resourcekey=' + encodeURIComponent(params.resourcekey)
+    : '';
+
+  return 'https://drive.google.com/uc?export=download&id=' + fileId +
+    resourceKey + '&format=' + format;
+}
 
 
 function isAppsScriptWebAppUrl_(value) {

@@ -1,96 +1,77 @@
 function doGet() {
+  return withPerformanceTiming_('doGet', function() {
 
-  return withPerformanceTiming_(
-    'doGet',
-    function() {
+    const config = AppConfig.getClientConfig_();
+    const userEmail = getCurrentUserEmail_();
+    const access = getUserAccess_(userEmail);
 
-  const config =
-    AppConfig.getClientConfig_();
+    const faviconUrl = config.branding.faviconUrl;
 
-  const userEmail =
-    getCurrentUserEmail_();
+    if (!access.authorized) {
 
-  const access =
-    getUserAccess_(
-      userEmail
-    );
+      const template =
+        HtmlService.createTemplateFromFile('AccessDenied');
 
+      template.userEmail =
+        userEmail || 'Unknown Google Account';
 
-  if (!access.authorized) {
+      template.appName = config.appName;
 
-    const template =
-      HtmlService
-        .createTemplateFromFile(
-          'AccessDenied'
+      template.organizationName =
+        config.organization.name || 'this organization';
+
+      template.branding = config.branding;
+
+      const output = template
+        .evaluate()
+        .setTitle(config.appName + ' - Access Restricted')
+        .addMetaTag(
+          'viewport',
+          'width=device-width, initial-scale=1'
         );
 
-    template.userEmail =
-      userEmail ||
-      'Unknown Google Account';
+      return applyAppFavicon_(output, faviconUrl);
+    }
 
-    template.appName =
-      config.appName;
+    const template =
+      HtmlService.createTemplateFromFile('Index');
 
-    template.organizationName =
-      config.organization.name ||
-      'this organization';
+    const bootstrap =
+      buildAppBootstrap_(access, config);
 
-    template.branding =
-      config.branding;
+    template.userEmail = userEmail;
+    template.userAccess = access;
+    template.appName = config.appName;
 
-    return template
+    template.initialBootstrapJson =
+      safeJsonForHtml_(bootstrap);
+
+    const output = template
       .evaluate()
-      .setTitle(
-        config.appName +
-        ' - Access Restricted'
-      )
+      .setTitle(config.appName)
       .addMetaTag(
         'viewport',
         'width=device-width, initial-scale=1'
       );
 
+    return applyAppFavicon_(output, faviconUrl);
+
+  });
+}
+
+
+function applyAppFavicon_(output, faviconUrl) {
+
+  if (faviconUrl) {
+    try {
+      output.setFaviconUrl(faviconUrl);
+    } catch (error) {
+      // A branding setting must not prevent either page from opening.
+      console.warn('Could not apply the configured Favicon URL. Use a public PNG or ICO image.');
+    }
   }
 
-
-  const template =
-    HtmlService
-      .createTemplateFromFile(
-        'Index'
-      );
-
-  const bootstrap =
-    buildAppBootstrap_(
-      access,
-      config
-    );
-
-
-  template.userEmail =
-    userEmail;
-
-  template.userAccess =
-    access;
-
-  template.appName =
-    config.appName;
-
-  template.initialBootstrapJson =
-    safeJsonForHtml_(
-      bootstrap
-    );
-
-  return template
-    .evaluate()
-    .setTitle(
-      config.appName
-    )
-    .addMetaTag(
-      'viewport',
-      'width=device-width, initial-scale=1'
-    );
-
-    }
-  );
+  return output;
 }
 
 
