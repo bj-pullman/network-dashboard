@@ -3723,8 +3723,7 @@ function prepareTableDataForAccess_(
   const integrationState = pageKey === 'servers' ? readIntegrationStateMap_(false) : {};
   const availableHeader = header => isManagedPageHeader_(pageKey, header) &&
     (pageKey !== 'servers' ||
-      (!/threatdown/i.test(header) || !!(integrationState.threatdown || {}).enabled) &&
-      (!/wazuh/i.test(header) || !!(integrationState.wazuh || {}).enabled));
+      (!/threatdown/i.test(header) || !!(integrationState.threatdown || {}).enabled));
   const safeHeaders =
     (result.headers || []).filter(availableHeader)
       .filter(header =>

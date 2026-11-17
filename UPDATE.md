@@ -344,6 +344,24 @@ Do not use `clasp pull` as the normal update mechanism. Do not replace organizat
 
 ---
 
+## Removed Wazuh placeholder: existing installations
+
+Wazuh is no longer supported. The former integration was a visibility toggle for the manually maintained `Servers` column `Wazuh Installed`; it had no API client, credential definitions, synchronization, dedicated Sheet, or scheduled job. New installations create neither that column nor a Wazuh integration row.
+
+Follow the normal update procedure above, including advancing the existing web app deployment and running **Update / Repair**, then reload open app tabs. The integration card, toggle, and status-summary entry disappear. The retired server column is hidden from app responses, including cached inventory, regardless of the old toggle value. Existing `App Integrations` rows with ID `wazuh`, server values, historical records, and Script Properties are preserved. Older schema migrations may rename the retired header to `Legacy: Wazuh Installed` in place; its values remain intact. No new schema migration or automatic data deletion is needed.
+
+Manual cleanup is optional for standard installations. To remove obsolete storage deliberately:
+
+1. Back up the spreadsheet, including `App Integrations` and `Servers`. Securely back up any custom Script Properties and record custom trigger handlers and schedules before changing them; do not put credentials in documentation or source control.
+2. In `App Integrations`, remove only the row whose **Integration ID** is exactly `wazuh`, if its historical configuration/status is no longer needed. Leave the Sheet and other provider rows intact.
+3. In `Servers`, optionally archive and then remove only `Wazuh Installed` or `Legacy: Wazuh Installed`, after checking organization formulas, reports, and scripts for dependencies. Leaving the column in place is safe; do not remove server records or historical logs.
+4. The standard integration created no Wazuh Script Properties or triggers. If your installation added custom ones, inspect them in **Apps Script → Project Settings → Script Properties** and **Triggers**. Remove only properties and triggers you have confirmed are exclusively used by your retired custom Wazuh code. Check each trigger owner's account as needed. Preserve shared credentials, triggers, and all Aruba Central, UptimeRobot, and ThreatDown configuration.
+5. Run **Validate Installation**, reload Settings and Servers, and confirm the remaining integrations still load and save. Repeating Update / Repair will not recreate the removed Wazuh row or column.
+
+For local regression verification, run `npm run test:integration-removal`. These tests use mocked Apps Script services and require no credentials or development seed data.
+
+---
+
 # 9. Application and Schema Versions
 
 Network HQ uses semantic application versions:

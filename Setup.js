@@ -67,7 +67,8 @@ function getNetworkDashboardSchema_() {
     },
 
     'Servers': {
-      retiredHeaders: ["Reason"],
+      // Hide the former integration field while preserving existing sheet data.
+      retiredHeaders: ["Reason", "Wazuh Installed"],
       type: 'operational',
       category: 'Infrastructure',
       headers: [
@@ -80,7 +81,6 @@ function getNetworkDashboardSchema_() {
         'Closet ID',
         'Operating System',
         'ThreatDown Installed',
-        'Wazuh Installed',
         'Notes'
       ],
       requiredHeaders: [

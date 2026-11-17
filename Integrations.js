@@ -108,26 +108,6 @@ function getIntegrationRegistry_() {
         'Partial implementation: endpoint inventory matching exists; broader ThreatDown management, alerting and reporting are not implemented yet.'
     },
 
-    wazuh: {
-      id: 'wazuh',
-      name: 'Wazuh',
-      description: 'Controls visibility of locally maintained Wazuh server inventory fields.',
-      implementationStatus: 'planned',
-      capabilities: ['Server field visibility'],
-      requiredProperties: [],
-      optionalProperties: [],
-      settings: [],
-      supportsSync: false,
-      supportsConnectionTest: false,
-      supportsTestConnection: false,
-      supportsManualSync: false,
-      supportsScheduledSync: false,
-      hasLocalDataset: false,
-      localDatasetSheets: [],
-      providesDashboardWidgets: false,
-      enrichesModules: ['servers'],
-      notes: 'Visibility placeholder only. No Wazuh API or credential configuration is implemented.'
-    },
     uptimerobot: {
       id: 'uptimerobot',
       name: 'UptimeRobot',
