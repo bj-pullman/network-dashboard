@@ -2,6 +2,9 @@
 
 :root {
   --font-ui: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  --font-page-title: "Arial Black", "Segoe UI", system-ui, Arial, sans-serif;
+  --page-title-weight: 800;
+  --page-title-tracking: -0.025em;
   --font-navigation: Inter, "Segoe UI", Roboto, Arial, sans-serif;
   --brand-primary: #17345f;
   --brand-secondary: #0d2342;
@@ -422,120 +425,87 @@ textarea {
 
 #pageHeader {
   position: relative;
-  min-height: 118px;
-
+  min-height: 96px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-
-  gap: 25px;
-
-  padding: 24px 30px;
-
+  gap: clamp(12px, 1.6vw, 24px);
+  padding: clamp(14px, 1.55vw, 22px) 30px;
   background: var(--surface-header);
-
   border-bottom: 1px solid var(--border);
-
   min-width: 0;
-
   max-width: 100%;
-
   overflow: visible;
   z-index: var(--layer-navigation);
 }
 
-
-.page-eyebrow {
-  margin-bottom: 4px;
-
-  color: var(--muted);
-
-  font-size: 11px;
-  font-weight: 600;
-
-  letter-spacing: 0;
-}
-
-
-.title-line {
-  display: flex;
-  align-items: center;
-
-  gap: 9px;
-}
-
-
-.title-line h1 {
-  margin: 0;
-
-  color: var(--header-font-color);
-
-  font-size: 26px;
-  font-weight: 600;
-  line-height: 1.3;
-
-  letter-spacing: 0;
-}
-
-
-.title-slash {
-  color: var(--header-font-color);
-
-  font-size: 25px;
-  font-weight: 400;
-}
-
-
-.page-subtitle {
-  margin-top: 4px;
-
-  color: var(--muted);
-
-  font-size: 13px;
-}
-
-
 .page-heading {
   flex: 1 1 auto;
   min-width: 0;
+  max-width: 100%;
 }
 
+.page-eyebrow {
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 0.69rem;
+  line-height: 1.35;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  overflow-wrap: anywhere;
+}
+
+.page-title {
+  margin: 0;
+  color: var(--header-font-color);
+  font-family: var(--font-page-title);
+  font-size: clamp(1.55rem, 1.17rem + 1.3vw, 2.12rem);
+  font-weight: var(--page-title-weight);
+  line-height: 1.12;
+  letter-spacing: var(--page-title-tracking);
+  overflow-wrap: anywhere;
+}
+
+.title-slash {
+  font-weight: 600;
+}
+
+.page-subtitle {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.page-subtitle:empty { display: none; }
 
 .page-header-controls {
   display: flex;
   flex: 0 1 auto;
   flex-direction: column;
   align-items: flex-end;
-
   gap: 8px;
-
   min-width: 0;
-  max-width: 100%;
+  width: max-content;
+  max-width: min(52%, 38rem);
 }
 
-
-.page-header-help {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-
-  gap: 8px;
-
-  width: 100%;
-}
-
-
+.page-header-help,
 .page-actions {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-
   flex-wrap: wrap;
-
   gap: 8px;
-
+  width: 100%;
   max-width: 100%;
+}
+
+.page-header-controls .btn {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 
@@ -1469,12 +1439,20 @@ textarea {
   }
 
   #pageHeader {
-    align-items: flex-start;
+    min-height: 0;
+    align-items: stretch;
     flex-direction: column;
   }
 
   .page-header-controls {
+    align-items: flex-start;
     width: 100%;
+    max-width: 100%;
+  }
+
+  .page-header-help,
+  .page-actions {
+    justify-content: flex-start;
   }
 
 }
@@ -4674,14 +4652,15 @@ textarea {
   gap: 8px;
   margin-top: 6px;
   color: var(--header-font-color);
+  font-family: var(--font-page-title);
   font-size: 1.08rem;
-  font-weight: 600;
-  line-height: 1.2;
+  font-weight: var(--page-title-weight);
+  letter-spacing: var(--page-title-tracking);
+  line-height: 1.12;
 }
 
-.settings-preview-title-line span {
-  color: var(--header-font-color);
-}
+.settings-preview-title-line strong { font-weight: inherit; }
+.settings-preview-title-line .title-slash { color: inherit; }
 
 .settings-preview-accent-line {
   width: 76px;

@@ -66,6 +66,70 @@ async function main() {
     assert.deepEqual(state.visible, [...state.expected, 'Actions'], key + ': default visible order');
     assert.deepEqual(state.checked.sort(), [...state.expected].sort(), key + ': column selector');
   }
+  async function verifySharedHeading(label) {
+    const heading = page.locator('#pageHeader h1');
+    assert.equal(await heading.count(), 1);
+    await page.getByRole('heading', { level: 1, name: label, exact: true }).waitFor();
+    assert.deepEqual((await heading.locator('.title-slash[aria-hidden="true"]').allTextContents())
+      .map(text => text.trim()), ['/', '/']);
+    const type = await heading.evaluate(node => ({
+      font: getComputedStyle(node).fontFamily,
+      weight: Number(getComputedStyle(node).fontWeight),
+      size: parseFloat(getComputedStyle(node).fontSize),
+      color: getComputedStyle(node).color,
+      slashes: Array.from(node.querySelectorAll('.title-slash'), slash => getComputedStyle(slash).color)
+    }));
+    assert.match(type.font, /Arial Black|Segoe UI/);
+    assert.ok(type.weight >= 800, label);
+    assert.ok(type.size >= 24, label);
+    assert.deepEqual(type.slashes, [type.color, type.color]);
+  }
+  async function verifyHeadingLayout() {
+    const original = await page.locator('#pageSubtitle').textContent();
+    await page.evaluate(() => applyBranding({
+      ...appBootstrap.config, branding: { ...appBootstrap.config.branding, headerFontColor: '#254d73' }
+    }));
+    assert.equal(await page.locator('#pageTitle').evaluate(node => getComputedStyle(node).color), 'rgb(37, 77, 115)');
+    await verifySharedHeading('Change Log');
+    await page.screenshot({ path: path.join(output, 'heading-desktop.png') });
+
+    const long = 'District infrastructure change records with an unusually long unbroken RegionalOperationsImplementationReviewReference';
+    await page.evaluate(text => setPageHeader(text, 'Long subtitle for responsive operational context.'), long);
+    for (const width of [1440, 1024, 1000, 760, 390, 320]) {
+      await page.setViewportSize({ width, height: 844 });
+      await verifySharedHeading(long);
+      const layout = await page.evaluate(() => {
+        const box = node => node.getBoundingClientRect();
+        const header = document.getElementById('pageHeader');
+        const label = header.querySelector('.page-heading');
+        const controls = header.querySelector('.page-header-controls');
+        const title = document.getElementById('pageTitle');
+        const buttons = Array.from(header.querySelectorAll('.btn')).filter(node => box(node).width > 0);
+        const withinHeader = node => box(node).left >= box(header).left - 1 && box(node).right <= box(header).right + 1;
+        return {
+          contained: [title, ...buttons].every(withinHeader),
+          noTitleOverflow: title.scrollWidth <= title.clientWidth + 1,
+          disjoint: getComputedStyle(header).flexDirection === 'row'
+            ? box(label).right < box(controls).left : box(label).bottom < box(controls).top,
+          actionsVisible: buttons.length,
+          actionRows: new Set(Array.from(document.querySelectorAll('#pageActions .btn'), node => Math.round(box(node).top))).size
+        };
+      });
+      assert.ok(layout.contained && layout.noTitleOverflow && layout.disjoint, String(width));
+      assert.ok(layout.actionsVisible >= 6, String(width));
+      if (width === 320) {
+        assert.ok(layout.actionRows > 1, 'page actions wrap at narrow widths');
+        await page.screenshot({ path: path.join(output, 'heading-narrow.png') });
+      }
+    }
+    await page.evaluate(() => setPageHeader('Change Log', ''));
+    assert.equal(await page.locator('#pageSubtitle').isVisible(), false);
+    await page.evaluate(subtitle => {
+      setPageHeader('Change Log', subtitle);
+      applyBranding(appBootstrap.config);
+    }, original);
+    await page.setViewportSize({ width: 1440, height: 1000 });
+  }
   async function holdRpc(method) {
     let release, handled;
     const gate = new Promise(resolve => release = resolve);
@@ -99,6 +163,7 @@ async function main() {
     await page.waitForFunction(() => window.networkDashboardPerformance?.length > 0);
     assert.deepEqual(rpcCalls.map(call => call.page), ['dashboard']);
     await navigate('securityCameras');
+    await verifySharedHeading('Security Cameras');
     await checkColumns('securityCameras');
     assert.equal(await page.evaluate(() => tableInstance.getDataCount()), 18);
     assert.equal(await page.locator('.tabulator-row').count(), 18);
@@ -151,7 +216,9 @@ async function main() {
     for (const item of pages) {
       if (item.key === 'securityCameras') continue;
       await navigate(item.key);
+      await verifySharedHeading(item.label);
       await checkColumns(item.key);
+      if (item.key === 'changeLog') await verifyHeadingLayout();
       assert.equal(await page.locator('.app-loading').count(), 0, item.key);
       if (item.key === 'switches' || item.key === 'accessPoints') {
         assert.equal(await page.locator('#pageActions .btn-aruba').count(), 1);
@@ -272,6 +339,9 @@ async function main() {
     }
     console.log('Checking Settings success, failure, retry and integration toggle');
     await navigate('settings');
+    const previewHeading = page.locator('.settings-preview-title-line');
+    assert.equal(await previewHeading.evaluate(node => getComputedStyle(node).fontWeight),
+      await page.locator('#pageTitle').evaluate(node => getComputedStyle(node).fontWeight));
     const saveSettings = '#pageActions button[onclick="saveSettingsForm(this)"]';
     for (const failure of [false, true, false]) {
       const release = await holdRpc('saveAppSettings');
