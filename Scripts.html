@@ -2702,43 +2702,24 @@ function openRecordModal(
 
 
       if (selectOptions.length) {
-
-        const currentValue =
-          String(
-            record[header] || ''
-          ).trim();
-
-        const optionList =
-          currentValue &&
-          !selectOptions.some(option =>
-            String(option).toLowerCase() ===
-            currentValue.toLowerCase()
-          )
-            ? [currentValue].concat(selectOptions)
-            : selectOptions;
+        // In Change Log, do not turn an old empty or differently cased
+        // status into a new status when the user edits an unrelated field.
+        const preserveStored = !!editingRow && (definition.preserveStoredSelectFields || []).includes(header);
+        const raw = String(record[header] ?? '');
+        const currentValue = preserveStored ? raw : raw.trim();
+        const listed = selectOptions.some(option => preserveStored
+          ? String(option) === currentValue : String(option).toLowerCase() === currentValue.toLowerCase());
+        const optionList = (preserveStored || currentValue) && !listed
+          ? [currentValue].concat(selectOptions) : selectOptions;
 
         optionList.forEach(option => {
-
-          const item =
-            document.createElement(
-              'option'
-            );
-
-          item.value =
-            option;
-
-          item.textContent =
-            option;
-
-          input.appendChild(
-            item
-          );
-
+          const item = document.createElement('option');
+          item.value = option;
+          item.textContent = preserveStored && option === '' ? 'Not set (unchanged)' : option;
+          input.appendChild(item);
         });
 
-        input.value =
-          currentValue ||
-          selectOptions[0];
+        input.value = preserveStored ? currentValue : currentValue || selectOptions[0];
 
       } else {
 

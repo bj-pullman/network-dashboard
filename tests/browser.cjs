@@ -476,6 +476,53 @@ async function main() {
     assert.equal(await page.locator('#standardPlaybookPaper tbody tr').count(), 0);
     await playbook.locator('.btn-close').click();
     await playbook.waitFor({ state: 'hidden' });
+    console.log('Checking Change Log status tones and preservation of historical labels');
+    const statusFixtures = [
+      ['Implemented', 'healthy', 'Fixture Status Implemented', '2026-11-20'],
+      ['Monitoring', 'active', 'Fixture Status Monitoring', '2026-11-19'],
+      ['Rolled Back', 'warning', 'Fixture Status Rolled Back', '2026-11-18'],
+      ['Retired', 'neutral', 'Fixture Status Retired', '2026-11-17'],
+      ['Office Review', 'neutral', 'Fixture Status Custom', '2026-11-16'],
+      ['monitoring', 'active', 'Fixture Status Legacy Case', '2026-11-15'],
+      ['', 'neutral', 'Fixture Status Legacy Blank', '2026-11-14']
+    ];
+    harness.records('Change Log', statusFixtures.map(([status, , name, date]) =>
+      ({ 'Change Name': name, 'Change Date': date, Status: status })));
+    harness.context.invalidateAppPage_('changeLog');
+    await navigate('changeLog');
+    await page.evaluate(() => refreshCurrentPage());
+    await page.waitForFunction(() => currentPageData.rows?.some(row => row['Change Name'] === 'Fixture Status Legacy Blank'));
+    const statusFilter = page.locator('#changeLogStatusFilter');
+    for (const [status, tone, name] of statusFixtures) {
+      const row = page.locator('.tabulator-row').filter({ hasText: name });
+      await row.locator(`[data-status-tone="${tone}"]`).filter({ hasText: status || 'Unknown' }).waitFor();
+      if (status) {
+        await statusFilter.selectOption(status);
+        await page.waitForFunction(name => tableInstance.getData('active').some(
+          row => row['Change Name'] === name), name);
+        assert.equal(await page.evaluate(status => tableInstance.getData('active').every(row => row.Status === status), status), true);
+        await statusFilter.selectOption('');
+      }
+    }
+    const statusModal = page.locator('#recordModal');
+    for (const [status, , name] of statusFixtures.slice(-3)) {
+      const row = page.locator('.tabulator-row').filter({ hasText: name });
+      await row.locator('.table-row-action-edit').click();
+      await statusModal.waitFor({ state: 'visible' });
+      if (!status) assert.ok((await statusModal.locator('[data-header="Status"] option:checked').textContent()).includes('Not set'));
+      assert.equal(await statusModal.locator('[data-header="Status"]').inputValue(), status, name);
+      await statusModal.locator('[data-header="Summary"]').fill('Unrelated status preservation edit');
+      await statusModal.locator('#saveRecordButton').click();
+      await statusModal.waitFor({ state: 'hidden' });
+      await page.waitForFunction(name => currentPageData.rows?.some(row =>
+        row['Change Name'] === name && row.Summary === 'Unrelated status preservation edit'), name);
+      assert.equal(await page.evaluate(name => currentPageData.rows.find(row => row['Change Name'] === name).Status, name), status);
+    }
+    await navigate('dashboard');
+    for (const [status, tone, name] of statusFixtures.slice(0, 5)) {
+      const item = page.locator('.dashboard-recent-changes .dashboard-list-row').filter({ hasText: name });
+      await item.locator(`[data-status-tone="${tone}"]`).filter({ hasText: status }).waitFor();
+    }
     console.log('Checking Dashboard Add Change Log, cancel and shared save');
     await navigate('dashboard');
     const quickChange = page.getByRole('button', { name: 'Add Change Log', exact: true });

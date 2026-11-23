@@ -125,3 +125,26 @@ test('Dashboard advertises Add Change Log only to Change Log editors', () => {
   assert.equal(h.invoke('appGetPageData', ['dashboard'], actor('editor')).canAddChangeLog, false);
   assert.throws(() => h.invoke('appGetPageData', ['changeLog'], actor('editor')), /not enabled/);
 });
+
+test('Change Log reads and unrelated edits preserve existing status labels exactly', () => {
+  const h = createHarness();
+  const statuses = ['Implemented', 'Monitoring', 'Rolled Back', 'Retired', 'Office Review', 'monitoring', ''];
+  h.records('Change Log', statuses.map((status, index) => ({
+    'Change Date': '2026-11-' + String(10 + index), 'Change Name': 'Fixture change ' + index, Status: status
+  })));
+  const sheet = h.sheets.get('Change Log');
+  const index = sheet.data[0].indexOf('Status');
+  const snapshot = JSON.stringify(sheet.data);
+  const records = h.invoke('appGetPageData', ['changeLog', true]).rows;
+  assert.equal(JSON.stringify(sheet.data), snapshot);
+  for (let i = 0; i < statuses.length; i++) {
+    const name = 'Fixture change ' + i;
+    const row = records.find(item => item['Change Name'] === name);
+    assert.equal(row.Status, statuses[i], name);
+    h.invoke('appUpdateRecord', ['changeLog', row._row, {
+      'Change Date': '2026-11-' + String(10 + i), 'Change Name': name,
+      Summary: 'Unrelated edit', Status: row.Status
+    }]);
+    assert.equal(sheet.data[row._row - 1][index], statuses[i], name);
+  }
+});
