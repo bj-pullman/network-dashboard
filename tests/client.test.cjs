@@ -250,3 +250,39 @@ test('Dashboard quick action does not open the modal after permission loss or su
     assert.deepEqual(h.opens, [], reason);
   }
 });
+
+test('shared status tones follow explicit context vocabulary and preserve display labels', () => {
+  const h = clientHarness();
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'StatusColors.html'), 'utf8')
+    .replace(/<\/?script>/g, ''), h.context);
+  const tone = h.context.getStatusTone_;
+  for (const [context, statuses] of Object.entries({
+    inventory: { Online: 'healthy', Offline: 'critical', Degraded: 'warning', Unknown: 'neutral' },
+    wanStatus: { Active: 'active', Standby: 'neutral', Disabled: 'neutral' },
+    monitorHealth: { Online: 'healthy', Down: 'critical', Paused: 'neutral', 'Not Monitored': 'neutral' },
+    outage: { Ongoing: 'critical', Restored: 'healthy', Unknown: 'neutral', Active: 'neutral' },
+    contacts: { Active: 'active', Inactive: 'neutral' },
+    enablement: { Enabled: 'active', Disabled: 'neutral' },
+    changeLog: { Implemented: 'healthy', Monitoring: 'active', 'Rolled Back': 'warning', Retired: 'neutral' },
+    integrationConnection: { Connected: 'healthy', 'Not Configured': 'neutral', 'Connection Failed': 'critical' },
+    integrationData: { Synced: 'healthy', 'Not Synced': 'neutral', Syncing: 'active', 'Sync Failed': 'critical' },
+    priority: { P1: 'critical', P2: 'warning', P3: 'active', P4: 'neutral' },
+    installation: { Yes: 'healthy', No: 'critical' }, update: { Yes: 'warning', No: 'healthy' },
+    outageSource: { Manual: 'neutral', UptimeRobot: 'neutral' }
+  })) {
+    for (const [label, expected] of Object.entries(statuses)) assert.equal(tone(label, context), expected, context + ': ' + label);
+  }
+  assert.equal(tone('Custom Active Rollout', 'inventory'), 'neutral');
+  assert.equal(tone('Tier 99', 'tier'), 'neutral');
+  assert.equal(tone('  rOLLed  Back ', 'changeLog'), 'warning');
+  assert.equal(tone('constructor', 'toString'), 'neutral');
+  assert.equal(h.context.getStatusContextForField_('ThreatDown Installed', 'servers'), 'installation');
+  assert.equal(h.context.getStatusContextForField_('Date Installed', 'servers'), '');
+  assert.equal(h.context.getStatusContextForField_('Status', 'ssids'), 'enablement');
+  assert.equal(h.context.getStatusContextForField_('Status', 'contacts'), 'contacts');
+  const custom = h.context.statusPill('Site-specific <review>', 'inventory');
+  assert.match(custom, /status-neutral/);
+  assert.match(custom, /Site-specific &lt;review&gt;/);
+  assert.match(custom, /aria-hidden="true"/);
+  assert.match(h.context.statusPill('', 'contacts', 'Not classified'), /Not classified/);
+});

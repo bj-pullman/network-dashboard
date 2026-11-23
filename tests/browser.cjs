@@ -17,6 +17,12 @@ async function main() {
     { 'Contact Name': 'Former Fixture Vendor', Organization: 'Example Service', Category: 'Contractor',
       Status: 'Inactive' }
   ]);
+  harness.records('Switches', [
+    { 'Device Label': 'Fixture Healthy Switch', 'Serial Number': 'FIXTURE-UP', Status: 'Online' },
+    { 'Device Label': 'Fixture Down Switch', 'Serial Number': 'FIXTURE-DOWN', Status: 'Offline' },
+    { 'Device Label': 'Fixture Warning Switch', 'Serial Number': 'FIXTURE-WARN', Status: 'Degraded' },
+    { 'Device Label': 'Fixture Custom Status', 'Serial Number': 'FIXTURE-CUSTOM', Status: 'Site-specific rollout' }
+  ]);
   harness.records('Change Log', Array.from({ length: 115 }, (_, index) => ({
     'Change Name': 'FIXTURE_BROWSER_CHANGE_CANARY',
     'Change Date': new Date(Date.UTC(2026, 0, index + 1)).toISOString().slice(0, 10),
@@ -130,6 +136,38 @@ async function main() {
     }, original);
     await page.setViewportSize({ width: 1440, height: 1000 });
   }
+  async function verifyStatusContrast() {
+    const palettes = await page.evaluate(() => {
+      const host = document.createElement('div');
+      host.innerHTML = ['Online', 'Down', 'Degraded', 'Active', 'Unknown'].map(label => statusPill(label)).join('');
+      document.body.append(host);
+      const colors = () => [...host.children].map(pill => ({
+        tone: pill.dataset.statusTone, text: pill.textContent.trim(), iconHidden: pill.firstElementChild.getAttribute('aria-hidden'),
+        foreground: getComputedStyle(pill).color, background: getComputedStyle(pill).backgroundColor
+      }));
+      const normal = colors();
+      applyBranding({ ...appBootstrap.config, branding: { primaryColor: '#f1e7c4', secondaryColor: '#553226',
+        accentColor: '#194d53', headerFontColor: '#254d73' } });
+      const custom = colors();
+      applyBranding(appBootstrap.config);
+      host.remove();
+      return { normal, custom };
+    });
+    assert.deepEqual(palettes.custom, palettes.normal);
+    const luminance = color => color.match(/\d+(?:\.\d+)?/g).slice(0, 3).map(component => {
+      const value = Number(component) / 255;
+      return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+    }).reduce((sum, value, index) => sum + value * [0.2126, 0.7152, 0.0722][index], 0);
+    assert.deepEqual(palettes.normal.map(item => item.tone), ['healthy', 'critical', 'warning', 'active', 'neutral']);
+    palettes.normal.forEach(item => {
+      const text = luminance(item.foreground);
+      const fill = luminance(item.background);
+      const ratio = (Math.max(text, fill) + 0.05) / (Math.min(text, fill) + 0.05);
+      assert.ok(ratio >= 4.5, item.tone + ' normal-text contrast: ' + ratio);
+      assert.ok(item.text.length, item.tone);
+      assert.equal(item.iconHidden, 'true');
+    });
+  }
   async function holdRpc(method) {
     let release, handled;
     const gate = new Promise(resolve => release = resolve);
@@ -233,6 +271,13 @@ async function main() {
         assert.equal(await page.evaluate(() => fixtureStructuredTable === structuredTables.intercomSystems), true);
         assert.equal(await page.evaluate(() => structuredTables.intercomSystems.getDataCount('active')), state);
       }
+      if (item.key === 'switches') {
+        await verifyStatusContrast();
+        for (const [label, tone] of [['Online', 'healthy'], ['Offline', 'critical'], ['Degraded', 'warning'],
+          ['Site-specific rollout', 'neutral']]) {
+          await page.locator(`.tabulator-row [data-status-tone="${tone}"]`).filter({ hasText: label }).waitFor();
+        }
+      }
       if (item.key === 'contacts') {
         console.log('Checking Contacts search, view, create and reversible inactivation');
         const search = page.locator('#tableSearch');
@@ -242,6 +287,8 @@ async function main() {
         const activeRows = count => page.waitForFunction(expected =>
           tableInstance.getDataCount('active') === expected, count);
         await activeRows(2);
+        await rows.filter({ hasText: 'Fixture Helpdesk' }).locator('[data-status-tone="active"]')
+          .filter({ hasText: 'Active' }).waitFor();
         await search.fill('FIXTURE WIRELESS');
         await category.selectOption('support');
         await status.selectOption('active');
@@ -310,6 +357,9 @@ async function main() {
         ));
         const expected = [['2026-11-01T06:30:00.000Z', '2026-11-01T07:30:00.000Z', '60']];
         assert.deepEqual(await readInstants(), expected);
+        await page.locator('.tabulator-row [data-status-tone="healthy"]').filter({ hasText: 'Restored' }).waitFor();
+        await page.evaluate(() => tableInstance.showColumn('Source'));
+        await page.locator('.tabulator-row [data-status-tone="neutral"]').filter({ hasText: 'Manual' }).waitFor();
 
         await page.locator('.tabulator-row .table-row-action-edit').click();
         await modal.waitFor({ state: 'visible' });

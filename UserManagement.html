@@ -305,8 +305,8 @@ function renderUserTableCell_(
       <td>
         ${
           user.active
-            ? statusPill('Active')
-            : statusPill('Inactive')
+            ? statusPill('Active', 'enablement')
+            : statusPill('Inactive', 'enablement')
         }
       </td>
     `;
@@ -544,46 +544,12 @@ function setAllUserColumnsVisible_(
 
 
 function rolePill(role) {
-
-  if (role === 'admin') {
-    return `
-      <span class="status-pill status-success">
-        Admin
-      </span>
-    `;
-  }
-
-  return `
-    <span class="status-pill status-neutral">
-      User
-    </span>
-  `;
+  return statusPill(role === 'admin' ? 'Admin' : 'User', 'role');
 }
 
 
 function permissionPill(permission) {
-
-  if (permission === 'edit') {
-    return `
-      <span class="status-pill status-success">
-        Edit
-      </span>
-    `;
-  }
-
-  if (permission === 'view') {
-    return `
-      <span class="status-pill status-info">
-        View
-      </span>
-    `;
-  }
-
-  return `
-    <span class="status-pill status-neutral">
-      None
-    </span>
-  `;
+  return statusPill(permission === 'edit' ? 'Edit' : permission === 'view' ? 'View' : 'None', 'permission');
 }
 
 

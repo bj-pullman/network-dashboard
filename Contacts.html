@@ -26,15 +26,7 @@ RECORD_PAGE_DEFINITIONS.contacts = {
   },
   actions: renderRecordActions_,
   buildColumns: function(data) {
-    const columns = buildRecordColumns_(data, RECORD_PAGE_DEFINITIONS.contacts);
-    const status = columns.find(column => column.field === 'Status');
-    if (status) status.formatter = function(cell) {
-      const value = String(cell.getValue() || '').trim();
-      return contactFilterKey_(value) === 'active'
-        ? statusPill('Active')
-        : `<span class="status-pill status-neutral">${escapeHtml(value || 'Not classified')}</span>`;
-    };
-    return columns;
+    return buildRecordColumns_(data, RECORD_PAGE_DEFINITIONS.contacts);
   },
   toolbar: function(data) {
     return `

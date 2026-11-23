@@ -542,7 +542,7 @@ function getInternetWanColumns_(
 
         return `
           <div class="internet-wan-health-cell">
-            ${statusPill(cell.getValue() || 'Not Monitored')}
+            ${statusPill(cell.getValue() || 'Not Monitored', 'monitorHealth')}
             ${detail ? `<small>${escapeHtml(detail)}</small>` : ''}
           </div>
         `;
@@ -553,9 +553,7 @@ function getInternetWanColumns_(
       field: 'Status',
       minWidth: 115,
       formatter: function(cell) {
-        return statusPill(
-          cell.getValue()
-        );
+        return statusPill(cell.getValue(), 'wanStatus');
       }
     }),
     applyVisible({

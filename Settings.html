@@ -410,7 +410,7 @@ function renderModuleCard(module) {
       <div class="module-card-body">
         <div class="module-card-title-row">
           <h3>${escapeHtml(module.name)}</h3>
-          ${statusPill(module.enabled ? 'Active' : 'Inactive')}
+          ${statusPill(module.enabled ? 'Active' : 'Inactive', 'enablement')}
         </div>
 
         <p>${escapeHtml(module.description || '')}</p>
@@ -691,11 +691,11 @@ function renderIntegrationCard(integration) {
         <div>
           <div class="integration-card-title-row">
             <h3>${escapeHtml(integration.name)}</h3>
-            ${statusPill(implementationLabel)}
+            ${statusPill(implementationLabel, 'integrationImplementation')}
             ${
               integration.configurationComplete
-                ? statusPill('Configured')
-                : statusPill('Missing')
+                ? statusPill('Configured', 'integrationConfiguration')
+                : statusPill('Missing', 'integrationConfiguration')
             }
           </div>
 
@@ -739,8 +739,8 @@ function renderIntegrationCard(integration) {
             <code>${escapeHtml(property.key)}</code>
             ${
               property.configured
-                ? statusPill('Configured')
-                : statusPill('Missing')
+                ? statusPill('Configured', 'integrationConfiguration')
+                : statusPill('Missing', 'integrationConfiguration')
             }
           </div>
         `).join('')}
@@ -843,15 +843,15 @@ function renderIntegrationRuntimeSummary_(
       <div class="integration-runtime-grid">
       <div>
         <span>Enabled</span>
-        ${statusPill(integration.enabled ? 'Enabled' : 'Disabled')}
+        ${statusPill(integration.enabled ? 'Enabled' : 'Disabled', 'enablement')}
       </div>
       <div>
         <span>Connection</span>
-        ${statusPill(formatIntegrationState_(integration.connectionStatus || 'unknown'))}
+        ${statusPill(formatIntegrationState_(integration.connectionStatus || 'unknown'), 'integrationConnection')}
       </div>
       <div>
         <span>Data</span>
-        ${statusPill(formatIntegrationState_(integration.dataStatus || 'not_synced'))}
+        ${statusPill(formatIntegrationState_(integration.dataStatus || 'not_synced'), 'integrationData')}
       </div>
       <div>
         <span>Last Attempt</span>
@@ -907,7 +907,7 @@ function renderArubaOAuthRefreshSummary_(
     </div>
     <div>
       <span>OAuth Status</span>
-      ${statusPill(statusLabel)}
+      ${statusPill(statusLabel, 'operationResult')}
     </div>
     ${
       refresh.status === 'error' && refresh.error

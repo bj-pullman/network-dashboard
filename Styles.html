@@ -59,6 +59,18 @@
   --info: #2b67a8;
   --info-bg: #eaf2fb;
 
+  /* Status colors must remain legible independently of organization branding. */
+  --status-healthy-ink: #17512f;
+  --status-healthy-fill: #e2f4e8;
+  --status-critical-ink: #8f1e26;
+  --status-critical-fill: #ffe5e7;
+  --status-warning-ink: #77410e;
+  --status-warning-fill: #fff0d6;
+  --status-active-ink: #184f85;
+  --status-active-fill: #e4f0ff;
+  --status-neutral-ink: #495768;
+  --status-neutral-fill: #eef1f5;
+
   --sidebar-width: 265px;
 
   --radius: 12px;
@@ -1156,48 +1168,22 @@ textarea {
 .status-pill {
   display: inline-flex;
   align-items: center;
-
   gap: 5px;
-
   padding: 4px 8px;
-
   border-radius: 999px;
-
-  font-size: 10px;
+  font-size: 0.72rem;
   font-weight: 600;
-
+  line-height: 1.25;
   white-space: nowrap;
+  background: var(--status-fill, var(--status-neutral-fill));
+  color: var(--status-ink, var(--status-neutral-ink));
 }
 
-
-.status-success {
-  background: var(--success-bg);
-  color: var(--success);
-}
-
-
-.status-danger {
-  background: var(--danger-bg);
-  color: var(--danger);
-}
-
-
-.status-warning {
-  background: var(--warning-bg);
-  color: var(--warning);
-}
-
-
-.status-info {
-  background: var(--info-bg);
-  color: var(--info);
-}
-
-
-.status-neutral {
-  background: #eef0f2;
-  color: #65707c;
-}
+.status-healthy { --status-ink: var(--status-healthy-ink); --status-fill: var(--status-healthy-fill); }
+.status-critical { --status-ink: var(--status-critical-ink); --status-fill: var(--status-critical-fill); }
+.status-warning { --status-ink: var(--status-warning-ink); --status-fill: var(--status-warning-fill); }
+.status-active { --status-ink: var(--status-active-ink); --status-fill: var(--status-active-fill); }
+.status-neutral { --status-ink: var(--status-neutral-ink); --status-fill: var(--status-neutral-fill); }
 
 
 /*******************************************************
@@ -5365,15 +5351,15 @@ textarea {
 }
 
 .outage-row-ongoing {
-  background: #fff7ed !important;
+  background: var(--status-critical-fill) !important;
 }
 
 .outage-row-ongoing:hover {
-  background: #ffedd5 !important;
+  background: color-mix(in srgb, var(--status-critical-fill) 95%, var(--status-critical-ink)) !important;
 }
 
 .outage-ongoing-text {
-  color: var(--danger);
+  color: var(--status-critical-ink);
   font-weight: 600;
 }
 

@@ -315,19 +315,10 @@ function buildRecordColumns_(data, definition) {
 
         Object.assign(column, definition.columns[header] || {});
 
-        if (
-          isStatusColumn(header)
-        ) {
-
-          column.formatter =
-            function(cell) {
-
-              return statusPill(
-                cell.getValue()
-              );
-
-            };
-
+        const statusContext = getStatusContextForField_(header, data.pageKey);
+        if (statusContext) {
+          column.formatter = cell => statusPill(cell.getValue(), statusContext,
+            statusContext === 'contacts' ? 'Not classified' : undefined);
         }
 
         applyColumnWidthPreference_(

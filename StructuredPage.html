@@ -600,26 +600,8 @@ function createStructuredTabulator(
 
       Object.assign(column, sectionDefinition && sectionDefinition.columns[header] || {});
 
-      /*
-       * STATUS
-       */
-      if (
-        isStatusColumn(
-          header
-        )
-      ) {
-
-        column.formatter =
-          function(cell) {
-
-            return statusPill(
-              cell.getValue()
-            );
-
-          };
-
-      }
-
+      const statusContext = getStatusContextForField_(header, currentPageKey);
+      if (statusContext) column.formatter = cell => statusPill(cell.getValue(), statusContext);
 
       applyColumnWidthPreference_(
         column,

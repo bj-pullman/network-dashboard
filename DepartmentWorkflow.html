@@ -814,30 +814,7 @@ function getWorkflowGroupColor(
 
 
 function priorityPill(priority) {
-
-  const value =
-    String(priority || '');
-
-  let cls =
-    'status-neutral';
-
-  if (value.startsWith('P1')) {
-    cls = 'status-danger';
-  }
-
-  if (value.startsWith('P2')) {
-    cls = 'status-warning';
-  }
-
-  if (value.startsWith('P3')) {
-    cls = 'status-info';
-  }
-
-  return `
-    <span class="status-pill ${cls}">
-      ${escapeHtml(value)}
-    </span>
-  `;
+  return statusPill(priority, 'priority');
 }
 
 function workflowTierPill(

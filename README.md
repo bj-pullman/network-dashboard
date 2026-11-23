@@ -782,6 +782,17 @@ printed or saved copy in an appropriate location. There is no Confidential editi
 
 ---
 
+## Status colors
+
+Status pills use a shared palette: green for healthy/completed, red for
+critical/failed, orange for warnings or degraded conditions, blue for active or
+monitoring, and gray for inactive, unknown or custom statuses. Context matters:
+an ongoing outage is critical, while an active directory contact is not. Labels
+are always shown, and the status palette stays legible independently of the
+organization's branding colors. The displayed status never changes the saved value.
+
+---
+
 ## Branding
 
 Network HQ supports organization-specific branding without source-code changes.

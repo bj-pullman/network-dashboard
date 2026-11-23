@@ -1,0 +1,97 @@
+<script>
+// Status text stays in the source record. These exact vocabularies select its
+// visual tone, not validation, permission or lifecycle behavior.
+const STATUS_TONE_ICONS_ = Object.freeze({
+  healthy: 'fa-circle-check',
+  critical: 'fa-circle-xmark',
+  warning: 'fa-triangle-exclamation',
+  active: 'fa-circle-dot',
+  neutral: 'fa-circle'
+});
+
+const STATUS_TONE_WORDS_ = Object.freeze({
+  general: {
+    healthy: ['healthy', 'operational', 'successful', 'success', 'completed', 'normal', 'online', 'up',
+      'available', 'configured', 'connected', 'synced', 'restored', 'implemented'],
+    critical: ['down', 'offline', 'failed', 'failure', 'critical', 'error', 'connection failed', 'sync failed'],
+    warning: ['warning', 'needs attention', 'degraded', 'rolled back', 'maintenance', 'needs update', 'partial'],
+    active: ['monitoring', 'active', 'in progress', 'testing', 'syncing', 'enabled', 'pending'],
+    neutral: ['inactive', 'disabled', 'retired', 'unknown', 'paused']
+  },
+  inventory: {
+    healthy: ['online', 'up', 'healthy', 'operational'], critical: ['offline', 'down'],
+    warning: ['degraded', 'maintenance'], active: ['active', 'monitoring']
+  },
+  changeLog: {
+    healthy: ['implemented'], warning: ['rolled back'], active: ['monitoring']
+  },
+  contacts: { active: ['active'] },
+  enablement: { active: ['enabled', 'active'] },
+  wanStatus: { active: ['active'] },
+  monitorHealth: {
+    healthy: ['online', 'operational', 'up'], critical: ['down', 'offline'],
+    warning: ['degraded'], active: ['monitoring']
+  },
+  outage: { healthy: ['restored', 'resolved'], critical: ['ongoing', 'outage'] },
+  outageSource: {},
+  installation: {
+    healthy: ['yes', 'true', 'installed'], critical: ['no', 'false', 'not installed']
+  },
+  update: {
+    healthy: ['no', 'false', 'up to date'], warning: ['yes', 'true', 'required', 'needs update']
+  },
+  integrationSummary: { healthy: ['ready'], warning: ['needs attention'], neutral: ['disabled'] },
+  integrationImplementation: { healthy: ['available'], warning: ['partial'] },
+  integrationConfiguration: { healthy: ['configured'], warning: ['missing'] },
+  integrationConnection: {
+    healthy: ['connected'], critical: ['connection failed', 'failed', 'error'],
+    warning: ['needs attention'], active: ['testing', 'connecting']
+  },
+  integrationData: {
+    healthy: ['synced'], critical: ['sync failed', 'failed', 'error'],
+    warning: ['partial', 'needs attention'], active: ['syncing']
+  },
+  operationResult: { healthy: ['success'], critical: ['error', 'failure', 'failed'], active: ['in progress'] },
+  role: { active: ['admin'] },
+  permission: { healthy: ['edit'], active: ['view'] },
+  priority: {
+    critical: ['p1', 'p1 critical'], warning: ['p2', 'p2 high'], active: ['p3', 'p3 medium']
+  },
+  tier: { active: ['tier 1', 'tier 2', 'tier 3', 'tier 4'] }
+});
+
+const STATUS_TABLE_CONTEXTS_ = Object.freeze({
+  switches: 'inventory', accessPoints: 'inventory', servers: 'inventory',
+  contacts: 'contacts', changeLog: 'changeLog', ssids: 'enablement', internetWan: 'wanStatus'
+});
+
+const STATUS_FIELD_CONTEXTS_ = Object.freeze({
+  'threatdown installed': 'installation', 'update?': 'update', tier: 'tier'
+});
+
+function statusValueKey_(value) {
+  return String(value ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function getStatusContextForField_(header, pageKey) {
+  const key = statusValueKey_(header);
+  if (key === 'status') {
+    return Object.prototype.hasOwnProperty.call(STATUS_TABLE_CONTEXTS_, pageKey)
+      ? STATUS_TABLE_CONTEXTS_[pageKey] : 'general';
+  }
+  return Object.prototype.hasOwnProperty.call(STATUS_FIELD_CONTEXTS_, key) ? STATUS_FIELD_CONTEXTS_[key] : '';
+}
+
+function getStatusTone_(value, context) {
+  const key = statusValueKey_(value);
+  const vocabulary = Object.prototype.hasOwnProperty.call(STATUS_TONE_WORDS_, context || 'general')
+    ? STATUS_TONE_WORDS_[context || 'general'] : null;
+  return vocabulary && Object.keys(vocabulary).find(tone => vocabulary[tone].includes(key)) || 'neutral';
+}
+
+function statusPill(value, context, fallback) {
+  const label = String(value ?? '').trim() || fallback || 'Unknown';
+  const tone = getStatusTone_(value, context);
+  return `<span class="status-pill status-${tone}" data-status-tone="${tone}"><i class="fa-solid ${STATUS_TONE_ICONS_[tone]}" aria-hidden="true"></i> ${escapeHtml(label)}</span>`;
+}
+</script>

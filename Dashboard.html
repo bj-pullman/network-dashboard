@@ -300,9 +300,9 @@ function renderDashboardWidgetBody_(
   }
 
   if (widget.type === 'status_summary') {
-    return renderStatusSummary(
-      widget.statuses || {}
-    );
+    const contexts = { switch_health: 'inventory', ap_health: 'inventory',
+      wan_status: 'wanStatus', 'uptimerobot.wan_health': 'monitorHealth', integration_health: 'integrationSummary' };
+    return renderStatusSummary(widget.statuses || {}, contexts[widget.id] || 'general');
   }
 
   if (widget.type === 'list') {
@@ -346,7 +346,7 @@ function renderDashboardListWidget_(
                 <small>${escapeHtml(context)}</small>
               </div>
               <div class="dashboard-change-status">
-                ${statusPill(item.status || 'Unknown')}
+                ${statusPill(item.status, 'changeLog')}
                 ${url ? `<a href="${escapeAttribute(url)}" target="_blank" rel="noopener noreferrer" title="Open change documentation" aria-label="Open documentation for ${escapeAttribute(item.name || 'change')}"><i class="fa-solid fa-file-lines"></i></a>` : ''}
               </div>
             </div>
@@ -364,7 +364,7 @@ function renderDashboardListWidget_(
             <strong>${escapeHtml(item.name || item.id || '')}</strong>
             <small>${escapeHtml(item.target || item.type || '')}</small>
           </div>
-          ${statusPill(item.health || 'Unknown')}
+          ${statusPill(item.health, 'monitorHealth')}
         </div>
       `).join('')}
     </div>
@@ -791,7 +791,7 @@ function dashboardMiniMetric(label, value) {
 }
 
 
-function renderStatusSummary(statuses) {
+function renderStatusSummary(statuses, context) {
 
   const entries =
     Object.entries(statuses || {});
@@ -808,7 +808,7 @@ function renderStatusSummary(statuses) {
     <div class="d-flex flex-wrap gap-2">
       ${entries.map(([status, count]) => `
         <div class="d-flex align-items-center gap-2 border rounded px-3 py-2">
-          ${statusPill(status)}
+          ${statusPill(status, context)}
           <strong>${escapeHtml(count)}</strong>
         </div>
       `).join('')}
