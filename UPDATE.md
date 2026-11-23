@@ -6,6 +6,14 @@ The standard workflow advances the existing installation. It does not create a n
 
 **Naming note:** **Network HQ** is the product name. Existing repository URLs and local project directories may still use legacy technical names such as `network-dashboard` or `network_dashboard_template`; updates do not require renaming them.
 
+**Servers schema 12:** Update / Repair adds internal server identity and VM host reference columns
+to the existing Servers and Offline Servers sheets and fills blank identities on recognized
+inventory rows. It does not infer links from names or change existing inventory fields. Set
+links with **VM Host** in the Servers editor. Keep the internal values with the record when
+sorting or moving an entire row, and do not copy those values into another record. If an
+old link is marked **Unavailable host**, review the inventory, then choose a replacement or
+unlink it in the editor.
+
 ---
 
 # 1. How Network HQ Updates Work

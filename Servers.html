@@ -2,14 +2,24 @@
 let currentServerView = 'active';
 
 RECORD_PAGE_DEFINITIONS.servers = {
-  defaultColumns: ["Server Name","Status","IP Address","Type","Location","Serial Number"],
+  defaultColumns: ["Server Name","Status","IP Address","Type","Location","Serial Number","_vmHostName","_vmGuestNames"],
+  hiddenEditorColumns: ['_vmGuestNames'],
+  createEditorField: createServerHostEditorField_,
+  prepareEditorSubmission: function(record, edited) {
+    if (record._vmHostName === 'unchanged' || (edited && record._vmHostName === edited._vmHostId)) {
+      delete record._vmHostName;
+    }
+    if (edited && edited._vmServerId) record._expectedServerId = edited._vmServerId;
+  },
   requiredColumns: ["Server Name"],
   columns: {
     "Server Name": { minWidth: 120 },
     "IP Address": { minWidth: 115 },
     "Serial Number": { minWidth: 125 },
     "Status": { minWidth: 100 },
-    "Notes": { minWidth: 130 }
+    "Notes": { minWidth: 130 },
+    "_vmHostName": { title: 'VM Host', minWidth: 140 },
+    "_vmGuestNames": { title: 'VM Guests', minWidth: 145 }
   },
   buildColumns: function(data) {
     return buildRecordColumns_(data, RECORD_PAGE_DEFINITIONS.servers);
@@ -26,6 +36,26 @@ RECORD_PAGE_DEFINITIONS.servers = {
   matchesRow: function(row) { return currentServerView === 'all' || row._serverView === currentServerView; },
   updateSummary: updateServerViewCounts_
 };
+
+function createServerHostEditorField_(header, record) {
+  if (header !== '_vmHostName') return null;
+  const input = document.createElement('select');
+  input.className = 'form-select';
+  const option = (value, label) => {
+    const item = document.createElement('option');
+    item.value = value;
+    item.textContent = label;
+    input.appendChild(item);
+  };
+  option('', 'No VM host');
+  if (record._vmHostUnavailable) option('unchanged', 'Unavailable host (unchanged)');
+  (currentPageData.rows || [])
+    .filter(row => row._vmServerId && row._vmServerId !== record._vmServerId)
+    .sort((left, right) => left._vmServerLabel.localeCompare(right._vmServerLabel))
+    .forEach(row => option(row._vmServerId, row._vmServerLabel));
+  input.value = record._vmHostUnavailable ? 'unchanged' : record._vmHostId || '';
+  return { input, label: 'VM Host' };
+}
 
 function renderServersPage(data) {
   renderRecordTable_(data, RECORD_PAGE_DEFINITIONS.servers);

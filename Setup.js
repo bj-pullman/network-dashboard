@@ -81,7 +81,9 @@ function getNetworkDashboardSchema_() {
         'Closet ID',
         'Operating System',
         'ThreatDown Installed',
-        'Notes'
+        'Notes',
+        SERVER_ID_HEADER,
+        SERVER_HOST_ID_HEADER
       ],
       requiredHeaders: [
         'Server Name',
@@ -89,7 +91,9 @@ function getNetworkDashboardSchema_() {
         'Type',
         'Serial Number',
         'Status',
-        'Closet ID'
+        'Closet ID',
+        SERVER_ID_HEADER,
+        SERVER_HOST_ID_HEADER
       ],
       frozenRows: 1,
       tabColor: '#2563eb'
@@ -108,7 +112,9 @@ function getNetworkDashboardSchema_() {
         'Location',
         'Closet ID',
         'Offline Since',
-        'Notes'
+        'Notes',
+        SERVER_ID_HEADER,
+        SERVER_HOST_ID_HEADER
       ],
       requiredHeaders: [
         'Server Name',
@@ -116,7 +122,9 @@ function getNetworkDashboardSchema_() {
         'Type',
         'Serial Number',
         'Status',
-        'Closet ID'
+        'Closet ID',
+        SERVER_ID_HEADER,
+        SERVER_HOST_ID_HEADER
       ],
       frozenRows: 1,
       tabColor: '#2563eb'
@@ -1770,6 +1778,8 @@ function reconcileNetworkDashboard_(
       );
     });
 
+  if (schema.Servers && schema['Offline Servers']) reconcileServerInventoryIdentities_(ss);
+
   const completeSchema =
     getNetworkDashboardSchema_();
 
@@ -1954,6 +1964,10 @@ function ensureEnabledOptionalModuleSheets_() {
         });
 
     });
+
+  if (ss.getSheetByName('Servers') && ss.getSheetByName('Offline Servers')) {
+    reconcileServerInventoryIdentities_(ss);
+  }
 
   ensureDashboardFormulaLayer_(
     ss,
@@ -2873,6 +2887,12 @@ function getNetworkDashboardSchemaMigrations_() {
       // The normal schema reconciler adds the Contacts sheet and missing headers.
       from: 10,
       to: 11,
+      run: function() {}
+    },
+    {
+      // Reconciliation adds the two managed fields, then fills only blank identities.
+      from: 11,
+      to: 12,
       run: function() {}
     }
   ];

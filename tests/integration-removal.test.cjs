@@ -20,7 +20,8 @@ test('Wazuh removal preserves legacy storage through reads, edits, and repeated 
   const before = JSON.stringify(integrations.data);
   h.properties.set('WAZUH_CUSTOM_TOKEN', 'fixture-preserve-only');
   const customTrigger = h.context.ScriptApp.newTrigger('customWazuhSync').timeBased().everyDays(1).create();
-  const originalValues = servers.data[1].slice();
+  const stableFields = row => row.filter((_, index) => servers.data[0][index] !== 'Network HQ Server ID');
+  const originalValues = stableFields(servers.data[1]);
 
   for (const repair of [false, true, true]) {
     if (repair) h.invoke('updateNetworkDashboard', [{ silent: true }]);
@@ -30,7 +31,7 @@ test('Wazuh removal preserves legacy storage through reads, edits, and repeated 
       assert.ok(!JSON.stringify(data).includes('historical-agent-value'));
       assert.deepEqual(h.calls.filter(call => /^(set|clear|append|insert|delete)/.test(call.name)), []);
     }
-    assert.deepEqual(servers.data[1], originalValues);
+    assert.deepEqual(stableFields(servers.data[1]), originalValues);
     assert.equal(JSON.stringify(integrations.data), before);
     assert.equal(h.properties.get('WAZUH_CUSTOM_TOKEN'), 'fixture-preserve-only');
     assert.ok(h.triggers.includes(customTrigger));

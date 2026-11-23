@@ -107,7 +107,9 @@ const APP_PAGE_CONFIG = {
       'IP Address',
       'Type',
       'Location',
-      'Serial Number'
+      'Serial Number',
+      '_vmHostName',
+      '_vmGuestNames'
     ]
   },
 
@@ -3410,6 +3412,9 @@ function getCombinedServersData_(
         offlineData.credentialColumns
       ),
 
+    vmRelationshipsReady: [activeData, offlineData].every(source =>
+      ['Server Name', SERVER_ID_HEADER, SERVER_HOST_ID_HEADER].every(field => source.headers.filter(header => header === field).length === 1)),
+
     serverViews: {
 
       active:
@@ -3796,6 +3801,18 @@ function prepareTableDataForAccess_(
         })
       }
     );
+
+  if (pageKey === 'servers') {
+    addServerRelationshipDisplay_(output, result.vmRelationshipsReady);
+    output.rows.forEach(row => {
+      delete row[SERVER_ID_HEADER];
+      delete row[SERVER_HOST_ID_HEADER];
+    });
+    output.headers = output.headers.filter(header => header !== SERVER_ID_HEADER && header !== SERVER_HOST_ID_HEADER);
+    if (output.vmRelationshipsReady) {
+      output.headers.push('_vmHostName', '_vmGuestNames');
+    }
+  }
 
   const credentialColumns =
     result.credentialColumns || [];
@@ -8191,13 +8208,12 @@ function appUpdateRecord(
   record,
   sourceSheetName
 ) {
+  requirePagePermission_(pageKey, 'edit');
+  const operation = () => appUpdateRecord_(pageKey, rowNumber, record, sourceSheetName);
+  return pageKey === 'servers' ? withServerInventoryLock_(operation) : operation();
+}
 
-  requirePagePermission_(
-    pageKey,
-    'edit'
-  );
-
-
+function appUpdateRecord_(pageKey, rowNumber, record, sourceSheetName) {
   const config =
     APP_PAGE_CONFIG[
       pageKey
@@ -8218,6 +8234,11 @@ function appUpdateRecord(
 
   }
 
+
+  if (pageKey === 'servers' && record && String(record['Server Name'] || '').trim() &&
+      !isServerInventoryRow_(record['Server Name'], record['Server Name'])) {
+    throw new Error('Server Name cannot use an inventory legend or count label.');
+  }
 
   if (pageKey === 'contacts') record = normalizeContactRecord_(record, false);
 
@@ -8298,7 +8319,7 @@ function appUpdateRecord(
     !Number.isInteger(
       rowNumber
     ) ||
-    rowNumber < (pageKey === 'contacts' ? 2 : 1) ||
+    rowNumber < (['contacts', 'servers'].includes(pageKey) ? 2 : 1) ||
     rowNumber >
       sheet.getLastRow()
   ) {
@@ -8365,6 +8386,10 @@ function appUpdateRecord(
   }
 
 
+  const serverFields = pageKey === 'servers'
+    ? prepareServerInventoryWrite_(SpreadsheetApp.getActiveSpreadsheet(), config, targetSheetName, rowNumber, record)
+    : null;
+
   const current =
     sheet
       .getRange(
@@ -8375,6 +8400,10 @@ function appUpdateRecord(
       )
       .getValues()[0];
 
+
+  const originalDisplay = serverFields
+    ? sheet.getRange(rowNumber, 1, 1, lastColumn).getDisplayValues()[0] : null;
+  const changedServerColumns = new Set();
 
   const output =
     current.slice();
@@ -8393,6 +8422,14 @@ function appUpdateRecord(
         String(
           header || ''
         ).trim();
+
+      if (serverFields && (name === SERVER_ID_HEADER || name === SERVER_HOST_ID_HEADER)) {
+        if (Object.prototype.hasOwnProperty.call(serverFields, name)) {
+          output[index] = serverFields[name];
+          changedServerColumns.add(index);
+        }
+        return;
+      }
 
       const recordHasField =
         Object.prototype
@@ -8424,6 +8461,7 @@ function appUpdateRecord(
         } else if (explicitlyClearedCredentials.has(name)) {
           output[index] = '';
         }
+        if (serverFields && output[index] !== current[index]) changedServerColumns.add(index);
 
         return;
       }
@@ -8435,6 +8473,8 @@ function appUpdateRecord(
       ) {
 
         const submittedValue = record[name];
+        if (serverFields && String(submittedValue ?? '') ===
+            formatNetworkDashboardField_(name, originalDisplay[index])) return;
         const controlledOptionKey =
           getControlledOptionKeyForSheetField_(
             targetSheetName,
@@ -8460,6 +8500,7 @@ function appUpdateRecord(
               false
             )
           );
+        if (serverFields) changedServerColumns.add(index);
 
       }
 
@@ -8467,7 +8508,9 @@ function appUpdateRecord(
   );
 
 
-  sheet
+  if (serverFields) {
+    changedServerColumns.forEach(index => sheet.getRange(rowNumber, index + 1).setValue(output[index]));
+  } else sheet
     .getRange(
       rowNumber,
       1,
@@ -8479,9 +8522,7 @@ function appUpdateRecord(
     ]);
 
 
-  invalidateAppPage_(
-    pageKey
-  );
+  if (pageKey !== 'servers') invalidateAppPage_(pageKey);
 
 
   return {
@@ -8494,13 +8535,12 @@ function appAddRecord(
   pageKey,
   record
 ) {
+  requirePagePermission_(pageKey, 'edit');
+  const operation = () => appAddRecord_(pageKey, record);
+  return pageKey === 'servers' ? withServerInventoryLock_(operation) : operation();
+}
 
-  requirePagePermission_(
-    pageKey,
-    'edit'
-  );
-
-
+function appAddRecord_(pageKey, record) {
   const config =
     APP_PAGE_CONFIG[pageKey];
 
@@ -8521,6 +8561,11 @@ function appAddRecord(
     );
   }
 
+
+  if (pageKey === 'servers' && record && String(record['Server Name'] || '').trim() &&
+      !isServerInventoryRow_(record['Server Name'], record['Server Name'])) {
+    throw new Error('Server Name cannot use an inventory legend or count label.');
+  }
 
   if (pageKey === 'contacts') record = normalizeContactRecord_(record, true);
 
@@ -8558,6 +8603,9 @@ function appAddRecord(
   if (pageKey === 'contacts') requireContactSheetHeaders_(headers);
 
 
+  const serverFields = pageKey === 'servers'
+    ? prepareServerInventoryWrite_(SpreadsheetApp.getActiveSpreadsheet(), config, config.sheet, null, record)
+    : null;
   const row =
     headers.map(header => {
 
@@ -8569,6 +8617,10 @@ function appAddRecord(
         !name
       ) {
         return '';
+      }
+
+      if (serverFields && (name === SERVER_ID_HEADER || name === SERVER_HOST_ID_HEADER)) {
+        return serverFields[name] || '';
       }
 
       if (
@@ -8606,9 +8658,7 @@ function appAddRecord(
   sheet.appendRow(row);
 
 
-  invalidateAppPage_(
-    pageKey
-  );
+  if (pageKey !== 'servers') invalidateAppPage_(pageKey);
 
 
   return {
@@ -8733,15 +8783,14 @@ function compareChangeLogRowsNewestFirst_(
 function appDeleteRecord(
   pageKey,
   rowNumber,
-  sourceSheetName
+  sourceSheetName, expectedId
 ) {
+  requirePagePermission_(pageKey, 'edit');
+  const operation = () => appDeleteRecord_(pageKey, rowNumber, sourceSheetName, expectedId);
+  return pageKey === 'servers' ? withServerInventoryLock_(operation) : operation();
+}
 
-  requirePagePermission_(
-    pageKey,
-    'edit'
-  );
-
-
+function appDeleteRecord_(pageKey, rowNumber, sourceSheetName, expectedId) {
   const config =
     APP_PAGE_CONFIG[
       pageKey
@@ -8835,6 +8884,10 @@ function appDeleteRecord(
   }
 
 
+  if (pageKey === 'servers') {
+    assertServerCanBeDeleted_(SpreadsheetApp.getActiveSpreadsheet(), config, targetSheetName, rowNumber, expectedId);
+  }
+
   if (pageKey === 'networkClosets') {
     const headers = sheet.getRange(
       1, 1, 1, sheet.getLastColumn()
@@ -8856,9 +8909,7 @@ function appDeleteRecord(
   );
 
 
-  invalidateAppPage_(
-    pageKey
-  );
+  if (pageKey !== 'servers') invalidateAppPage_(pageKey);
 
   if (pageKey === 'networkClosets') {
     invalidateAppPage_('switches');

@@ -23,16 +23,18 @@ test('Contacts is additive on fresh setup and on an existing schema 10 installat
   old.sheets.delete('Contacts');
   old.records('Servers', [{ 'Server Name': 'Fixture Server', Notes: 'Keep this server' }]);
   const servers = old.sheets.get('Servers').data;
-  const before = JSON.stringify(servers);
+  const originalServerColumns = () => servers.map(row => row.filter((_, i) =>
+    !['Network HQ Server ID', 'Network HQ VM Host ID'].includes(servers[0][i])));
+  const before = JSON.stringify(originalServerColumns());
   const appSettings = old.sheets.get('App Settings').data;
   appSettings.find(row => row[0] === 'schema.version')[appSettings[0].indexOf('Value')] = '10';
   const update = old.invoke('updateNetworkDashboard', [{ silent: true }]);
   assert.ok(update.sheets.created.includes('Contacts'));
-  assert.equal(old.invoke('getAppBootstrap').config.installedSchemaVersion, '11');
+  assert.equal(old.invoke('getAppBootstrap').config.installedSchemaVersion, old.context.NETWORK_DASHBOARD_SCHEMA_VERSION);
   const second = old.invoke('updateNetworkDashboard', [{ silent: true }]);
   assert.ok(!second.sheets.created.includes('Contacts'));
   assert.deepEqual(old.sheets.get('Contacts').data[0], Array.from(schema.headers));
-  assert.equal(JSON.stringify(servers), before);
+  assert.equal(JSON.stringify(originalServerColumns()), before);
 });
 
 test('authorized Contacts editors add, update and inactivate records, while deletion is denied', () => {

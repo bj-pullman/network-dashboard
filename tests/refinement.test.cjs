@@ -13,7 +13,7 @@ test('changed page defaults, schemas, and protected fields are consistent', () =
     switches: ['Status', 'Device Label', 'Model', 'Type', 'IP Address', 'Campus', 'Serial Number'],
     accessPoints: ['Status', 'Device Label', 'IP Address', 'Model', 'MAC Address'],
     securityCameras: ['Name', 'IP Address', 'Asset / System', 'Username', 'Password', 'Server Location'],
-    servers: ['Server Name', 'Status', 'IP Address', 'Type', 'Location', 'Serial Number'],
+    servers: ['Server Name', 'Status', 'IP Address', 'Type', 'Location', 'Serial Number', '_vmHostName', '_vmGuestNames'],
     routes: ['Campus / Location', 'VLAN ID', 'VLAN Name', 'Network / CIDR', 'Gateway']
   };
   for (const [key, defaults] of Object.entries(expected)) {

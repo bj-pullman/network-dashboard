@@ -5,7 +5,7 @@ const { execFileSync } = require('node:child_process');
 
 const root = path.resolve(__dirname, '..');
 const sourceFiles = ['Performance.js', 'Config.js', 'DateUtils.js', 'App.js', 'Options.js',
-  'ChangeLogService.js', 'ContactsService.js', 'PlaybookService.js', 'Integrations.js', 'Setup.js', 'ArubaCentral.js',
+  'ChangeLogService.js', 'ContactsService.js', 'PlaybookService.js', 'ServerRelationships.js', 'Integrations.js', 'Setup.js', 'ArubaCentral.js',
   'UptimeRobot.js', 'Outages.js', 'Code.js'];
 
 function createHarness({
@@ -26,6 +26,7 @@ function createHarness({
     waitError: null
   };
   let triggerSequence = 0;
+  let uuidSequence = 0;
   let email = 'admin@example.test';
   let readOnly = false;
   function call(name, sheet) { calls.push({ name, sheet }); }
@@ -175,6 +176,7 @@ function createHarness({
   const context = vm.createContext({
     console: { log: (...args) => logs.push(args), warn: (...args) => logs.push(args) },
     SpreadsheetApp: {
+      flush() {},
       ProtectionType: { RANGE: 'RANGE', SHEET: 'SHEET' },
       getActiveSpreadsheet() { call('getActiveSpreadsheet'); return spreadsheet; },
       newDataValidation() {
@@ -252,7 +254,7 @@ function createHarness({
         };
         return new Date(midnight - offsetAt(midnight - offsetAt(midnight)));
       },
-      getUuid: () => 'fixture-uuid'
+      getUuid: () => '00000000-0000-4000-8000-' + String(++uuidSequence).padStart(12, '0')
     },
     UrlFetchApp: { fetch() { throw new Error('Unexpected external API request during a page read'); } }
   });
@@ -261,7 +263,7 @@ function createHarness({
   const baselineFiles = baseline ? new Set(execFileSync(
     'git', ['ls-tree', '--name-only', baselineRef], { cwd: root, encoding: 'utf8' }
   ).trim().split(/\r?\n/)) : null;
-  const laterFiles = new Set(['Performance.js', 'DateUtils.js', 'ChangeLogService.js', 'ContactsService.js', 'PlaybookService.js']);
+  const laterFiles = new Set(['Performance.js', 'DateUtils.js', 'ChangeLogService.js', 'ContactsService.js', 'PlaybookService.js', 'ServerRelationships.js']);
   for (const file of sourceFiles) {
     if (baselineFiles && laterFiles.has(file) && !baselineFiles.has(file)) continue;
     const source = baseline ? execFileSync('git', ['show', baselineRef + ':' + file], { cwd: root, encoding: 'utf8' }) :

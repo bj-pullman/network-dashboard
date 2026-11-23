@@ -808,10 +808,8 @@ function buildColumnMenu(
         );
 
 
-      text.textContent =
-        requiredColumns[header]
-          ? header + ' (required)'
-          : header;
+      const title = column && column.getDefinition().title || header;
+      text.textContent = requiredColumns[header] ? title + ' (required)' : title;
 
 
       wrapper.appendChild(

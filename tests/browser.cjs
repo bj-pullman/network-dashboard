@@ -61,7 +61,8 @@ async function main() {
       const structured = STRUCTURED_PAGE_DEFINITIONS[key];
       if (!definition && !structured) return null;
       const table = definition ? tableInstance : Object.values(structuredTables)[0];
-      const expected = definition ? definition.defaultColumns : Object.values(structured)[0].defaultColumns;
+      const expected = definition ? definition.defaultColumns.map(field =>
+        table.getColumn(field)?.getDefinition().title || field) : Object.values(structured)[0].defaultColumns;
       const visible = table.getColumns().filter(column => column.isVisible()).map(column => column.getDefinition().title);
       const menu = document.querySelector(definition ? '#columnMenu' : '.column-menu-controls')?.parentElement;
       const checked = menu ? Array.from(menu.querySelectorAll('label')).filter(label => label.querySelector('input')?.checked)
@@ -523,6 +524,46 @@ async function main() {
       const item = page.locator('.dashboard-recent-changes .dashboard-list-row').filter({ hasText: name });
       await item.locator(`[data-status-tone="${tone}"]`).filter({ hasText: status }).waitFor();
     }
+    console.log('Checking VM host picker, duplicate names, cross-view relationship and rename');
+    harness.sheets.get('Servers').data.splice(1);
+    harness.records('Servers', [
+      { 'Server Name': 'Fixture Shared Host', 'Network HQ Server ID': '70000000-0000-4000-8000-000000000001' },
+      { 'Server Name': 'Fixture VM Guest', Type: 'Virtual',
+        'Network HQ Server ID': '70000000-0000-4000-8000-000000000003' }
+    ]);
+    harness.records('Offline Servers', [
+      { 'Server Name': 'Fixture Shared Host', 'Network HQ Server ID': '70000000-0000-4000-8000-000000000002' }
+    ]);
+    harness.context.invalidateAppPage_('servers');
+    await navigate('servers');
+    await page.evaluate(() => refreshCurrentPage());
+    await page.waitForFunction(() => currentPageData.rows?.length === 3);
+    await checkColumns('servers');
+    const serverModal = page.locator('#recordModal');
+    const guest = page.locator('.tabulator-row').filter({ has: page.locator(
+      '.tabulator-cell[tabulator-field="Server Name"]', { hasText: 'Fixture VM Guest' }) });
+    await guest.locator('.table-row-action-edit').click();
+    await serverModal.waitFor({ state: 'visible' });
+    const vmHostSelect = serverModal.getByLabel('VM Host', { exact: true });
+    assert.deepEqual(await vmHostSelect.locator('option').allTextContents(),
+      ['No VM host', 'Fixture Shared Host (Active, row 2)', 'Fixture Shared Host (Offline, row 2)']);
+    await vmHostSelect.selectOption({ label: 'Fixture Shared Host (Offline, row 2)' });
+    await page.screenshot({ path: path.join(output, 'servers-vm-host-editor.png') });
+    await serverModal.locator('#saveRecordButton').click();
+    await serverModal.waitFor({ state: 'hidden' });
+    await guest.locator('[tabulator-field="_vmHostName"]').getByText(
+      'Fixture Shared Host (Offline, row 2)', { exact: true }).waitFor();
+    await page.locator('#serverViewOffline').click();
+    await page.locator('[tabulator-field="_vmGuestNames"]').getByText('Fixture VM Guest', { exact: true }).waitFor();
+    await page.locator('.tabulator-row .table-row-action-edit').click();
+    await serverModal.locator('[data-header="Server Name"]').fill('Renamed Fixture Host');
+    await serverModal.locator('#saveRecordButton').click();
+    await serverModal.waitFor({ state: 'hidden' });
+    await page.waitForFunction(() => currentPageData.rows?.some(
+      row => row['Server Name'] === 'Fixture VM Guest' && row._vmHostName === 'Renamed Fixture Host'));
+    await page.locator('#serverViewAll').click();
+    await guest.locator('[tabulator-field="_vmHostName"]').getByText('Renamed Fixture Host', { exact: true }).waitFor();
+    assert.equal(await page.evaluate(() => currentPageData.totalCount), 3);
     console.log('Checking Dashboard Add Change Log, cancel and shared save');
     await navigate('dashboard');
     const quickChange = page.getByRole('button', { name: 'Add Change Log', exact: true });
