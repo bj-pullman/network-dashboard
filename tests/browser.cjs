@@ -17,6 +17,11 @@ async function main() {
     { 'Contact Name': 'Former Fixture Vendor', Organization: 'Example Service', Category: 'Contractor',
       Status: 'Inactive' }
   ]);
+  harness.records('Change Log', Array.from({ length: 115 }, (_, index) => ({
+    'Change Name': 'FIXTURE_BROWSER_CHANGE_CANARY',
+    'Change Date': new Date(Date.UTC(2026, 0, index + 1)).toISOString().slice(0, 10),
+    Status: 'Implemented'
+  })));
   const browser = await chromium.launch({
     ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : { channel: 'chrome' }),
     headless: true
@@ -319,6 +324,38 @@ async function main() {
     await page.waitForFunction(() => tableInstance?.getDataCount() === 18);
     await checkColumns('securityCameras');
     assert.equal(rpcCalls.length, requestsBeforeReset);
+    console.log('Checking section selection and generating a paginated Standard Playbook PDF');
+    harness.invoke('saveAppSettings', [{ 'organization.name': 'Example Operations' }]);
+    harness.records('Contacts', [{ 'Contact Name': 'FIXTURE_PDF_CONTACT_CANARY', Status: 'Active',
+      Email: 'support@example.test', Phone: '+1 202-555-0100' }]);
+    harness.records('Servers', [{ 'Server Name': 'Unselected Fixture Server', Status: 'Online' }]);
+    await page.locator('#standardPlaybookButton').click();
+    const playbook = page.locator('#standardPlaybookModal');
+    await playbook.waitFor({ state: 'visible' });
+    assert.equal(await playbook.getByLabel('Settings', { exact: true }).count(), 0);
+    const policyOptions = playbook.locator('#standardPlaybookSections input');
+    for (const option of await policyOptions.all()) {
+      if (!['changeLog', 'contacts', 'networkClosets'].includes(await option.inputValue())) await option.uncheck();
+    }
+    await playbook.locator('#standardPlaybookPrepare').click();
+    await playbook.getByText('Change Log (115 rows)', { exact: true }).waitFor();
+    await playbook.getByText('Contacts (1 row)', { exact: true }).waitFor();
+    assert.equal(await playbook.locator('#standardPlaybookSummary li').count(), 2);
+    await playbook.locator('input[value="contacts"]').uncheck();
+    assert.equal(await playbook.locator('#standardPlaybookPrint').isEnabled(), false);
+    await playbook.locator('input[value="contacts"]').check();
+    await playbook.locator('#standardPlaybookPrepare').click();
+    await playbook.getByText('Contacts (1 row)', { exact: true }).waitFor();
+    await page.evaluate(() => { window.print = () => { window.fixturePlaybookPrintCalls = 1; }; });
+    await playbook.locator('#standardPlaybookPrint').click();
+    await page.waitForFunction(() => window.fixturePlaybookPrintCalls === 1);
+    assert.equal(await page.locator('#standardPlaybookPaper tbody tr').count(), 116);
+    assert.doesNotMatch(await page.locator('#standardPlaybookPaper').textContent(), /CANARY|Security Cameras|Unselected Fixture Server|Former Fixture Vendor/);
+    await page.pdf({ path: path.join(output, 'standard-playbook.pdf'), preferCSSPageSize: true, printBackground: true });
+    await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
+    assert.equal(await page.locator('#standardPlaybookPaper tbody tr').count(), 0);
+    await playbook.locator('.btn-close').click();
+    await playbook.waitFor({ state: 'hidden' });
     await navigate('dashboard');
     await navigate('securityCameras');
     const cachedCameraTiming = await page.evaluate(() => window.networkDashboardPerformance.at(-1));

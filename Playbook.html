@@ -1,0 +1,177 @@
+<div class="modal fade" id="standardPlaybookModal" tabindex="-1" aria-labelledby="standardPlaybookModalTitle">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <div class="modal-eyebrow">STANDARD EDITION</div>
+          <h2 class="modal-title h5" id="standardPlaybookModalTitle">Print Playbook</h2>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p>Print a reference copy of approved operational summaries and shared contact details.
+          Credentials, network identifiers, notes, and other unapproved fields are omitted.</p>
+        <div id="standardPlaybookSections" class="row row-cols-1 row-cols-sm-2 g-2" aria-label="Playbook sections"></div>
+        <div id="standardPlaybookFeedback" class="mt-3 small" role="status" aria-live="polite"></div>
+        <div id="standardPlaybookSummary" class="mt-2"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Close</button>
+        <button type="button" id="standardPlaybookPrepare" class="btn btn-light border"
+                onclick="prepareStandardPlaybook_()">Preview selection</button>
+        <button type="button" id="standardPlaybookPrint" class="btn btn-brand" disabled
+                onclick="printStandardPlaybook_()">Print / Save as PDF</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<main id="standardPlaybookPaper" aria-label="Network HQ Playbook print document"></main>
+
+<style>
+#standardPlaybookPaper { display: none; }
+@media print {
+  body.standard-playbook-print > :not(#standardPlaybookPaper) { display: none !important; }
+  body.standard-playbook-print { overflow: visible !important; padding: 0 !important; }
+  body.standard-playbook-print #standardPlaybookPaper {
+    display: block; color: #101827; background: #fff; font: 10.5pt/1.4 Arial, sans-serif;
+    page: standardPlaybook; max-width: none;
+  }
+  @page standardPlaybook {
+    size: letter; margin: .62in .58in .62in 1in;
+    @top-left { content: "NETWORK HQ PLAYBOOK  /  STANDARD"; color: #435171; font: 8pt Arial, sans-serif; }
+    @bottom-right { content: "Page " counter(page) " of " counter(pages); color: #435171; font: 8pt Arial, sans-serif; }
+  }
+  #standardPlaybookPaper .playbook-cover,
+  #standardPlaybookPaper .playbook-section-cover {
+    break-after: page; padding-top: 1.35in;
+  }
+  #standardPlaybookPaper .playbook-section-cover { break-before: page; }
+  #standardPlaybookPaper .playbook-label { color: #435171; font-weight: bold; letter-spacing: .08em; }
+  #standardPlaybookPaper .playbook-cover h1 { font-size: 34pt; line-height: 1.1; }
+  #standardPlaybookPaper h2 { font-size: 26pt; line-height: 1.15; }
+  #standardPlaybookPaper h3 { font-size: 17pt; break-after: avoid; }
+  #standardPlaybookPaper .playbook-meta { margin: 12pt 0; color: #435171; }
+  #standardPlaybookPaper .playbook-data { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  #standardPlaybookPaper .playbook-data thead { display: table-header-group; }
+  #standardPlaybookPaper .playbook-data tr { break-inside: avoid; }
+  #standardPlaybookPaper .playbook-data th,
+  #standardPlaybookPaper .playbook-data td {
+    padding: 5pt 7pt; border: 1px solid #b2bed5; vertical-align: top; overflow-wrap: anywhere; text-align: left;
+  }
+  #standardPlaybookPaper .playbook-data th { background: #e6eef9; font-weight: bold; }
+}
+</style>
+
+<script>
+let standardPlaybookPreview_ = null;
+let standardPlaybookRequest_ = 0;
+let standardPlaybookModal_ = null;
+let standardPlaybookTitle_ = '';
+
+
+function clearStandardPlaybookPreview_() {
+  standardPlaybookRequest_ += 1;
+  standardPlaybookPreview_ = null;
+  document.getElementById('standardPlaybookPrint').disabled = true;
+  document.getElementById('standardPlaybookPrepare').disabled = false;
+  document.getElementById('standardPlaybookFeedback').textContent = '';
+  document.getElementById('standardPlaybookSummary').replaceChildren();
+}
+
+function openStandardPlaybook_() {
+  const options = appBootstrap?.standardPlaybookSections || [];
+  if (!options.length) return;
+  const node = document.getElementById('standardPlaybookModal');
+  if (!standardPlaybookModal_) {
+    standardPlaybookModal_ = new bootstrap.Modal(node);
+    node.addEventListener('hidden.bs.modal', clearStandardPlaybookPreview_);
+  }
+  clearStandardPlaybookPreview_();
+  document.getElementById('standardPlaybookSections').innerHTML = options.map(option => `
+    <div class="col"><label class="d-flex gap-2 align-items-center border rounded py-2 px-3">
+      <input type="checkbox" class="form-check-input mt-0" value="${escapeAttribute(option.key)}"
+             onchange="clearStandardPlaybookPreview_()" checked>
+      <span>${escapeHtml(option.label)}</span>
+    </label></div>`).join('');
+  standardPlaybookModal_.show();
+}
+
+async function prepareStandardPlaybook_() {
+  clearStandardPlaybookPreview_();
+  const request = standardPlaybookRequest_;
+  const button = document.getElementById('standardPlaybookPrepare');
+  const feedback = document.getElementById('standardPlaybookFeedback');
+  const keys = [...document.querySelectorAll('#standardPlaybookSections input:checked')].map(item => item.value);
+  if (!keys.length) {
+    feedback.textContent = 'Select at least one section.';
+    return;
+  }
+  button.disabled = true;
+  feedback.textContent = 'Checking section access and preparing the Standard edition…';
+  try {
+    const data = await scriptRunPromise_('standard playbook', runner => runner.appGetStandardPlaybook(keys));
+    if (request !== standardPlaybookRequest_) return;
+    if (!data.sections.length) {
+      feedback.textContent = 'Nothing eligible to print for this selection.';
+      return;
+    }
+    standardPlaybookPreview_ = { data, preparedAt: Date.now() };
+    feedback.textContent = 'Ready to print. Empty or ineligible sections are omitted. In the print dialog, choose Save as PDF to keep a copy.';
+    document.getElementById('standardPlaybookSummary').innerHTML = `
+      <ul class="mb-0">${data.sections.map(section =>
+        `<li>${escapeHtml(section.label)} (${section.rows.length} ${section.rows.length === 1 ? 'row' : 'rows'})</li>`).join('')}</ul>`;
+    document.getElementById('standardPlaybookPrint').disabled = false;
+  } catch (error) {
+    if (request === standardPlaybookRequest_) feedback.textContent = 'The Playbook could not be prepared. Check your selections and try again.';
+  } finally {
+    if (request === standardPlaybookRequest_) button.disabled = false;
+  }
+}
+
+function printStandardPlaybook_() {
+  if (!standardPlaybookPreview_ || Date.now() - standardPlaybookPreview_.preparedAt > 120000) {
+    clearStandardPlaybookPreview_();
+    document.getElementById('standardPlaybookFeedback').textContent = 'Refresh the preview to check current section access.';
+    return;
+  }
+  const data = standardPlaybookPreview_.data;
+  const paper = document.getElementById('standardPlaybookPaper');
+  paper.innerHTML = `
+    <article class="playbook-cover">
+      <p class="playbook-label">STANDARD EDITION</p>
+      <h1>${escapeHtml(data.title)}</h1>
+      <p class="playbook-meta">${escapeHtml(data.organization)}<br>Generated ${escapeHtml(data.generatedLabel)}</p>
+      <p>Operational reference. Sensitive fields and detailed identifiers are omitted.</p>
+      <h3>Contents</h3>
+      <ol>${data.sections.map(section => `<li>${escapeHtml(section.label)}</li>`).join('')}</ol>
+    </article>
+    ${data.sections.map((section, index) => `
+      <article>
+        <div class="playbook-section-cover">
+          <p class="playbook-label">SECTION ${index + 1} / STANDARD</p>
+          <h2>${escapeHtml(section.label)}</h2>
+          <p class="playbook-meta">${escapeHtml(data.organization)}<br>Generated ${escapeHtml(data.generatedLabel)}</p>
+        </div>
+        <h3>${escapeHtml(section.label)}</h3>
+        <table class="playbook-data">
+          <thead><tr>${section.columns.map(column => `<th scope="col">${escapeHtml(column)}</th>`).join('')}</tr></thead>
+          <tbody>${section.rows.map(row => `<tr>${row.map(cell =>
+            `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`).join('')}</tbody>
+        </table>
+      </article>`).join('')}`;
+  standardPlaybookTitle_ = document.title;
+  document.title = data.title + ' - Standard';
+  document.body.classList.add('standard-playbook-print');
+  try { window.print(); } catch (error) { cleanupStandardPlaybookPrint_(); }
+}
+
+function cleanupStandardPlaybookPrint_() {
+  if (!document.body.classList.contains('standard-playbook-print')) return;
+  document.body.classList.remove('standard-playbook-print');
+  document.getElementById('standardPlaybookPaper').replaceChildren();
+  document.title = standardPlaybookTitle_;
+  clearStandardPlaybookPreview_();
+}
+window.addEventListener('afterprint', cleanupStandardPlaybookPrint_);
+</script>

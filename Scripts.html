@@ -762,6 +762,8 @@ function buildNavigation(
   pages
 ) {
 
+  const playbookButton = document.getElementById('standardPlaybookButton');
+  if (playbookButton) playbookButton.hidden = !appBootstrap?.standardPlaybookSections?.length;
   const container =
     document.getElementById(
       'navigation'

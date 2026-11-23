@@ -168,6 +168,10 @@
             <i class="fa-regular fa-envelope me-1" aria-hidden="true"></i>
             Subscribe for updates
           </a>
+          <button id="standardPlaybookButton" type="button" class="btn btn-sm btn-light border" hidden
+                  onclick="openStandardPlaybook_()">
+            <i class="fa-solid fa-print me-1" aria-hidden="true"></i> Print Playbook
+          </button>
           <div class="dropdown help-menu-shell">
             <button
               id="globalHelpButton"
@@ -215,6 +219,8 @@
 
 </div>
 
+
+<?!= include('Playbook'); ?>
 
 <div id="toastContainer"></div>
 

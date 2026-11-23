@@ -1892,6 +1892,7 @@ function buildAppBootstrap_(
     },
 
     pages: pages,
+    standardPlaybookSections: getStandardPlaybookSectionOptions_(pages),
 
     modules:
       getModuleStatusList_({

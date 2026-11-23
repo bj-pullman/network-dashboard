@@ -765,6 +765,23 @@ Application definitions may update setting metadata during Update / Repair while
 
 ---
 
+## Standard Playbook
+
+Choose **Print Playbook**, select sections, and preview the selection. Only populated
+sections you can view are included. Select **Print / Save as PDF** and choose
+**Save as PDF** or an approved printer in the browser dialog. Current Chromium
+browsers support the built-in page numbers; turn off browser-generated headers
+and footers to avoid duplicates.
+
+The Standard edition includes selected inventory status and type counts, outage
+and Change Log timelines, and active Contacts with recognized shared support
+mailboxes. It omits individual contact details, notes, links, network addresses and
+identifiers, credentials, formula results, and all other unreviewed fields or
+sections. The PDF is created by the browser, not stored by Network HQ. Keep a
+printed or saved copy in an appropriate location. There is no Confidential edition.
+
+---
+
 ## Branding
 
 Network HQ supports organization-specific branding without source-code changes.
