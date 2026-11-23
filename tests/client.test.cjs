@@ -197,3 +197,56 @@ test('all registered renderers are included in the initial shell without filenam
   const names = fs.readdirSync(root).filter(file => /\.(js|gs|html)$/.test(file)).map(file => file.replace(/\.[^.]+$/, '').toLowerCase());
   assert.equal(new Set(names).size, names.length);
 });
+
+function dashboardQuickAddHarness() {
+  const h = clientHarness();
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'Dashboard.html'), 'utf8')
+    .replace(/<\/?script>/g, ''), h.context);
+  h.evaluate(`currentPageKey = renderedPageKey = 'dashboard';
+    currentPageData = { canAddChangeLog: true };
+    appBootstrap.pages.find(page => page.key === 'changeLog').permission = 'edit';`);
+  const opens = [];
+  h.context.openAddRecord = () => opens.push(h.evaluate('currentPageKey'));
+  h.context.showToast = () => {};
+  // Keep the ordinary route/load state, while replacing actual DOM renderers.
+  h.context.renderDashboard = () => {};
+  return { ...h, opens };
+}
+
+test('Dashboard quick action checks permission and reuses the existing Add form after a fresh load', async () => {
+  const h = dashboardQuickAddHarness();
+  const visible = () => h.evaluate('canAddDashboardChangeLog_(currentPageData)');
+  assert.equal(visible(), true);
+  h.evaluate('currentPageData.canAddChangeLog = false');
+  assert.equal(visible(), false);
+  h.evaluate(`currentPageData.canAddChangeLog = true;
+    appBootstrap.pages.find(page => page.key === 'changeLog').permission = 'view';`);
+  assert.equal(visible(), false);
+  await h.context.openDashboardChangeLog_();
+  assert.equal(h.requests.length, 0);
+  h.evaluate(`appBootstrap.pages = appBootstrap.pages.filter(page => page.key !== 'changeLog');`);
+  assert.equal(visible(), false);
+  h.evaluate(`appBootstrap.pages.push({ key: 'changeLog', permission: 'edit' });`);
+
+  h.context.setClientCache('changeLog', { ...data('changeLog'), permission: 'edit' });
+  const operation = h.context.openDashboardChangeLog_();
+  assert.deepEqual(h.requests[0].args, ['changeLog', true]);
+  assert.deepEqual(h.opens, []);
+  h.requests[0].resolve({ ...data('changeLog'), permission: 'edit' });
+  await operation;
+  assert.deepEqual(h.opens, ['changeLog']);
+});
+
+test('Dashboard quick action does not open the modal after permission loss or superseded navigation', async () => {
+  for (const reason of ['permission changed', 'navigation superseded']) {
+    const h = dashboardQuickAddHarness();
+    const operation = h.context.openDashboardChangeLog_();
+    if (reason === 'navigation superseded') {
+      h.context.navigateTo('contacts');
+      h.requests[1].resolve(data('contacts'));
+    }
+    h.requests[0].resolve({ ...data('changeLog'), permission: reason === 'permission changed' ? 'view' : 'edit' });
+    await operation;
+    assert.deepEqual(h.opens, [], reason);
+  }
+});

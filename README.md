@@ -451,7 +451,7 @@ Current optional modules include:
 
 SSIDs are maintained manually in Google Sheets and support per-page `view`/`edit` RBAC through the `ssids` permission key. The inventory separates Security Level (Open, Personal, Enterprise, or a custom value) from Key Management and includes practical Aruba-oriented fields for radio bands, authentication servers, MAC authentication, client IP/VLAN assignment, and VLAN. Passwords are optional and use the shared restricted-field workflow: normal page data omits raw values, edit-authorized users may reveal them on demand, and blank edits preserve the saved password.
 
-Change Log is a Google Sheets-backed infrastructure and application change-record index. It supports standard page permissions, search, filters, column selection, optional external documentation links, and a Recent Changes Dashboard widget.
+Change Log is a Google Sheets-backed infrastructure and application change-record index. It supports standard page permissions, search, filters, column selection, optional external documentation links, and a Recent Changes Dashboard widget. Users with Change Log Edit can choose **Add Change Log** on the Dashboard to open the same Change Log entry form.
 
 Category and System / Area choices are read from the editable JSON App Settings keys `change_log.categories` and `change_log.system_areas`. Both lists include `Other`; the editor stores the entered custom value instead of the word `Other`. Existing values outside the configured lists remain valid.
 

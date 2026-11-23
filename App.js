@@ -5222,6 +5222,7 @@ function getAppDashboardData_(
       : getEmptyDashboardData_();
 
 
+  result.canAddChangeLog = getPagePermission_('changeLog') === 'edit';
   return result;
 
     }

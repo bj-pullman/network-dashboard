@@ -910,8 +910,10 @@ function buildNavigation(
 
 
 function navigateTo(
-  pageKey
+  pageKey,
+  options
 ) {
+  options = options || {};
   const started = nowClient_();
 
   if (
@@ -951,13 +953,13 @@ function navigateTo(
     );
 
 
-  loadPage(
+  return loadPage(
     pageKey,
-    false,
+    !!options.forceRefresh,
     {
       generation: generation,
       started: started,
-      reason: 'navigation'
+      reason: options.reason || 'navigation'
     }
   );
 }

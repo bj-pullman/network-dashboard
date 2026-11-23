@@ -101,3 +101,27 @@ test('user permission writes invalidate the existing access cache', () => {
     role: 'user', defaultPermission: 'view', permissions: { securityCameras: 'edit' } }], { user: 'admin@example.test' });
   assert.equal(h.invoke('appGetPageData', ['securityCameras'], { user: 'viewer@example.test' }).permission, 'edit');
 });
+
+test('Dashboard advertises Add Change Log only to Change Log editors', () => {
+  const h = createHarness();
+  for (const [name, permission] of [['editor', 'edit'], ['reader', 'view'], ['no-access', 'none']]) {
+    h.invoke('saveAppUser', [{ name: 'Fixture ' + name, email: name + '@example.test', active: true,
+      role: 'user', defaultPermission: 'view', permissions: { changeLog: permission, dashboard: 'view' } }]);
+  }
+  const actor = name => ({ user: name + '@example.test' });
+  assert.equal(h.invoke('appGetPageData', ['dashboard'], actor('editor')).canAddChangeLog, true);
+  assert.equal(h.invoke('appGetPageData', ['dashboard'], actor('reader')).canAddChangeLog, false);
+  assert.equal(h.invoke('appGetPageData', ['dashboard'], actor('no-access')).canAddChangeLog, false);
+  const before = JSON.stringify(h.sheets.get('Change Log').data);
+  assert.throws(() => h.invoke('appAddRecord', ['changeLog', {
+    'Change Date': '2026-11-01', 'Change Name': 'Denied fixture'
+  }], actor('reader')), /permission/);
+  assert.equal(JSON.stringify(h.sheets.get('Change Log').data), before);
+
+  // Change Log is core today. Simulate the current module-state gate denying it
+  // without changing its classification or introducing a new setting.
+  const isEnabled = h.context.isPageEnabled_;
+  h.context.isPageEnabled_ = key => key !== 'changeLog' && isEnabled(key);
+  assert.equal(h.invoke('appGetPageData', ['dashboard'], actor('editor')).canAddChangeLog, false);
+  assert.throws(() => h.invoke('appGetPageData', ['changeLog'], actor('editor')), /not enabled/);
+});
