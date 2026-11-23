@@ -324,7 +324,7 @@ function readIntegrationStateMap_(
   if (!sheet) return map;
 
 
-  const allValues = readSheetDisplayBatch_(sheet);
+  const allValues = readConfiguredPageValues_(sheet, {});
   const headers = (allValues[0] || []).map(value => String(value || '').trim());
   const index = {};
 
@@ -668,11 +668,9 @@ function getIntegrationStatusList_(onlyId, includeLiveCounts) {
         dataStatus:
           dataStatus,
         lastAttempt:
-          itemState.lastAttempt || '',
+          serializeNetworkDashboardTimestamp_(itemState.lastAttempt),
         lastSuccessfulSync:
-          itemState.lastSuccessfulSync ||
-          itemState.lastSync ||
-          '',
+          serializeNetworkDashboardTimestamp_(itemState.lastSuccessfulSync || itemState.lastSync),
         recordCount:
           recordCount,
         recordCounts:
@@ -682,9 +680,7 @@ function getIntegrationStatusList_(onlyId, includeLiveCounts) {
         oauthRefresh:
           oauthRefresh,
         lastSync:
-          itemState.lastSuccessfulSync ||
-          itemState.lastSync ||
-          '',
+          serializeNetworkDashboardTimestamp_(itemState.lastSuccessfulSync || itemState.lastSync),
         lastStatus:
           itemState.lastStatus || '',
         notes:

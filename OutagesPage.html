@@ -1192,12 +1192,16 @@ function openOutageRecordModal_(
       'recordModalBody'
     );
 
+  const timezone = getClientRegionalPreferences_().timezone;
   body.innerHTML = `
     <div class="form-required-note">
       <span class="required-marker">*</span> Required
     </div>
 
-    <div class="outage-form">
+    <div class="outage-form" data-outage-timezone="${escapeAttribute(timezone)}">
+      <p class="internet-wan-field-full mb-0 text-muted small">
+        Times are in ${escapeHtml(timezone)}.
+      </p>
       <label class="internet-wan-field internet-wan-field-full">
         <span>Circuit <span class="required-marker">*</span></span>
         <select
@@ -1238,6 +1242,21 @@ function openOutageRecordModal_(
         >
       </label>
 
+      <details class="internet-wan-field-full">
+        <summary class="small">Repeated clock times</summary>
+        <p class="small text-muted mb-2">Choose First or Second only if the same local time occurs twice when clocks move back.</p>
+        ${['Started', 'Restored'].map(field => `
+          <label class="internet-wan-field mb-2">
+            <span>${field} occurrence</span>
+            <select class="form-select form-select-sm" data-outage-occurrence="${field}">
+              <option value="">Automatic</option>
+              <option value="earlier">First occurrence</option>
+              <option value="later">Second occurrence</option>
+            </select>
+          </label>
+        `).join('')}
+      </details>
+
       <label class="internet-wan-field internet-wan-field-full">
         <span>Cause / Reason</span>
         <input
@@ -1269,17 +1288,14 @@ function openOutageRecordModal_(
 
 function saveOutageFromModal() {
 
-  const record =
-    {};
-
-  document
-    .querySelectorAll(
-      '#recordModalBody [data-outage-field]'
-    )
-    .forEach(input => {
-      record[input.dataset.outageField] =
-        input.value;
-    });
+  const form = document.querySelector('#recordModalBody .outage-form');
+  const record = { _timezone: form.dataset.outageTimezone, _timeOccurrences: {} };
+  form.querySelectorAll('[data-outage-field]').forEach(input => {
+    record[input.dataset.outageField] = input.value;
+  });
+  form.querySelectorAll('[data-outage-occurrence]').forEach(input => {
+    if (input.value) record._timeOccurrences[input.dataset.outageOccurrence] = input.value;
+  });
 
   if (editingRow) {
     record._row =

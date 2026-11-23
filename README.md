@@ -738,6 +738,15 @@ Settings include areas such as:
 * user-domain restrictions
 * Dashboard configuration
 
+**Regional:** Enter an IANA timezone such as `America/Chicago` or `Etc/UTC`.
+Network HQ keeps calendar-only values, such as Change Log dates, on the entered day.
+Timestamp displays and manual outage input use the organization timezone; new outage
+instants are stored in UTC. During a spring clock change, enter a time that actually
+exists. When a fall clock change repeats an hour, use **Repeated clock times** in the
+outage editor to choose the first or second occurrence. Unchanged edits retain the
+stored instant. ISO-style historical timestamps without an offset are interpreted in
+the spreadsheet timezone where unambiguous; no historical records are rewritten.
+
 System-controlled settings include application and schema version metadata.
 
 Editable settings should normally be managed through the Network HQ Settings interface.

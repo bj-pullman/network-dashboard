@@ -24,13 +24,27 @@ function getNetworkDashboardRegionalPreferences_() {
 
 function getValidNetworkDashboardTimezone_(timezone) {
   const value = String(timezone || '').trim();
-  if (!value) return '';
-  try {
-    Utilities.formatDate(new Date(0), value, 'yyyy');
-    return value;
-  } catch (error) {
-    return '';
+  if (!/^(?:UTC|GMT|[A-Za-z_]+(?:\/[A-Za-z0-9_.+\-]+)+)$/.test(value)) return '';
+  return getNetworkDashboardZoneFormatter_(value) ? value : '';
+}
+
+
+// Apps Script executions do not share globals. Reuse validated formatters across rows in this request.
+var NETWORK_DASHBOARD_ZONE_FORMATTERS_ = new Map();
+
+function getNetworkDashboardZoneFormatter_(timezone) {
+  if (!NETWORK_DASHBOARD_ZONE_FORMATTERS_.has(timezone)) {
+    let formatter = null;
+    try {
+      formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: timezone, calendar: 'gregory', numberingSystem: 'latn',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'
+      });
+    } catch (error) {}
+    NETWORK_DASHBOARD_ZONE_FORMATTERS_.set(timezone, formatter);
   }
+  return NETWORK_DASHBOARD_ZONE_FORMATTERS_.get(timezone);
 }
 
 
@@ -91,15 +105,76 @@ function makeNetworkDashboardDateParts_(year, month, day) {
 }
 
 
-function parseNetworkDashboardTimestamp_(value) {
+// Parse ISO-style timestamps only. Legacy unzoned sheet text uses the sheet timezone,
+// not whichever timezone happens to be set on the server or browser.
+function parseNetworkDashboardTimestamp_(value, localTimezone, occurrence) {
   if (value === null || value === undefined || value === '') return null;
   if (Object.prototype.toString.call(value) === '[object Date]') {
     return isNaN(value.getTime()) ? null : value;
   }
-  const text = String(value).trim();
-  if (!text || parseNetworkDashboardDateOnly_(text)) return null;
-  const parsed = new Date(text);
-  return isNaN(parsed.getTime()) ? null : parsed;
+  const parsed = readNetworkDashboardTimestampParts_(value);
+  if (!parsed) return null;
+  if (parsed.offset) return parseNetworkDashboardOffsetTimestamp_(parsed);
+  const matches = findNetworkDashboardLocalInstants_(
+    parsed, localTimezone || getNetworkDashboardCalendarTimezone_()
+  );
+  if (matches.length === 1) return matches[0];
+  if (matches.length > 1 && occurrence === 'earlier') return matches[0];
+  if (matches.length > 1 && occurrence === 'later') return matches[matches.length - 1];
+  return null;
+}
+
+
+function readNetworkDashboardTimestampParts_(value) {
+  const text = String(value == null ? '' : value).trim();
+  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?(Z|[+-]\d{2}:?\d{2})?$/i);
+  if (!match) return null;
+  const [, year, month, day, hour, minute, second = '00', fraction = '', suffix = ''] = match;
+  if (!isValidNetworkDashboardDateParts_(Number(year), Number(month), Number(day)) ||
+      Number(hour) > 23 || Number(minute) > 59 || Number(second) > 59) return null;
+  const wall = year + '-' + month + '-' + day + 'T' + hour + ':' + minute + ':' + second;
+  return { wall: wall, fractionalMs: Number(fraction.padEnd(3, '0')), offset: suffix.toUpperCase() };
+}
+
+
+function parseNetworkDashboardOffsetTimestamp_(parsed) {
+  const offset = parsed.offset.replace(/([+-]\d{2})(\d{2})$/, '$1:$2');
+  const result = new Date(parsed.wall + '.' + String(parsed.fractionalMs).padStart(3, '0') + offset);
+  return isNaN(result.getTime()) ? null : result;
+}
+
+
+function projectNetworkDashboardWallTime_(date, timezone) {
+  const formatter = getNetworkDashboardZoneFormatter_(timezone);
+  if (!formatter) return '';
+  const parts = {};
+  formatter.formatToParts(date).forEach(part => { parts[part.type] = part.value; });
+  return String(parts.year).padStart(4, '0') + '-' + parts.month + '-' + parts.day +
+    'T' + parts.hour + ':' + parts.minute + ':' + parts.second;
+}
+
+
+function findNetworkDashboardLocalInstants_(parsed, timezone) {
+  if (!getValidNetworkDashboardTimezone_(timezone)) return [];
+  const clockMs = Date.parse(parsed.wall + 'Z');
+  const offsets = new Set();
+  // Sample on both sides of any nearby transition. Round-tripping candidates
+  // means gaps produce no matches and repeated times retain both instants.
+  [-36, -12, 0, 12, 36].forEach(hours => {
+    const sampleMs = clockMs + hours * 3600000;
+    const wall = projectNetworkDashboardWallTime_(new Date(sampleMs), timezone);
+    offsets.add(Date.parse(wall + 'Z') - sampleMs);
+  });
+  return [...offsets]
+    .map(offset => new Date(clockMs - offset + parsed.fractionalMs))
+    .filter(date => projectNetworkDashboardWallTime_(date, timezone) === parsed.wall)
+    .sort((a, b) => a.getTime() - b.getTime());
+}
+
+
+function serializeNetworkDashboardTimestamp_(value) {
+  const timestamp = parseNetworkDashboardTimestamp_(value);
+  return timestamp ? timestamp.toISOString() : String(value || '').trim();
 }
 
 
@@ -113,7 +188,7 @@ function parseNetworkDashboardDate_(value) {
 
 function isValidNetworkDashboardDateParts_(year, month, day) {
   if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return false;
-  if (month < 1 || month > 12 || day < 1) return false;
+  if (year < 1 || year > 9999 || month < 1 || month > 12 || day < 1) return false;
   return day <= new Date(Date.UTC(year, month, 0)).getUTCDate();
 }
 
@@ -162,7 +237,7 @@ function isDateOnlyHeader_(header) {
 
 
 function isDateTimeHeader_(header) {
-  return /timestamp|(^|\s)(sync|synced|updated|created|imported|checked)(\s|$)|started|restored|offline since/i
+  return /timestamp|(^|\s)(sync|synced|updated|created|imported|checked)(\s|$)|started|restored|offline since|^last attempt$/i
     .test(String(header || '').trim());
 }
 
@@ -185,7 +260,9 @@ function normalizeNetworkDashboardSheetValue_(header, value) {
       'yyyy-MM-dd'
     );
   }
-  if (isDateTimeHeader_(header)) return parseNetworkDashboardTimestamp_(value) || value;
+  if (isDateTimeHeader_(header)) {
+    return parseNetworkDashboardTimestamp_(value, getEffectiveTimezone_()) || value;
+  }
   return value;
 }
 

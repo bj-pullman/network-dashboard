@@ -18,7 +18,7 @@ async function main() {
   const url = 'http://127.0.0.1:' + server.address().port;
   const output = path.join(root, 'test-results');
   fs.mkdirSync(output, { recursive: true });
-  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, serviceWorkers: 'block' });
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, timezoneId: 'Asia/Tokyo', serviceWorkers: 'block' });
   const externalRequests = [];
   await context.route('**/*', route => {
     if (new URL(route.request().url()).origin === url) return route.continue();
@@ -153,6 +153,38 @@ async function main() {
         await page.evaluate(() => refreshPageQuietly_('intercom', navigationGeneration, 'browser-test'));
         assert.equal(await page.evaluate(() => fixtureStructuredTable === structuredTables.intercomSystems), true);
         assert.equal(await page.evaluate(() => structuredTables.intercomSystems.getDataCount('active')), state);
+      }
+      if (item.key === 'outages') {
+        console.log('Checking outage repeated-hour save from a browser in a different zone');
+        await page.locator('#pageActions button[onclick="openOutageAddRecord()"]').click();
+        const modal = page.locator('#recordModal');
+        await modal.waitFor({ state: 'visible' });
+        assert.equal(await modal.locator('[data-outage-timezone]').getAttribute('data-outage-timezone'), 'America/Chicago');
+        assert.match(await modal.locator('[data-outage-timezone]').textContent(), /Times are in America\/Chicago/);
+        await modal.locator('[data-outage-field="Circuit ID"]').selectOption('WAN-FIXTURE-1');
+        await modal.locator('[data-outage-field="Started"]').fill('2026-11-01T01:30');
+        await modal.locator('[data-outage-field="Restored"]').fill('2026-11-01T01:30');
+        await modal.getByText('Repeated clock times').click();
+        await modal.locator('[data-outage-occurrence="Started"]').selectOption('earlier');
+        await modal.locator('[data-outage-occurrence="Restored"]').selectOption('later');
+        await modal.locator('#saveRecordButton').click();
+        await modal.waitFor({ state: 'hidden' });
+        await page.waitForFunction(() => currentPageData.rows.length === 1);
+        const readInstants = () => page.evaluate(() => currentPageData.rows.map(
+          row => [row.Started, row.Restored, row['Duration Minutes']]
+        ));
+        const expected = [['2026-11-01T06:30:00.000Z', '2026-11-01T07:30:00.000Z', '60']];
+        assert.deepEqual(await readInstants(), expected);
+
+        await page.locator('.tabulator-row .table-row-action-edit').click();
+        await modal.waitFor({ state: 'visible' });
+        assert.equal(await modal.locator('[data-outage-field="Started"]').inputValue(), '2026-11-01T01:30');
+        assert.equal(await modal.locator('[data-outage-field="Restored"]').inputValue(), '2026-11-01T01:30');
+        await modal.locator('[data-outage-field="Notes"]').fill('Fixture notes-only edit');
+        await modal.locator('#saveRecordButton').click();
+        await modal.waitFor({ state: 'hidden' });
+        await page.waitForFunction(() => currentPageData.rows[0].Notes === 'Fixture notes-only edit');
+        assert.deepEqual(await readInstants(), expected);
       }
       if (item.key === 'internetWan') {
         await page.waitForFunction(() => !document.querySelector('#toastContainer .app-toast'));

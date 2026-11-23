@@ -5426,15 +5426,7 @@ function validateOutageRows_(
     return;
   }
 
-  const values =
-    sheet
-      .getRange(
-        2,
-        1,
-        sheet.getLastRow() - 1,
-        headers.length
-      )
-      .getDisplayValues();
+  const values = readConfiguredPageValues_(sheet, {}).slice(1);
 
   const seenOutageIds = {};
   const seenExternalIds = {};
@@ -5597,15 +5589,8 @@ function validateOutageRows_(
       }
     }
 
-    const startedMs =
-      Date.parse(
-        record.Started || ''
-      );
-
-    const restoredMs =
-      Date.parse(
-        record.Restored || ''
-      );
+    const startedMs = parseOutageTimestampMs_(record.Started) || NaN;
+    const restoredMs = parseOutageTimestampMs_(record.Restored) || NaN;
 
     if (
       record.Started &&
@@ -6023,6 +6008,14 @@ function validateSettings_(result) {
       }
 
     });
+
+
+  if (Object.prototype.hasOwnProperty.call(values, 'regional.timezone') &&
+      !getValidNetworkDashboardTimezone_(values['regional.timezone'])) {
+    addValidationIssue_(result, 'action',
+      'App Settings -> regional.timezone - Not a valid IANA timezone.',
+      'Set a valid organization timezone, such as America/Chicago, in Settings -> Regional.');
+  }
 
 
   const installedAppVersion =

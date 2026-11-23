@@ -191,7 +191,8 @@ function parseAppTimestamp_(value) {
   if (value === null || value === undefined || value === '') return null;
   if (value instanceof Date) return isNaN(value.getTime()) ? null : value;
   const text = String(value).trim();
-  if (!text || parseAppDateOnly_(text)) return null;
+  // Never interpret an offset-free timestamp in the viewer's personal timezone.
+  if (!/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:?\d{2})$/i.test(text)) return null;
   const date = new Date(text);
   return isNaN(date.getTime()) ? null : date;
 }
@@ -227,8 +228,7 @@ function formatAppDate_(value, includeTime) {
     const options = {
       year: 'numeric', month: '2-digit', day: '2-digit',
       hour: '2-digit', minute: '2-digit',
-      hour12: regional.timeFormat === 'h:mm a',
-      hourCycle: regional.timeFormat === 'HH:mm' ? 'h23' : undefined,
+      hourCycle: regional.timeFormat === 'HH:mm' ? 'h23' : 'h12',
       timeZone: regional.timezone
     };
     const parts = {};

@@ -324,7 +324,7 @@ function readOutageRecords_(
     return [];
   }
 
-  const allValues = readSheetDisplayBatch_(sheet);
+  const allValues = readConfiguredPageValues_(sheet, {});
   const headers = (allValues[0] || []).map(value => String(value || '').trim());
 
   const indexes =
@@ -371,9 +371,9 @@ function readOutageRecords_(
       row[header] =
         columnIndex === undefined
           ? ''
-          : String(
-              sourceRow[columnIndex] || ''
-            );
+          : isDateTimeHeader_(header)
+            ? sourceRow[columnIndex]
+            : String(sourceRow[columnIndex] || '');
 
     });
 
@@ -606,14 +606,10 @@ function hydrateOutageDisplayFields_(
     String(row.Restored || '').trim();
 
   const startedMs =
-    parseOutageTimestampMs_(
-      startedText
-    );
+    parseOutageTimestampMs_(row.Started);
 
   const restoredMs =
-    parseOutageTimestampMs_(
-      restoredText
-    );
+    parseOutageTimestampMs_(row.Restored);
 
   row._diagnostics = [];
 
@@ -636,6 +632,14 @@ function hydrateOutageDisplayFields_(
 
   row._restoredMs =
     restoredMs;
+
+  // RPCs and cache transport instants with offsets; leave legacy sheet cells untouched.
+  row.Started = startedMs ? new Date(startedMs).toISOString() : startedText;
+  row.Restored = restoredMs ? new Date(restoredMs).toISOString() : restoredText;
+  ['Created At', 'Updated At'].forEach(header => {
+    const epoch = parseOutageTimestampMs_(row[header]);
+    row[header] = epoch ? new Date(epoch).toISOString() : String(row[header] || '');
+  });
 
   const sourceKey = normalizeSimpleKey_(row.Source);
   const storedStatus = String(row.Status || '').trim();
@@ -1065,19 +1069,15 @@ function normalizeManualOutageRecord_(
     );
   }
 
-  const started =
-    normalizeOutageTimestamp_(
-      record.Started,
-      'Started',
-      true
-    );
-
-  const restored =
-    normalizeOutageTimestamp_(
-      record.Restored,
-      'Restored',
-      false
-    );
+  const timezone = getEffectiveTimezone_();
+  if (record._timezone && record._timezone !== timezone) {
+    throw new Error('The organization timezone changed. Reload the page and reopen this outage.');
+  }
+  const occurrences = record._timeOccurrences || {};
+  const started = normalizeOutageTimestamp_(record.Started, 'Started', true, timezone,
+    occurrences.Started, current.Started);
+  const restored = normalizeOutageTimestamp_(record.Restored, 'Restored', false, timezone,
+    occurrences.Restored, current.Restored);
 
   const startedMs =
     parseOutageTimestampMs_(
@@ -1654,21 +1654,13 @@ function getOutageRowObject_(
   headers
 ) {
 
-  const row =
-    sheet
-      .getRange(
-        rowNumber,
-        1,
-        1,
-        headers.length
-      )
-      .getDisplayValues()[0];
-
+  const range = sheet.getRange(rowNumber, 1, 1, headers.length);
+  const displayed = range.getDisplayValues()[0];
+  const raw = range.getValues()[0];
   const record = {};
 
   headers.forEach((header, index) => {
-    record[header] =
-      String(row[index] || '');
+    record[header] = isDateTimeHeader_(header) ? raw[index] : String(displayed[index] || '');
   });
 
   return record;
@@ -1796,39 +1788,39 @@ function formatOutageIdNumber_(
 }
 
 
-function normalizeOutageTimestamp_(
-  value,
-  label,
-  required
-) {
-
-  const text =
-    String(value || '').trim();
-
+function normalizeOutageTimestamp_(value, label, required, timezone, occurrence, storedValue) {
+  const text = String(value == null ? '' : value).trim();
   if (!text) {
-    if (required) {
-      throw new Error(
-        label + ' is required.'
-      );
-    }
-
+    if (required) throw new Error(label + ' is required.');
     return '';
   }
 
-  const date =
-    new Date(text);
-
-  if (
-    isNaN(
-      date.getTime()
-    )
-  ) {
-    throw new Error(
-      label + ' must be a valid date and time.'
-    );
+  const parsed = readNetworkDashboardTimestampParts_(text);
+  const zone = timezone || getEffectiveTimezone_();
+  const invalid = label + ' must be a valid date and time.';
+  if (!parsed) throw new Error(invalid);
+  if (parsed.offset) {
+    const instant = parseNetworkDashboardOffsetTimestamp_(parsed);
+    if (!instant) throw new Error(invalid);
+    return instant.toISOString();
   }
 
-  return date.toISOString();
+  // The editor displays minutes, not seconds. A notes-only edit should keep
+  // the exact stored instant, including the occurrence of a repeated hour.
+  const storedMs = parseOutageTimestampMs_(storedValue);
+  if (!occurrence && storedMs && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(text) &&
+      projectNetworkDashboardWallTime_(new Date(storedMs), zone).slice(0, 16) === text) {
+    return storedValue;
+  }
+
+  const matches = findNetworkDashboardLocalInstants_(parsed, zone);
+  if (!matches.length) {
+    throw new Error(label + ' does not exist in ' + zone + ' because the clocks move forward. Enter a different time.');
+  }
+  if (matches.length > 1 && occurrence !== 'earlier' && occurrence !== 'later') {
+    throw new Error(label + ' occurs twice in ' + zone + '. Under Repeated clock times, select First or Second.');
+  }
+  return matches[occurrence === 'later' ? matches.length - 1 : 0].toISOString();
 }
 
 
@@ -1854,16 +1846,8 @@ function normalizeUptimeRobotIncidentTimestamp_(
     if (/^\d+(?:\.\d+)?$/.test(text)) {
       return normalizeUptimeRobotIncidentTimestamp_(Number(text));
     }
-    const date =
-      new Date(text);
-
-    if (
-      !isNaN(
-        date.getTime()
-      )
-    ) {
-      return date.toISOString();
-    }
+    const date = parseNetworkDashboardTimestamp_(text, 'Etc/UTC');
+    if (date) return date.toISOString();
 
     return '';
   }
@@ -1883,33 +1867,15 @@ function normalizeUptimeRobotIncidentTimestamp_(
 }
 
 
-function parseOutageTimestampMs_(
-  value
-) {
-
-  const text =
-    String(value || '').trim();
-
-  if (!text) {
-    return 0;
-  }
-
+function parseOutageTimestampMs_(value) {
+  const text = String(value == null ? '' : value).trim();
   if (/^\d+(?:\.\d+)?$/.test(text)) {
     const numeric = Number(text);
-    const numericTime = numeric > 100000000000
-      ? numeric
-      : numeric * 1000;
-    return Number.isFinite(numericTime) ? numericTime : 0;
+    const millis = numeric > 100000000000 ? numeric : numeric * 1000;
+    return Number.isFinite(millis) ? millis : 0;
   }
-
-  const date = new Date(text);
-
-  const time =
-    date.getTime();
-
-  return isNaN(time)
-    ? 0
-    : time;
+  const date = parseNetworkDashboardTimestamp_(value);
+  return date ? date.getTime() : 0;
 }
 
 

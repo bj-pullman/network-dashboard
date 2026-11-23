@@ -42,7 +42,7 @@ function createPreviewServer() {
   html = html.replace('</head>', bridge + '</head>');
   const publicMethods = new Set(['appGetPageData', 'getAppBootstrap', 'appAddRecord', 'appUpdateRecord',
     'appDeleteRecord', 'appGetRowCredential', 'appGetCredentials', 'saveAppUser', 'deleteAppUser',
-    'saveAppSettings', 'saveIntegrationConfig', 'appSaveInternetWanCircuit']);
+    'saveAppSettings', 'saveIntegrationConfig', 'appSaveInternetWanCircuit', 'appSaveOutage']);
   const server = http.createServer(async (request, response) => {
     const url = new URL(request.url, 'http://localhost');
     if (url.pathname === '/rpc' && request.method === 'POST') {

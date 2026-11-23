@@ -8,7 +8,9 @@ const sourceFiles = ['Performance.js', 'Config.js', 'DateUtils.js', 'App.js', 'O
   'ChangeLogService.js', 'Integrations.js', 'Setup.js', 'ArubaCentral.js',
   'UptimeRobot.js', 'Outages.js', 'Code.js'];
 
-function createHarness({ baseline = false } = {}) {
+function createHarness({
+  baseline = false, scriptTimezone = 'America/Chicago', spreadsheetTimezone = 'America/Chicago'
+} = {}) {
   const sheets = new Map();
   const cache = new Map();
   const properties = new Map([['UPTIMEROBOT_API_KEY', 'fixture-only-not-a-real-key']]);
@@ -162,7 +164,7 @@ function createHarness({ baseline = false } = {}) {
     getSheets() { return [...sheets.values()]; },
     insertSheet(name) { write('insertSheet', name); return makeSheet(name, []); },
     getUrl() { return 'https://docs.google.com/spreadsheets/d/fixture-spreadsheet/edit'; },
-    getSpreadsheetTimeZone() { return 'America/Chicago'; }
+    getSpreadsheetTimeZone() { return spreadsheetTimezone; }
   };
   const scriptProperties = {
     getProperty(key) { return properties.get(key) || null; },
@@ -183,7 +185,7 @@ function createHarness({ baseline = false } = {}) {
       }
     },
     Session: { getActiveUser: () => ({ getEmail: () => email }), getEffectiveUser: () => ({ getEmail: () => email }),
-      getScriptTimeZone: () => 'America/Chicago' },
+      getScriptTimeZone: () => scriptTimezone },
     CacheService: { getScriptCache: () => ({
       get: key => cache.get(key) || null,
       put: (key, value, seconds) => { cacheWrites.push({ key, value, seconds }); cache.set(key, value); },
@@ -239,7 +241,17 @@ function createHarness({ baseline = false } = {}) {
         }
         return output;
       },
-      parseDate(value) { return new Date(String(value) + 'T00:00:00.000Z'); },
+      parseDate(value, timezone, format) {
+        if (format !== 'yyyy-MM-dd') throw new Error('Unsupported date format in fixture: ' + format);
+        const midnight = Date.parse(value + 'T00:00:00Z');
+        const formatter = new Intl.DateTimeFormat('en-US', { timeZone: timezone, timeZoneName: 'longOffset' });
+        const offsetAt = instant => {
+          const label = formatter.formatToParts(instant).find(part => part.type === 'timeZoneName').value;
+          const match = label.match(/^GMT([+-])(\d{2}):(\d{2})$/);
+          return !match ? 0 : (Number(match[2]) * 60 + Number(match[3])) * (match[1] === '-' ? -60000 : 60000);
+        };
+        return new Date(midnight - offsetAt(midnight - offsetAt(midnight)));
+      },
       getUuid: () => 'fixture-uuid'
     },
     UrlFetchApp: { fetch() { throw new Error('Unexpected external API request during a page read'); } }

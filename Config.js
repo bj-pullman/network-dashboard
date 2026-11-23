@@ -205,7 +205,7 @@ function getAppSettingDefinitions_() {
       type: 'timezone',
       defaultValue: getDefaultTimezone_(),
       editable: true,
-      description: 'Timezone used for setup and status timestamps.'
+      description: 'IANA timezone for organization timestamps and local time entry.'
     },
     {
       key: 'regional.date_format',
@@ -749,13 +749,8 @@ var AppConfig = (function() {
     }
 
 
-    if (
-      definition.type === 'timezone' &&
-      !value
-    ) {
-      throw new Error(
-        'Timezone is required.'
-      );
+    if (definition.type === 'timezone' && !getValidNetworkDashboardTimezone_(value)) {
+      throw new Error('Enter a valid IANA timezone, such as America/Chicago or Etc/UTC.');
     }
 
 
