@@ -12,7 +12,7 @@ test('the clean-checkout runner fails before running anything when a required su
   try {
     const runner = path.join(temporary, 'run-tests.cjs');
     fs.copyFileSync(path.join(__dirname, 'run-tests.cjs'), runner);
-    for (const name of ['server.test.cjs', 'refinement.test.cjs', 'integration-removal.test.cjs', 'qa.test.cjs', 'regional.test.cjs']) {
+    for (const name of ['server.test.cjs', 'refinement.test.cjs', 'integration-removal.test.cjs', 'qa.test.cjs', 'regional.test.cjs', 'contacts.test.cjs']) {
       fs.writeFileSync(path.join(temporary, name), "console.log('fixture suite ran');");
     }
     const result = spawnSync(process.execPath, [runner], { encoding: 'utf8' });

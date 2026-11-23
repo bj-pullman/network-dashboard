@@ -41,6 +41,12 @@ const APP_PASSWORD_HEADERS = new Set([
 ]);
 
 
+const CONTACT_DIRECTORY_FIELDS_ = Object.freeze([
+  'Contact Name', 'Organization', 'Role / Title', 'Category', 'Email', 'Phone',
+  'Alternate Email', 'Alternate Phone', 'Campus / Sites', 'Systems / Services', 'Status', 'Notes'
+]);
+
+
 const APP_PAGE_CONFIG = {
 
   dashboard: {
@@ -231,6 +237,19 @@ const APP_PAGE_CONFIG = {
       'Summary', 'Documentation URL', 'Implemented By', 'Status'
     ],
     suggestedOptions: {}
+  },
+
+  contacts: {
+    key: 'contacts',
+    label: 'Contacts',
+    sheet: 'Contacts',
+    type: 'table',
+    icon: 'fa-address-book',
+    group: 'Operations',
+    defaultColumns: ['Contact Name', 'Organization', 'Role / Title', 'Category', 'Email', 'Phone', 'Status'],
+    recordFields: CONTACT_DIRECTORY_FIELDS_,
+    allowCredentials: false,
+    allowDelete: false
   },
 
   busCameras: {
@@ -472,6 +491,17 @@ const APP_MODULE_REGISTRY = {
     pageKey: 'changeLog',
     requiredSheets: ['Change Log'],
     permissionKey: 'changeLog'
+  },
+
+  contacts: {
+    id: 'contacts',
+    name: 'Contacts',
+    description: 'Vendor, support and operational contact directory.',
+    classification: 'core',
+    enabledByDefault: true,
+    pageKey: 'contacts',
+    requiredSheets: ['Contacts'],
+    permissionKey: 'contacts'
   },
 
   workflow: {
@@ -2360,7 +2390,7 @@ function getAppTableData_(
   rawHeaders.forEach(
     (header, index) => {
 
-      if (!header) {
+      if (!header || (config.recordFields && !config.recordFields.includes(header))) {
         return;
       }
 
@@ -4495,6 +4525,11 @@ function appGetCredentials(
   }
 
 
+  if (config.allowCredentials === false) {
+    throw new Error('Credentials are not available for this page.');
+  }
+
+
   const sheet =
     SpreadsheetApp
       .getActiveSpreadsheet()
@@ -4605,6 +4640,11 @@ function appGetRowCredential(
     throw new Error(
       'Unknown page.'
     );
+  }
+
+
+  if (config.allowCredentials === false) {
+    throw new Error('Credentials are not available for this page.');
   }
 
 
@@ -8177,6 +8217,9 @@ function appUpdateRecord(
   }
 
 
+  if (pageKey === 'contacts') record = normalizeContactRecord_(record, false);
+
+
   validateRequiredRecordFields_(
     pageKey,
     record || {}
@@ -8253,7 +8296,7 @@ function appUpdateRecord(
     !Number.isInteger(
       rowNumber
     ) ||
-    rowNumber < 1 ||
+    rowNumber < (pageKey === 'contacts' ? 2 : 1) ||
     rowNumber >
       sheet.getLastRow()
   ) {
@@ -8267,17 +8310,6 @@ function appUpdateRecord(
 
   const lastColumn =
     sheet.getLastColumn();
-
-
-  const current =
-    sheet
-      .getRange(
-        rowNumber,
-        1,
-        1,
-        lastColumn
-      )
-      .getValues()[0];
 
 
   let headerRow =
@@ -8321,6 +8353,25 @@ function appUpdateRecord(
         lastColumn
       )
       .getDisplayValues()[0];
+
+
+  if (pageKey === 'contacts') {
+    requireContactSheetHeaders_(headers);
+    updateContactSheetFields_(sheet, rowNumber, headers, record);
+    invalidateAppPage_(pageKey);
+    return { status: 'success' };
+  }
+
+
+  const current =
+    sheet
+      .getRange(
+        rowNumber,
+        1,
+        1,
+        lastColumn
+      )
+      .getValues()[0];
 
 
   const output =
@@ -8469,6 +8520,9 @@ function appAddRecord(
   }
 
 
+  if (pageKey === 'contacts') record = normalizeContactRecord_(record, true);
+
+
   validateRequiredRecordFields_(
     pageKey,
     record || {}
@@ -8497,6 +8551,9 @@ function appAddRecord(
         sheet.getLastColumn()
       )
       .getDisplayValues()[0];
+
+
+  if (pageKey === 'contacts') requireContactSheetHeaders_(headers);
 
 
   const row =
@@ -8619,6 +8676,7 @@ function getRequiredRecordFieldsForPage_(
       'Change Date',
       'Change Name'
     ],
+    contacts: ['Contact Name'],
     backups: [
       'Server Name'
     ]
@@ -8694,6 +8752,11 @@ function appDeleteRecord(
       'Unknown page.'
     );
 
+  }
+
+
+  if (config.allowDelete === false) {
+    throw new Error('Contacts cannot be deleted here. Set the contact status to Inactive instead.');
   }
 
 

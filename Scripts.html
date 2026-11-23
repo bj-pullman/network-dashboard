@@ -109,7 +109,7 @@ const PAGE_RENDERER_FUNCTIONS = {
   networkClosets: 'renderNetworkClosetsPage',
   routes: 'renderRoutesPage', securityCameras: 'renderSecurityCamerasPage',
   ssids: 'renderSsidsPage',
-  changeLog: 'renderChangeLogPage',
+  changeLog: 'renderChangeLogPage', contacts: 'renderContactsPage',
   busCameras: 'renderBusCamerasPage', intercom: 'renderIntercomPage',
   backups: 'renderBackupsPage', internetWan: 'renderInternetWanPage',
   outages: 'renderOutagesPage',
@@ -120,7 +120,7 @@ const PAGE_UPDATE_FUNCTIONS = {
   switches: 'updateRecordTablePage_', accessPoints: 'updateRecordTablePage_',
   servers: 'updateRecordTablePage_', routes: 'updateRecordTablePage_',
   securityCameras: 'updateRecordTablePage_', ssids: 'updateRecordTablePage_',
-  changeLog: 'updateRecordTablePage_',
+  changeLog: 'updateRecordTablePage_', contacts: 'updateRecordTablePage_',
   backups: 'updateRecordTablePage_',
   busCameras: 'updateStructuredTables_', intercom: 'updateStructuredTables_',
   internetWan: 'updateInternetWanPage_', outages: 'updateOutagesPage_',
@@ -2524,6 +2524,14 @@ function openRecordModal(
   }
 
 
+  const definition = currentRecordDefinition || {};
+  if (definition.editorHint) {
+    const hint = document.createElement('p');
+    hint.className = 'small text-muted';
+    hint.textContent = definition.editorHint;
+    body.appendChild(hint);
+  }
+
   const row =
     document.createElement(
       'div'
@@ -2605,15 +2613,12 @@ function openRecordModal(
         currentPageData.hasCredentials &&
         currentPageData.permission === 'edit';
 
-      const input =
-        selectOptions.length
-          ? document.createElement(
-              'select'
-            )
-          : document.createElement(
-              'input'
-            );
-
+      const multiline = (definition.textAreaFields || []).includes(header) && !selectOptions.length;
+      const input = document.createElement(selectOptions.length ? 'select' : multiline ? 'textarea' : 'input');
+      if (multiline) {
+        input.rows = 3;
+        column.className = 'col-12';
+      }
 
       input.className =
         selectOptions.length
@@ -2653,6 +2658,10 @@ function openRecordModal(
       input.id =
         'recordField_' +
         index;
+
+      label.htmlFor = input.id;
+      const limit = (definition.inputMaxLengths || {})[header];
+      if (limit && !selectOptions.length) input.maxLength = limit;
 
       if (
         suggestions.length &&

@@ -334,6 +334,15 @@ function getNetworkDashboardSchema_() {
       tabColor: '#2563eb'
     },
 
+    'Contacts': {
+      type: 'operational',
+      category: 'Operations',
+      headers: CONTACT_DIRECTORY_FIELDS_,
+      requiredHeaders: CONTACT_DIRECTORY_FIELDS_,
+      frozenRows: 1,
+      tabColor: '#0f766e'
+    },
+
     'Change Log': {
       type: 'operational',
       category: 'Operations',
@@ -2858,6 +2867,12 @@ function getNetworkDashboardSchemaMigrations_() {
     {
       from: 9,
       to: 10,
+      run: function() {}
+    },
+    {
+      // The normal schema reconciler adds the Contacts sheet and missing headers.
+      from: 10,
+      to: 11,
       run: function() {}
     }
   ];

@@ -421,12 +421,22 @@ Core infrastructure functionality includes:
 * Outages
 * Security Cameras
 * Change Log
+* Contacts
 
 System administration functionality includes:
 
 * Department Workflow
 * User Management
 * Settings
+
+**Operations → Contacts** is the business directory for vendors, service desks,
+and other operational contacts. Search across all directory fields, filter by category
+or status, or open a record for alternate contact details, sites, systems and notes.
+The existing Contacts page permissions control viewing and editing. Editors can set
+contacts to **Inactive** and reactivate them later; the directory does not delete
+records or store credentials. Contact fields are available to authorized application
+readers through the standard Contacts page data path, ready for later use by an
+approved Playbook section.
 
 ### Optional Modules
 
@@ -1062,10 +1072,10 @@ Current application version:
 1.3.0
 ```
 
-Current schema version:
+Current schema version in this source:
 
 ```text
-10
+11
 ```
 
 The source release and schema constants define the expected versions. App Settings records the versions successfully installed by Setup or Update / Repair; Validation reports installed and expected values separately.

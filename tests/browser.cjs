@@ -10,6 +10,13 @@ async function main() {
   for (const key of ['THREATDOWN_ACCOUNT_ID', 'THREATDOWN_CLIENT_ID', 'THREATDOWN_CLIENT_SECRET']) {
     harness.properties.set(key, 'QA_ONLY_NOT_A_REAL_SECRET');
   }
+  harness.records('Contacts', [
+    { 'Contact Name': 'Fixture Helpdesk', Organization: 'Example Support', Category: 'Support',
+      Email: 'desk@example.test', Status: 'Active', 'Systems / Services': 'Fixture wireless',
+      Notes: 'Call only during business hours' },
+    { 'Contact Name': 'Former Fixture Vendor', Organization: 'Example Service', Category: 'Contractor',
+      Status: 'Inactive' }
+  ]);
   const browser = await chromium.launch({
     ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : { channel: 'chrome' }),
     headless: true
@@ -153,6 +160,62 @@ async function main() {
         await page.evaluate(() => refreshPageQuietly_('intercom', navigationGeneration, 'browser-test'));
         assert.equal(await page.evaluate(() => fixtureStructuredTable === structuredTables.intercomSystems), true);
         assert.equal(await page.evaluate(() => structuredTables.intercomSystems.getDataCount('active')), state);
+      }
+      if (item.key === 'contacts') {
+        console.log('Checking Contacts search, view, create and reversible inactivation');
+        const search = page.locator('#tableSearch');
+        const status = page.getByLabel('Filter contacts by status');
+        const category = page.getByLabel('Filter contacts by category');
+        const rows = page.locator('.tabulator-row');
+        const activeRows = count => page.waitForFunction(expected =>
+          tableInstance.getDataCount('active') === expected, count);
+        await activeRows(2);
+        await search.fill('FIXTURE WIRELESS');
+        await category.selectOption('support');
+        await status.selectOption('active');
+        await activeRows(1);
+        await rows.filter({ hasText: 'Fixture Helpdesk' }).locator('.table-row-action-view').click();
+        const modal = page.locator('#recordModal');
+        await modal.waitFor({ state: 'visible' });
+        await modal.getByText('Call only during business hours', { exact: true }).waitFor();
+        assert.equal(await modal.locator('#saveRecordButton').isVisible(), false);
+        await modal.locator('.btn-close').click();
+        await modal.waitFor({ state: 'hidden' });
+        await status.selectOption('inactive');
+        await activeRows(0);
+        await page.locator('.table-toolbar button[onclick="clearTableFilters()"]').click();
+        await activeRows(2);
+        assert.equal(await page.locator('#pageActions button[onclick="exportCurrentTable()"]').count(), 0);
+        assert.equal(await rows.locator('.table-row-action-delete').count(), 0);
+
+        const addContact = page.locator('#pageActions button[onclick="openAddRecord()"]');
+        assert.match(await addContact.textContent(), /Add Contact/);
+        await addContact.click();
+        await modal.waitFor({ state: 'visible' });
+        await modal.locator('[data-header="Contact Name"]').fill('New Fixture Contact');
+        await modal.locator('[data-header="Organization"]').fill('Fixture Organization');
+        await modal.locator('[data-header="Category"]').fill('Installation');
+        await modal.locator('[data-header="Phone"]').fill('+1 202-555-0102');
+        await modal.locator('[data-header="Notes"]').fill('Fixture note\nSecond line');
+        await modal.locator('#saveRecordButton').click();
+        await modal.waitFor({ state: 'hidden' });
+        await activeRows(3);
+        await category.selectOption('installation');
+        await activeRows(1);
+        const added = rows.filter({ hasText: 'New Fixture Contact' });
+        await added.locator('.table-row-action-edit').click();
+        await modal.waitFor({ state: 'visible' });
+        assert.equal(await modal.locator('[data-header="Status"]').inputValue(), 'Active');
+        assert.equal(await modal.locator('[data-header="Notes"]').inputValue(), 'Fixture note\nSecond line');
+        await modal.locator('[data-header="Status"]').selectOption('Inactive');
+        await modal.locator('#saveRecordButton').click();
+        await modal.waitFor({ state: 'hidden' });
+        await page.waitForFunction(() => currentPageData.rows.some(
+          row => row['Contact Name'] === 'New Fixture Contact' && row.Status === 'Inactive'));
+        await category.selectOption('installation');
+        await status.selectOption('inactive');
+        await activeRows(1);
+        await added.locator('.status-neutral').filter({ hasText: 'Inactive' }).waitFor();
       }
       if (item.key === 'outages') {
         console.log('Checking outage repeated-hour save from a browser in a different zone');

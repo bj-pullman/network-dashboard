@@ -1,0 +1,116 @@
+<script>
+const CONTACT_DISPLAY_FIELDS = [
+  'Contact Name', 'Organization', 'Role / Title', 'Category', 'Email', 'Phone',
+  'Alternate Email', 'Alternate Phone', 'Campus / Sites', 'Systems / Services', 'Status', 'Notes'
+];
+
+RECORD_PAGE_DEFINITIONS.contacts = {
+  defaultColumns: ['Contact Name', 'Organization', 'Role / Title', 'Category', 'Email', 'Phone', 'Status'],
+  requiredColumns: ['Contact Name'],
+  addLabel: 'Add Contact',
+  addTitle: 'Add Contact',
+  editTitle: 'Edit Contact',
+  allowDelete: false,
+  allowExport: false,
+  editorHint: 'Use business contact information only. Do not enter passwords, access codes, or sensitive personal information.',
+  initialSort: [{ column: 'Organization', dir: 'asc' }, { column: 'Contact Name', dir: 'asc' }],
+  inputTypes: { Email: 'email', 'Alternate Email': 'email', Phone: 'tel', 'Alternate Phone': 'tel' },
+  inputMaxLengths: Object.fromEntries(CONTACT_DISPLAY_FIELDS.map(field => [field, field === 'Notes' ? 2000 : 254])),
+  textAreaFields: ['Notes'],
+  columns: Object.fromEntries(CONTACT_DISPLAY_FIELDS.map(field => [field, {
+    tooltip: false,
+    minWidth: { 'Contact Name': 165, Organization: 150, Email: 180, Notes: 230 }[field] || 112
+  }])),
+  header: function(data) {
+    setPageHeader(data.label, 'Vendors, support providers and operational contacts');
+  },
+  actions: renderRecordActions_,
+  buildColumns: function(data) {
+    const columns = buildRecordColumns_(data, RECORD_PAGE_DEFINITIONS.contacts);
+    const status = columns.find(column => column.field === 'Status');
+    if (status) status.formatter = function(cell) {
+      const value = String(cell.getValue() || '').trim();
+      return contactFilterKey_(value) === 'active'
+        ? statusPill('Active')
+        : `<span class="status-pill status-neutral">${escapeHtml(value || 'Not classified')}</span>`;
+    };
+    return columns;
+  },
+  toolbar: function(data) {
+    return `
+      <select id="contactsStatusFilter" class="form-select form-select-sm w-auto"
+              aria-label="Filter contacts by status" onchange="applyTableSearch()">
+        <option value="">All statuses</option>
+        <option value="active">Active</option>
+        <option value="inactive">Inactive</option>
+        <option value="unclassified">Not classified</option>
+      </select>
+      <select id="contactsCategoryFilter" class="form-select form-select-sm w-auto"
+              aria-label="Filter contacts by category" onchange="applyTableSearch()">
+        ${buildContactCategoryOptions_(data.rows)}
+      </select>
+    `;
+  },
+  matchesRow: function(row) {
+    const status = document.getElementById('contactsStatusFilter')?.value;
+    const category = document.getElementById('contactsCategoryFilter')?.value;
+    const value = contactFilterKey_(row.Status);
+    const rowStatus = ['active', 'inactive'].includes(value) ? value : 'unclassified';
+    return (!status || rowStatus === status) &&
+      (!category || contactFilterKey_(row.Category) === category);
+  },
+  clearFilters: function() {
+    ['contactsStatusFilter', 'contactsCategoryFilter'].forEach(id => {
+      const select = document.getElementById(id);
+      if (select) select.value = '';
+    });
+  },
+  updateSummary: function(data) {
+    const select = document.getElementById('contactsCategoryFilter');
+    if (!select) return;
+    const selected = select.value;
+    select.innerHTML = buildContactCategoryOptions_(data.rows);
+    if ([...select.options].some(option => option.value === selected)) select.value = selected;
+  },
+  viewRecord: viewContactRecord_
+};
+
+
+function contactFilterKey_(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+
+function buildContactCategoryOptions_(rows) {
+  const categories = new Map();
+  (rows || []).forEach(row => {
+    const label = String(row.Category || '').trim();
+    if (label && !categories.has(contactFilterKey_(label))) categories.set(contactFilterKey_(label), label);
+  });
+  return '<option value="">All categories</option>' + [...categories.entries()]
+    .sort((left, right) => left[1].localeCompare(right[1]))
+    .map(([key, label]) => `<option value="${escapeAttribute(key)}">${escapeHtml(label)}</option>`)
+    .join('');
+}
+
+
+function renderContactsPage(data) {
+  renderRecordTable_(data, RECORD_PAGE_DEFINITIONS.contacts);
+}
+
+
+function viewContactRecord_(record) {
+  document.getElementById('recordModalTitle').textContent = record['Contact Name'] || 'Contact details';
+  document.getElementById('saveRecordButton').style.display = 'none';
+  document.getElementById('recordModalBody').innerHTML = `
+    <dl class="row g-3 mb-0">
+      ${CONTACT_DISPLAY_FIELDS.filter(field => field !== 'Contact Name' && record[field]).map(field => `
+        <div class="${field === 'Notes' ? 'col-12' : 'col-md-6'}">
+          <dt class="small text-muted">${escapeHtml(field)}</dt>
+          <dd class="mb-0 text-break">${escapeHtml(record[field]).replace(/\r?\n/g, '<br>')}</dd>
+        </div>
+      `).join('')}
+    </dl>`;
+  recordModal.show();
+}
+</script>

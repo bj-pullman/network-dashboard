@@ -214,6 +214,7 @@ function renderRecordActions_(data, extraActions) {
     ${addButton}
 
 
+    ${!currentRecordDefinition || currentRecordDefinition.allowExport !== false ? `
     <button
       class="btn btn-sm btn-light border"
       onclick="exportCurrentTable()"
@@ -224,7 +225,7 @@ function renderRecordActions_(data, extraActions) {
       Export
 
     </button>
-
+    ` : ''}
 
     <button
       class="btn btn-sm btn-light border"
@@ -481,49 +482,51 @@ function buildRecordColumns_(data, definition) {
           );
 
 
-          /*
-          * DELETE
-          */
-          const remove =
-            document.createElement(
-              'button'
+          if (definition.allowDelete !== false) {
+            /*
+            * DELETE
+            */
+            const remove =
+              document.createElement(
+                'button'
+              );
+
+
+            remove.type =
+              'button';
+
+
+            remove.className =
+              'table-row-action table-row-action-delete';
+
+
+            remove.title =
+              'Delete record';
+
+
+            remove.innerHTML =
+              '<i class="fa-regular fa-trash-can"></i>';
+
+
+            remove.addEventListener(
+              'click',
+              function(event) {
+
+                event.stopPropagation();
+
+                confirmDeleteRecord(
+                  rowData,
+                  remove
+                );
+
+              }
             );
 
 
-          remove.type =
-            'button';
-
-
-          remove.className =
-            'table-row-action table-row-action-delete';
-
-
-          remove.title =
-            'Delete record';
-
-
-          remove.innerHTML =
-            '<i class="fa-regular fa-trash-can"></i>';
-
-
-          remove.addEventListener(
-            'click',
-            function(event) {
-
-              event.stopPropagation();
-
-              confirmDeleteRecord(
-                rowData,
-                remove
-              );
-
-            }
-          );
-
-
-          wrapper.appendChild(
-            remove
-          );
+            wrapper.appendChild(
+              remove
+            );
+          }
 
         }
 
@@ -1740,20 +1743,22 @@ function openRowActionMenu(
     );
 
 
-    menu.appendChild(
-      createActionMenuItem(
-        'fa-trash',
-        'Delete Record',
-        function() {
+    if (!currentRecordDefinition || currentRecordDefinition.allowDelete !== false) {
+      menu.appendChild(
+        createActionMenuItem(
+          'fa-trash',
+          'Delete Record',
+          function() {
 
-          confirmDeleteRecord(
-            rowData
-          );
+            confirmDeleteRecord(
+              rowData
+            );
 
-        },
-        true
-      )
-    );
+          },
+          true
+        )
+      );
+    }
 
   }
 

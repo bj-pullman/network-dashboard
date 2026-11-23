@@ -139,12 +139,8 @@ Network HQ
 
 ## Step 10 - Verify the release
 
-Open **Help -> About Network HQ** in the production web app and confirm:
-
-```text
-Application Version: 1.3.0
-Schema Version: 10
-```
+Open **Help -> About Network HQ** in the production web app and confirm the
+installed application and schema versions match the release being deployed.
 
 Then test the functionality affected by the release.
 
@@ -242,7 +238,7 @@ After validation, open the configured production dashboard from the Google Sheet
 
 * the Dashboard and navigation load;
 * organization branding and settings remain intact;
-* **About Network HQ** reports application version `1.3.0` and schema `10`;
+* **About Network HQ** reports the deployed release and schema versions;
 * the features changed by the release work as expected;
 * affected integrations work where applicable;
 * affected RBAC behavior works with an appropriate non-admin account;
@@ -401,6 +397,12 @@ Schema 9 adds the managed Network Closets and Network Closet UPS sheets and appe
 
 Schema 10 additively appends `Serial Number` to Servers and Offline Servers. Existing rows and organization-specific columns retain their positions and values; Update / Repair adds the header once, and repeated reconciliation is idempotent.
 
+Schema 11 adds the managed **Contacts** sheet and its headers. Setup on a new
+installation creates it; Update / Repair creates it or appends missing headers on
+an existing installation without rewriting existing contacts or custom columns.
+After an approved release, verify the Operations → Contacts page and its page-level
+access for the intended users.
+
 The SSID Add and Edit workflow now renders from one 15-field form schema aligned to the SSIDs Sheet headers. Configured choice fields use dropdowns, Security Level filters compatible Key Management choices, and Open, Personal/PSK, and Enterprise fields respond from centralized classification logic. Passwords remain excluded from ordinary row payloads: a blank Edit preserves the saved credential, replacement writes a new value, and the explicit clear control is required to remove it. Unknown legacy dropdown values remain selectable and survive unrelated edits.
 
 ## Schema migrations
@@ -494,8 +496,7 @@ Never place API keys, secrets, refresh tokens, private keys, or organization cre
 
 ```text
 [ ] Open Dashboard loads the production GUI
-[ ] About reports Application Version 1.3.0
-[ ] About reports Schema Version 10
+[ ] About reports the application and schema versions expected for this release
 [ ] Affected functionality tested
 [ ] Affected integrations tested where applicable
 [ ] Managed protections verified where applicable

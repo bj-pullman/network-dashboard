@@ -5,7 +5,7 @@ const { execFileSync } = require('node:child_process');
 
 const root = path.resolve(__dirname, '..');
 const sourceFiles = ['Performance.js', 'Config.js', 'DateUtils.js', 'App.js', 'Options.js',
-  'ChangeLogService.js', 'Integrations.js', 'Setup.js', 'ArubaCentral.js',
+  'ChangeLogService.js', 'ContactsService.js', 'Integrations.js', 'Setup.js', 'ArubaCentral.js',
   'UptimeRobot.js', 'Outages.js', 'Code.js'];
 
 function createHarness({
@@ -261,7 +261,7 @@ function createHarness({
   const baselineFiles = baseline ? new Set(execFileSync(
     'git', ['ls-tree', '--name-only', baselineRef], { cwd: root, encoding: 'utf8' }
   ).trim().split(/\r?\n/)) : null;
-  const laterFiles = new Set(['Performance.js', 'DateUtils.js', 'ChangeLogService.js']);
+  const laterFiles = new Set(['Performance.js', 'DateUtils.js', 'ChangeLogService.js', 'ContactsService.js']);
   for (const file of sourceFiles) {
     if (baselineFiles && laterFiles.has(file) && !baselineFiles.has(file)) continue;
     const source = baseline ? execFileSync('git', ['show', baselineRef + ':' + file], { cwd: root, encoding: 'utf8' }) :

@@ -79,6 +79,7 @@ function getControlledOptionDefinitions_() {
       'Telecom Room',
       'Other'
     ],
+    contactStatus: ['Active', 'Inactive'],
     changeStatus: [
       'Implemented',
       'Monitoring',
@@ -289,6 +290,10 @@ function getControlledOptionsForSheet_(
       );
   }
 
+  if (sheetName === 'Contacts') {
+    map.Status = getControlledOptions_('contactStatus');
+  }
+
   if (sheetName === 'Change Log') {
     map.Status =
       getControlledOptions_(
@@ -383,6 +388,8 @@ function getControlledOptionKeyForSheetField_(
       return 'yesNo';
     }
   }
+
+  if (sheetName === 'Contacts' && field === 'Status') return 'contactStatus';
 
   if (
     sheetName === 'Change Log' &&
