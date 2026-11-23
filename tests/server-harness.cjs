@@ -8,7 +8,7 @@ const sourceFiles = ['Performance.js', 'Config.js', 'DateUtils.js', 'App.js', 'O
   'ChangeLogService.js', 'Integrations.js', 'Setup.js', 'ArubaCentral.js',
   'UptimeRobot.js', 'Outages.js', 'Code.js'];
 
-function createHarness({ baseline = false, loadDevSeed = true } = {}) {
+function createHarness({ baseline = false } = {}) {
   const sheets = new Map();
   const cache = new Map();
   const properties = new Map([['UPTIMEROBOT_API_KEY', 'fixture-only-not-a-real-key']]);
@@ -245,9 +245,13 @@ function createHarness({ baseline = false, loadDevSeed = true } = {}) {
     UrlFetchApp: { fetch() { throw new Error('Unexpected external API request during a page read'); } }
   });
   let configSource;
+  const baselineRef = typeof baseline === 'string' ? baseline : 'HEAD';
+  const baselineFiles = baseline ? new Set(execFileSync(
+    'git', ['ls-tree', '--name-only', baselineRef], { cwd: root, encoding: 'utf8' }
+  ).trim().split(/\r?\n/)) : null;
+  const laterFiles = new Set(['Performance.js', 'DateUtils.js', 'ChangeLogService.js']);
   for (const file of sourceFiles) {
-    if (baseline && file === 'Performance.js') continue;
-    const baselineRef = typeof baseline === 'string' ? baseline : 'HEAD';
+    if (baselineFiles && laterFiles.has(file) && !baselineFiles.has(file)) continue;
     const source = baseline ? execFileSync('git', ['show', baselineRef + ':' + file], { cwd: root, encoding: 'utf8' }) :
       fs.readFileSync(path.join(root, file), 'utf8');
     vm.runInContext(source, context, { filename: file });
@@ -264,28 +268,25 @@ function createHarness({ baseline = false, loadDevSeed = true } = {}) {
     for (const item of definition.headerRanges || []) data[item.row - 1] = [...item.headers];
     makeSheet(name, Array.from({ length: Math.max(1, data.length) }, (_, i) => data[i] || []));
   }
-  const seedPath = path.join(root, 'DevSeed.js');
-  if (loadDevSeed && fs.existsSync(seedPath)) vm.runInContext(fs.readFileSync(seedPath, 'utf8'), context, { filename: 'DevSeed.js' });
   function records(name, objects) {
     const sheet = sheets.get(name);
+    if (!sheet) return;
     const headers = sheet.data[0];
     sheet.data.push(...objects.map(object => headers.map(header => object[header] ?? '')));
   }
-  const cameraRows = typeof context.devSeedSecurityCameraRows_ === 'function' ? context.devSeedSecurityCameraRows_() :
-    Array.from({ length: 18 }, (_, i) => ({ Name: 'Site ' + (i + 1), 'Asset / System': 'CAM-' + (i + 1),
-      Category: 'Primary Site', 'IP Address': '10.40.10.' + (i + 10), Username: 'fixture-user', Password: 'fixture-secret' }));
+  const cameraRows = Array.from({ length: 18 }, (_, i) => ({
+    Name: 'Fixture Camera ' + (i + 1), Location: 'Fixture Camera ' + (i + 1),
+    'Asset / System': 'FIXTURE-CAM-' + (i + 1), Category: 'Fixture',
+    'IP Address': '192.0.2.' + (i + 10), Username: 'fixture-user',
+    Password: 'QA_ONLY_NOT_A_REAL_SECRET', 'Server Location': i % 2 ? 'Lab' : 'Office'
+  }));
   records('Security Cameras', cameraRows);
-  if (typeof context.devSeedSsidRows_ === 'function') records('SSIDs', context.devSeedSsidRows_());
-  if (typeof context.devSeedBusCameraRows_ === 'function') {
-    const bus = sheets.get('Bus Cameras');
-    bus.data.push(...context.devSeedBusCameraRows_().map(row => bus.data[6].map(header => row[header] || '')));
-  }
-  for (const [name, seedFunction] of [['Switches', 'devSeedSwitchRows_'], ['Access Points', 'devSeedAccessPointRows_'],
-    ['Servers', 'devSeedServerRows_'], ['Offline Servers', 'devSeedOfflineServerRows_'],
-    ['IP Route Tables', 'devSeedRouteRows_'], ['Internet WAN', 'devSeedInternetWanRows_'],
-    ['Intercom Bell System', 'devSeedIntercomRows_'], ['Backup Schedule', 'devSeedBackupRows_']]) {
-    if (typeof context[seedFunction] === 'function') records(name, context[seedFunction]());
-  }
+  records('Intercom Bell System', [{ Location: 'Fixture Office', 'IP Address': '192.0.2.40',
+    Username: 'fixture-user', Password: 'QA_ONLY_NOT_A_REAL_SECRET' }]);
+  records('Internet WAN', [{ 'Circuit ID': 'WAN-FIXTURE-1', 'Circuit Name': 'Fixture WAN',
+    'Site / Location': 'Fixture Office', Provider: 'Fixture Provider', Role: 'Primary',
+    'Service Type': 'Fiber', 'Public Network / CIDR': '198.51.100.0/24',
+    'UptimeRobot Monitor ID': '123', Status: 'Active', Notes: 'Fixture only' }]);
   const users = [
     ['admin@example.test', 'Fixture Admin', true, 'admin', 'edit', '{}', ''],
     ['viewer@example.test', 'Fixture Viewer', true, 'user', 'view', '{}', ''],

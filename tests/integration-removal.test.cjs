@@ -4,7 +4,7 @@ const { createHarness } = require('./server-harness.cjs');
 const plain = value => JSON.parse(JSON.stringify(value));
 
 test('Wazuh removal preserves legacy storage through reads, edits, and repeated Update Repair', () => {
-  const h = createHarness({ loadDevSeed: false });
+  const h = createHarness();
   const servers = h.sheets.get('Servers');
   servers.data.splice(1);
   servers.data[0].push('Wazuh Installed', 'Legacy: Wazuh Installed');
@@ -41,7 +41,7 @@ test('Wazuh removal preserves legacy storage through reads, edits, and repeated 
 });
 
 test('Wazuh legacy enablement cannot register UI, affect health counts, or enable actions', () => {
-  const h = createHarness({ loadDevSeed: false });
+  const h = createHarness();
   const expected = ['aruba_central', 'threatdown', 'uptimerobot'];
   const health = plain(h.invoke('buildDashboardIntegrationHealth_'));
   const integrations = h.sheets.get('App Integrations');
@@ -64,7 +64,7 @@ test('Wazuh legacy enablement cannot register UI, affect health counts, or enabl
 });
 
 test('fresh setup and older header migration never initialize Wazuh functionality', () => {
-  const h = createHarness({ loadDevSeed: false });
+  const h = createHarness();
   const definition = h.context.getNetworkDashboardSchema_().Servers;
   assert.ok(!definition.headers.includes('Wazuh Installed'));
   const servers = h.sheets.get('Servers');

@@ -57,7 +57,19 @@ Client logs include navigation start, renderer availability, RPC round trip, dat
 
 ## Validation
 
-Run `npm test`, `npm run test:browser` and `npm run benchmark`. The benchmark accepts a different baseline revision as `npm run benchmark -- <revision>`. The browser test uses installed Chrome and local copies of the production frontend libraries. `npm run preview` starts a fixture server on an available loopback port. It uses fictional in-memory data and does not connect to live Sheets or provider APIs. When available, it uses the existing DevSeed row generators; otherwise it supplies an 18-row camera fixture.
+Run these commands from a clean checkout using Node.js 20 or later:
+
+```sh
+npm ci
+npm test
+npm run test:browser
+npm run benchmark
+npm run preview
+```
+
+The default test command verifies that every required suite is present before executing it. Browser QA uses installed Chrome by default; set `CHROMIUM_PATH` to an installed Chromium or Playwright Chromium Headless Shell executable when Chrome is unavailable. The frontend assets are served from the lockfile-installed dependencies, and browser QA blocks requests outside the loopback preview origin. No live Apps Script deployment, Google Sheet, or provider account is needed.
+
+The benchmark runs against the current checkout by default and can compare a local Git revision with `npm run benchmark -- <revision>`. The preview prints a loopback URL, uses synthetic in-memory records, does not load machine-local seed scripts or credentials, and cannot make real provider API calls. Press Ctrl+C to stop it.
 
 Validation covers all enabled page loaders, read-only access, denied/inactive users, module restrictions, shared-cache permissions, credential-reveal authorization, access-cache invalidation, camera CRUD, navigation races, no broad startup requests and all renderer includes. Browser coverage opens all enabled pages without reloading, verifies active navigation state and the unchanged `/exec` URL, and exercises dynamic page interactions. Syntax and clasp file-list checks also pass; local test files/dependencies are excluded by `.claspignore`.
 

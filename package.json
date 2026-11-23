@@ -2,7 +2,7 @@
   "name": "network-dashboard-checks",
   "private": true,
   "scripts": {
-    "test": "node --test tests/server.test.cjs tests/client.test.cjs tests/refinement.test.cjs tests/integration-removal.test.cjs",
+    "test": "node tests/run-tests.cjs",
     "test:integration-removal": "node --test tests/integration-removal.test.cjs",
     "test:browser": "node tests/browser.cjs",
     "benchmark": "node tests/benchmark.cjs",

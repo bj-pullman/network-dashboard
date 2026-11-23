@@ -7,5 +7,4 @@ TempSeed.gs
 test-results/
 REGRESSION_FIXES.md
 tests/*
-!tests/server-harness.cjs
-!tests/integration-removal.test.cjs
+!tests/*.cjs
