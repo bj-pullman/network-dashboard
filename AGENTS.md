@@ -32,10 +32,9 @@ The current Network HQ project is an Apps Script + Google Sheets application. A 
 
 - Server-side authorization controls all protected operations, not only visible UI.
 - Passwords, API keys, refresh tokens and sensitive network details must not be committed or logged.
-- The Print Playbook has two deliberately distinct modes:
-  - **Standard:** passwords and other credentials redacted; safe-for-reference output.
-  - **Confidential:** option to include authorized password fields, **only** with a reviewed, secure workflow (privileged authorization, fresh verification where technically feasible, clear confidentiality markings, minimal exposure, audit of exports, secure generation, and no unprotected temporary files or logs). Reject unsafe or unsupported implementations and ask the owner to approve the security design. Do not silently include plaintext secrets in a normal PDF/export flow.
-- Keep IP address visibility conditional on edit-level access where the roadmap requires it; password access remains stricter.
+- Print Playbook produces one permission-aware operational reference. Never read, fetch, print, or export passwords, API keys, tokens, recovery codes, or other secrets for the Playbook. Keep secrets in the approved off-site vault; do not access it or integrate it with the Playbook.
+- Validated, standalone usernames, IP addresses, and other structured nonsecret fields may be included only under the existing page and field permissions. Device and management IPs and supported usernames require page Edit access; WAN public ranges, gateways, and VLAN/DHCP addressing retain existing visibility. Omit free text, formulas, and unvalidated combined fields.
+- Outside the Playbook, keep existing credential handling and reveal rules unchanged.
 
 ## Development loop
 
