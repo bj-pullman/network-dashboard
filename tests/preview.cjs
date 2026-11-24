@@ -3,10 +3,11 @@ const http = require('node:http');
 const path = require('node:path');
 const { createHarness, root } = require('./server-harness.cjs');
 
-function createPreviewServer() {
+function createPreviewServer({ user } = {}) {
   const harness = createHarness();
   const rpcCalls = [];
-  const bootstrap = harness.invoke('getAppBootstrap');
+  const invoke = (method, args = []) => harness.invoke(method, args, user ? { user } : undefined);
+  const bootstrap = invoke('getAppBootstrap');
   bootstrap.startupTasks = {};
   let html = fs.readFileSync(path.join(root, 'Index.html'), 'utf8')
     .replace(/<\?!= include\('([^']+)'\); \?>/g, (_, name) => fs.readFileSync(path.join(root, name + '.html'), 'utf8'))
@@ -54,7 +55,7 @@ function createPreviewServer() {
         const { method, args } = JSON.parse(body);
         if (!publicMethods.has(method)) throw new Error('Live integration actions are unavailable in the local fixture.');
         rpcCalls.push({ method, page: args[0] });
-        const data = harness.invoke(method, args);
+        const data = invoke(method, args);
         response.end(JSON.stringify({ data }));
       } catch (error) { response.end(JSON.stringify({ error: error.message })); }
       return;

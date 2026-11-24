@@ -5,6 +5,40 @@ const { chromium } = require('playwright-core');
 const { createPreviewServer } = require('./preview.cjs');
 const { root } = require('./server-harness.cjs');
 
+async function verifyViewerInventoryExport_(browser) {
+  const { server, harness } = createPreviewServer({ user: 'viewer@example.test' });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const origin = 'http://127.0.0.1:' + server.address().port;
+  const context = await browser.newContext({ serviceWorkers: 'block' });
+  const attempts = [];
+  try {
+    await context.route('**/*', route => {
+      if (new URL(route.request().url()).origin === origin) return route.continue();
+      attempts.push(route.request().url());
+      return route.abort();
+    });
+    // Warm the same script cache as an editor before a viewer loads bulk rows.
+    const privileged = harness.invoke('appGetPageData', ['securityCameras', true], { user: 'admin@example.test' });
+    assert.equal(privileged.rows[0]['IP Address'], '192.0.2.10');
+    const viewer = await context.newPage();
+    await viewer.goto(origin);
+    await viewer.locator('.app-nav-item[data-page="securityCameras"]').click();
+    await viewer.waitForFunction(() => currentPageData.permission === 'view' && currentPageData.rows?.length === 18);
+    assert.equal(await viewer.evaluate(() => Object.hasOwn(currentPageData.rows[0], 'IP Address')), false);
+    assert.equal(await viewer.getByText('192.0.2.10', { exact: true }).count(), 0);
+    const expected = viewer.waitForEvent('download');
+    await viewer.locator('#pageActions button[onclick="exportCurrentTable()"]').click();
+    const file = await expected;
+    const csv = fs.readFileSync(await file.path(), 'utf8');
+    assert.match(csv, /Fixture Camera/);
+    assert.doesNotMatch(csv, /IP Address|192\.0\.2\./);
+    assert.deepEqual(attempts, []);
+  } finally {
+    await context.close();
+    await new Promise(resolve => server.close(resolve));
+  }
+}
+
 async function main() {
   const { server, harness, rpcCalls } = createPreviewServer();
   for (const key of ['THREATDOWN_ACCOUNT_ID', 'THREATDOWN_CLIENT_ID', 'THREATDOWN_CLIENT_SECRET']) {
@@ -792,6 +826,8 @@ async function main() {
     assert.deepEqual(warnings, []);
     assert.deepEqual(externalRequests, [], 'fixture must never attempt non-loopback requests');
     assert.equal(page.url(), url + '/', 'navigation must stay in the fixture shell');
+    console.log('Checking viewer bulk export against editor-warmed inventory cache');
+    await verifyViewerInventoryExport_(browser);
     const report = { firstCameraTiming, cachedCameraTiming, rpcCount: rpcCalls.length,
       expectedFailureChecks: errors.filter(error => error.includes('Fixture save rejected')).length,
       errors: errors.filter(error => !error.includes('Fixture save rejected')), warnings };

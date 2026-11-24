@@ -366,11 +366,12 @@ function networkClosetDetailGrid_(record, fields) {
 
 function networkClosetEquipmentDetails_(equipment) {
   if (!equipment.length) return '<p class="text-body-secondary mb-0">No equipment is assigned to this closet.</p>';
-  return `<div class="table-responsive"><table class="table table-sm align-middle mb-0"><thead><tr><th>Type</th><th>Name</th><th>IP Address</th><th>Status</th></tr></thead><tbody>${equipment.map(item => `<tr><td>${escapeHtml(item.type)}</td><td>${escapeHtml(item.name)}</td><td>${escapeHtml(item.ipAddress || '')}</td><td>${escapeHtml(item.status || '')}</td></tr>`).join('')}</tbody></table></div>`;
+  const showAddress = equipment.some(item => Object.prototype.hasOwnProperty.call(item, 'ipAddress'));
+  return `<div class="table-responsive"><table class="table table-sm align-middle mb-0"><thead><tr><th>Type</th><th>Name</th>${showAddress ? '<th>IP Address</th>' : ''}<th>Status</th></tr></thead><tbody>${equipment.map(item => `<tr><td>${escapeHtml(item.type)}</td><td>${escapeHtml(item.name)}</td>${showAddress ? '<td>' + escapeHtml(item.ipAddress || '') + '</td>' : ''}<td>${escapeHtml(item.status || '')}</td></tr>`).join('')}</tbody></table></div>`;
 }
 
 function networkClosetUpsDetails_(units) {
   if (!units.length) return '<p class="text-body-secondary mb-0">No UPS units are documented for this closet.</p>';
-  return `<div class="closet-ups-list">${units.map(unit => `<div class="closet-ups-card"><div class="d-flex justify-content-between gap-3 mb-2"><strong>${escapeHtml([unit.Manufacturer, unit.Model].filter(Boolean).join(' ') || 'UPS Unit')}</strong><span class="badge text-bg-light">${escapeHtml(unit['Capacity / VA'] || 'Capacity not listed')}</span></div>${networkClosetDetailGrid_(unit, ['Asset Tag', 'Serial Number', 'Network Managed', 'Management IP', 'Input Connector Type', 'Output / Receptacle Type', 'Battery Replacement Date', 'Last Service Date', 'Notes'])}</div>`).join('')}</div>`;
+  return `<div class="closet-ups-list">${units.map(unit => `<div class="closet-ups-card"><div class="d-flex justify-content-between gap-3 mb-2"><strong>${escapeHtml([unit.Manufacturer, unit.Model].filter(Boolean).join(' ') || 'UPS Unit')}</strong><span class="badge text-bg-light">${escapeHtml(unit['Capacity / VA'] || 'Capacity not listed')}</span></div>${networkClosetDetailGrid_(unit, ['Asset Tag', 'Serial Number', 'Network Managed', 'Management IP', 'Input Connector Type', 'Output / Receptacle Type', 'Battery Replacement Date', 'Last Service Date', 'Notes'].filter(field => field !== 'Management IP' || Object.prototype.hasOwnProperty.call(unit, field)))}</div>`).join('')}</div>`;
 }
 </script>

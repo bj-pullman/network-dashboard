@@ -60,6 +60,15 @@ Date filters use the organization timezone; exported timestamps are UTC.
 
 ---
 
+## Why are some inventory IP addresses not shown?
+
+Device and management IPs are available only with **Edit** access on the owning
+inventory page. Network Closet equipment details also require Edit access on
+Network Closets. A View-only table export omits those IPs. This does not change
+visibility for WAN public ranges, gateways, or VLAN/DHCP addressing.
+
+---
+
 ## Where is my data stored?
 
 Operational data is stored in the Google Sheet owned by your organization.

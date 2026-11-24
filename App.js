@@ -2038,7 +2038,8 @@ function appGetPageData(pageKey, forceRefresh) {
       return getAppTableData_(pageKey, !!forceRefresh);
     });
     // Shared row caches never determine the caller's permission.
-    const output = Object.assign({}, result, { permission: context.permission });
+    const output = projectInventoryDeviceIpAccess_(
+      Object.assign({}, result, { permission: context.permission }), pageKey, context.permission);
     output.performance = finishAppReadPerformance_(context, 'success');
     return output;
   } catch (error) {
