@@ -69,8 +69,11 @@ function createHarness({
         },
         getDisplayValue() { return result.getDisplayValues()[0][0]; },
         getFormulas() {
-          return result.getValues().map(values => values.map(value =>
-            typeof value === 'string' && value.startsWith('=') ? value : ''));
+          call('getFormulas', name);
+          return Array.from({ length: height }, (_, y) => Array.from({ length: width }, (_, x) => {
+            const value = data[row - 1 + y]?.[column - 1 + x];
+            return typeof value === 'string' && value.startsWith('=') ? value : '';
+          }));
         },
         setValues(rows) {
           write('setValues', name);

@@ -1,11 +1,27 @@
-// Standard Playbook is a separate allowlist, not an export of ordinary page payloads.
+// The single Playbook uses typed columns, never ordinary page payloads.
 function getStandardPlaybookPolicies_() {
+  const state = ['Status', 'infrastructureStatus'];
+  const address = ['IP Address', 'ip'];
   return {
-    switches: { sheets: ['Switches'], field: 'Status', options: 'infrastructureStatus' },
-    accessPoints: { sheets: ['Access Points'], field: 'Status', options: 'infrastructureStatus' },
-    servers: { sheets: ['Servers', 'Offline Servers'], field: 'Status', options: 'infrastructureStatus' },
-    networkClosets: { sheets: ['Network Closets'], field: 'Type', options: 'closetType' },
-    internetWan: { sheets: ['Internet WAN'], field: 'Status', options: 'wanStatus' },
+    switches: { sheets: ['Switches'], field: 'Status', options: 'infrastructureStatus',
+      detail: [state, address] },
+    accessPoints: { sheets: ['Access Points'], field: 'Status', options: 'infrastructureStatus',
+      detail: [state, address] },
+    servers: { sheets: ['Servers', 'Offline Servers'], field: 'Status', options: 'infrastructureStatus',
+      detail: [state, address] },
+    networkClosets: { sheets: ['Network Closets', 'Network Closet UPS'], field: 'Type', options: 'closetType',
+      detail: [['Type', 'closetType'], ['Management IP', 'ip']] },
+    routes: { sheets: ['IP Route Tables'], detail: [
+      ['VLAN ID', 'vlan'], ['Network / CIDR', 'cidr'], ['Gateway', 'ip']
+    ] },
+    internetWan: { sheets: ['Internet WAN'], detail: [
+      ['Status', 'wanStatus'], ['Role', 'wanRole'], ['Service Type', 'wanServiceType'],
+      ['Public Network / CIDR', 'cidr'], ['Gateway', 'ip']
+    ] },
+    securityCameras: { sheets: ['Security Cameras'], detail: [address, ['Username', 'username']] },
+    busCameras: { sheets: ['Bus Cameras'], headerRow: 7,
+      detail: [['DVR IP', 'ip'], ['Bridge IP', 'ip']] },
+    intercom: { sheets: ['Intercom Bell System'], detail: [address, ['Username', 'username']] },
     ssids: { sheets: ['SSIDs'], field: 'Status', options: 'enabledDisabled' },
     outages: { sheets: ['Outages'], kind: 'outages' },
     changeLog: { sheets: ['Change Log'], kind: 'changes' },
@@ -44,19 +60,15 @@ function appGetStandardPlaybook(sectionKeys) {
     if (!selected.has(option.key)) return;
     // Check through the existing page boundary before reading any data.
     requirePagePermission_(option.key, 'view');
-    const result = readStandardPlaybookSection_(policies[option.key]);
+    const permission = access.admin ? 'edit' : access.permissions[option.key];
+    const result = readStandardPlaybookSection_(policies[option.key], option.key, permission);
     if (result.rows.length) sections.push({ key: option.key, label: option.label, ...result });
   });
 
-  const organization = String(AppConfig.get('organization.name') || '').trim();
-  const safeOrganization = organization.length <= 100 &&
-    /^[\p{L}\p{M}][\p{L}\p{M}\d .,'’&()\-]{0,99}$/u.test(organization) &&
-    !hasStandardPlaybookSensitiveMarker_(organization) ? organization : 'Organization display name not configured';
   const now = new Date();
   return {
     title: 'Network HQ Playbook',
-    classification: 'Standard',
-    organization: safeOrganization,
+    classification: 'Operational reference',
     generatedAt: now.toISOString(),
     generatedLabel: formatNetworkDashboardDateTime_(now) + ' (' + getEffectiveTimezone_() + ')',
     sections: sections
@@ -65,30 +77,81 @@ function appGetStandardPlaybook(sectionKeys) {
 
 
 function hasStandardPlaybookSensitiveMarker_(value) {
-  return /\b(?:pass(?:word|wd|code)|secret|token|api[-_ ]?key|credential|recovery[-_ ]?code|canary)\b/i.test(value);
+  return /(?:pass(?:word|wd|code)|secret|token|api[-_. ]?key|credential|recovery[-_. ]?code|canary|gh[pousr]_|github_pat_|xox[baprs]-|(?:^|[^a-z])(?:sk|rk)[_-]|AIza|AKIA)/i.test(value);
 }
 
 
-function readStandardPlaybookFields_(sheetName, fields) {
+function readStandardPlaybookFields_(sheetName, fields, headerRow) {
+  if (!fields.length) return [];
   const sheet = getReadSheet_(sheetName);
-  if (!sheet || sheet.getLastRow() < 2 || !sheet.getLastColumn()) return [];
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0]
+  headerRow = headerRow || 1;
+  if (!sheet || sheet.getLastRow() <= headerRow || !sheet.getLastColumn()) return [];
+  const headers = sheet.getRange(headerRow, 1, 1, sheet.getLastColumn()).getDisplayValues()[0]
     .map(value => String(value || '').trim());
-  const rowCount = sheet.getLastRow() - 1;
+  const rowCount = sheet.getLastRow() - headerRow;
   const rows = [];
   fields.forEach(field => {
     const index = headers.indexOf(field);
     if (index < 0 || headers.lastIndexOf(field) !== index) return;
-    // Read only this explicitly allowed column, never the page's broad data range.
-    const range = sheet.getRange(2, index + 1, rowCount, 1);
-    const formulas = range.getFormulas();
-    range.getValues().forEach((cells, row) => {
-      if (formulas[row][0]) return; // Do not export data computed from other columns.
+    // Inspect formula presence before reading values. A calculated cell might
+    // reference any other sheet column, including an excluded credential field.
+    const range = sheet.getRange(headerRow + 1, index + 1, rowCount, 1);
+    const formulas = range.getFormulas().map(row => !!row[0]);
+    const store = (values, offset) => values.forEach((cells, i) => {
+      const row = offset + i;
       if (!rows[row]) rows[row] = {};
       rows[row][field] = cells[0];
     });
+    if (!formulas.some(Boolean)) {
+      store(range.getValues(), 0);
+      return;
+    }
+    let start = 0;
+    for (let i = 0; i <= rowCount; i++) {
+      if (i < rowCount && !formulas[i]) continue;
+      if (i > start) store(sheet.getRange(headerRow + 1 + start, index + 1, i - start, 1).getValues(), start);
+      start = i + 1;
+    }
   });
   return rows.filter(Boolean);
+}
+
+
+function safePlaybookUsername_(value) {
+  if (typeof value !== 'string') return '';
+  const name = value.trim();
+  // Only standalone, human-readable account identifiers. No email/URL, spaces,
+  // mixed username/password cells, or opaque token-shaped names.
+  if (name.length > 32 || !/^[a-z][a-z0-9]{0,14}(?:[._-][a-z0-9]{1,14}){0,2}$/.test(name) ||
+      /[0-9]{5}|[a-f0-9]{12}/i.test(name) || hasStandardPlaybookSensitiveMarker_(name)) return '';
+  return name;
+}
+
+
+function safePlaybookField_(value, type) {
+  if (type === 'username') return safePlaybookUsername_(value);
+  if (type === 'ip' || type === 'cidr') {
+    if (typeof value !== 'string') return '';
+    const text = value.trim();
+    if (text.length > 49 || !/^[0-9a-f:.]+(?:\/\d{1,3})?$/i.test(text)) return '';
+    const [address, prefix] = text.split('/');
+    if ((/:::/.test(address) || (address.startsWith(':') && !address.startsWith('::')) ||
+        (address.endsWith(':') && !address.endsWith('::'))) || !isValidIpAddress_(address)) return '';
+    if (prefix === undefined) return text;
+    return type === 'cidr' && isValidCidrBlock_(text) ? text : '';
+  }
+  if (type === 'vlan') {
+    const text = String(value ?? '').trim();
+    return /^\d{1,4}$/.test(text) && Number(text) >= 1 && Number(text) <= 4094 ? String(Number(text)) : '';
+  }
+  return toStandardPlaybookOption_(value, getControlledOptions_(type));
+}
+
+
+function canPrintPlaybookField_(pageKey, permission, field, type) {
+  if (type === 'username') return permission === 'edit';
+  if (inventoryDeviceAddressPolicy_(pageKey, field)) return canReadInventoryDeviceIp_(pageKey, permission);
+  return true;
 }
 
 
@@ -108,8 +171,18 @@ function formatStandardPlaybookInstant_(date) {
 }
 
 
-function readStandardPlaybookSection_(policy) {
-  const read = fields => [].concat(...policy.sheets.map(sheet => readStandardPlaybookFields_(sheet, fields)));
+function readStandardPlaybookSection_(policy, pageKey, permission) {
+  const read = fields => [].concat(...policy.sheets.map(sheet =>
+    readStandardPlaybookFields_(sheet, fields, policy.headerRow)));
+  if (policy.detail) {
+    const fields = policy.detail.filter(([field, type]) => canPrintPlaybookField_(pageKey, permission, field, type));
+    if (!policy.field || fields.length > 1) {
+      const rows = read(fields.map(([field]) => field))
+        .map(record => fields.map(([field, type]) => safePlaybookField_(record[field], type)))
+        .filter(row => row.some(Boolean));
+      return { columns: fields.map(([field]) => field), rows };
+    }
+  }
   if (policy.kind === 'contacts') {
     const sharedRoles = {
       support: 'Support desk', helpdesk: 'Help desk', servicedesk: 'Service desk',

@@ -32,6 +32,29 @@ async function verifyViewerInventoryExport_(browser) {
     const csv = fs.readFileSync(await file.path(), 'utf8');
     assert.match(csv, /Fixture Camera/);
     assert.doesNotMatch(csv, /IP Address|192\.0\.2\./);
+    await viewer.locator('#standardPlaybookButton').click();
+    const playbook = viewer.locator('#standardPlaybookModal');
+    await playbook.waitFor({ state: 'visible' });
+    for (const option of await playbook.locator('#standardPlaybookSections input').all()) {
+      if (await option.inputValue() !== 'securityCameras') await option.uncheck();
+    }
+    await playbook.locator('#standardPlaybookPrepare').click();
+    await playbook.getByText('Nothing eligible to print for this selection.', { exact: true }).waitFor();
+    assert.equal(await playbook.locator('#standardPlaybookPrint').isDisabled(), true);
+    assert.doesNotMatch(await playbook.innerText(), /192\.0\.2\.10|fixture-user/);
+    const grant = permission => harness.invoke('saveAppUser', [{
+      email: 'viewer@example.test', name: 'Fixture Viewer', active: true, role: 'user', defaultPermission: 'view',
+      permissions: { securityCameras: permission }
+    }], { user: 'admin@example.test' });
+    grant('edit');
+    await playbook.locator('#standardPlaybookPrepare').click();
+    await playbook.getByText('Security Cameras (18 rows)', { exact: true }).waitFor();
+    grant('view');
+    await viewer.evaluate(() => { window.print = () => { window.fixtureRevokedPrint = true; }; });
+    await playbook.locator('#standardPlaybookPrint').click();
+    await playbook.getByText('No selected sections are currently eligible. Refresh the preview to continue.', { exact: true }).waitFor();
+    assert.equal(await viewer.evaluate(() => window.fixtureRevokedPrint), undefined);
+    assert.equal(await viewer.locator('#standardPlaybookPaper tbody tr').count(), 0);
     assert.deepEqual(attempts, []);
   } finally {
     await context.close();
@@ -537,36 +560,51 @@ async function main() {
     await page.waitForFunction(() => tableInstance?.getDataCount() === 18);
     await checkColumns('securityCameras');
     assert.equal(rpcCalls.length, requestsBeforeReset);
-    console.log('Checking section selection and generating a paginated Standard Playbook PDF');
+    console.log('Checking permission-aware section selection and generating one paginated Playbook PDF');
     harness.invoke('saveAppSettings', [{ 'organization.name': 'Example Operations' }]);
     harness.records('Contacts', [{ 'Contact Name': 'FIXTURE_PDF_CONTACT_CANARY', Status: 'Active',
       Email: 'support@example.test', Phone: '+1 202-555-0100' }]);
     harness.records('Servers', [{ 'Server Name': 'Unselected Fixture Server', Status: 'Online' }]);
+    const intercomPlaybookFixture = harness.sheets.get('Intercom Bell System').data;
+    intercomPlaybookFixture[0].push('API Key', 'Token');
+    intercomPlaybookFixture[1][intercomPlaybookFixture[0].indexOf('API Key')] = 'PDF_KEY_CANARY';
+    intercomPlaybookFixture[1][intercomPlaybookFixture[0].indexOf('Token')] = 'PDF_TOKEN_CANARY';
+    intercomPlaybookFixture[1][intercomPlaybookFixture[0].indexOf('Password')] = 'PDF_PASSWORD_CANARY';
     await page.locator('#standardPlaybookButton').click();
     const playbook = page.locator('#standardPlaybookModal');
     await playbook.waitFor({ state: 'visible' });
     assert.equal(await playbook.getByLabel('Settings', { exact: true }).count(), 0);
     const policyOptions = playbook.locator('#standardPlaybookSections input');
     for (const option of await policyOptions.all()) {
-      if (!['changeLog', 'contacts', 'networkClosets'].includes(await option.inputValue())) await option.uncheck();
+      if (!['changeLog', 'contacts', 'networkClosets', 'intercom'].includes(await option.inputValue())) await option.uncheck();
     }
     await playbook.locator('#standardPlaybookPrepare').click();
     await playbook.getByText('Change Log (115 rows)', { exact: true }).waitFor();
     await playbook.getByText('Contacts (1 row)', { exact: true }).waitFor();
-    assert.equal(await playbook.locator('#standardPlaybookSummary li').count(), 2);
+    await playbook.getByText('Intercom & Bell (1 row)', { exact: true }).waitFor();
+    assert.equal(await playbook.locator('#standardPlaybookSummary li').count(), 3);
     await playbook.locator('input[value="contacts"]').uncheck();
     assert.equal(await playbook.locator('#standardPlaybookPrint').isEnabled(), false);
     await playbook.locator('input[value="contacts"]').check();
     await playbook.locator('#standardPlaybookPrepare').click();
     await playbook.getByText('Contacts (1 row)', { exact: true }).waitFor();
     await page.evaluate(() => { window.print = () => { window.fixturePlaybookPrintCalls = 1; }; });
+    const beforePrint = rpcCalls.filter(call => call.method === 'appGetStandardPlaybook').length;
     await playbook.locator('#standardPlaybookPrint').click();
     await page.waitForFunction(() => window.fixturePlaybookPrintCalls === 1);
-    assert.equal(await page.locator('#standardPlaybookPaper tbody tr').count(), 116);
+    assert.equal(rpcCalls.filter(call => call.method === 'appGetStandardPlaybook').length, beforePrint + 1);
+    assert.equal(await page.locator('#standardPlaybookPaper tbody tr').count(), 117);
+    assert.match(await page.locator('#standardPlaybookPaper').textContent(), /192\.0\.2\.40/);
+    assert.match(await page.locator('#standardPlaybookPaper').textContent(), /fixture-user/);
     assert.doesNotMatch(await page.locator('#standardPlaybookPaper').textContent(), /CANARY|Security Cameras|Unselected Fixture Server|Former Fixture Vendor/);
-    await page.pdf({ path: path.join(output, 'standard-playbook.pdf'), preferCSSPageSize: true, printBackground: true });
+    await page.emulateMedia({ media: 'print' });
+    assert.equal(await page.locator('#standardPlaybookPaper').isVisible(), true);
+    assert.equal(await page.locator('#pageContent').isVisible(), false);
+    await page.pdf({ path: path.join(output, 'network-hq-playbook.pdf'), preferCSSPageSize: true, printBackground: true });
     await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
+    await page.emulateMedia({ media: 'screen' });
     assert.equal(await page.locator('#standardPlaybookPaper tbody tr').count(), 0);
+    assert.equal(await page.locator('#pageContent').isVisible(), true);
     await playbook.locator('.btn-close').click();
     await playbook.waitFor({ state: 'hidden' });
     console.log('Checking Change Log status tones and preservation of historical labels');

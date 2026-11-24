@@ -24,7 +24,7 @@ function fixture() {
   return h;
 }
 
-test('Standard Playbook uses explicit projections, native names and sidebar order even when selection is arbitrary', () => {
+test('Playbook uses explicit projections, native names and sidebar order even when selection is arbitrary', () => {
   const h = fixture();
   const captures = new Map();
   for (const name of ['Switches', 'Outages', 'Change Log', 'Contacts']) {
@@ -38,29 +38,30 @@ test('Standard Playbook uses explicit projections, native names and sidebar orde
     };
   }
   const data = plain(h.invoke('appGetStandardPlaybook', [[
-    'contacts', 'settings', 'changeLog', 'outages', 'switches', 'networkClosets', 'securityCameras', 'dashboard', 'contacts'
+    'contacts', 'settings', 'changeLog', 'outages', 'switches', 'networkClosets', 'dashboard', 'contacts'
   ]], { readonly: true }));
-  assert.equal(data.classification, 'Standard');
-  assert.equal(data.organization, 'Example Operations');
+  assert.equal(data.classification, 'Operational reference');
+  assert.equal(data.organization, undefined);
   assert.equal(new Date(data.generatedAt).toISOString(), data.generatedAt);
   assert.deepEqual(data.sections.map(section => section.label), ['Switches', 'Outages', 'Change Log', 'Contacts']);
-  assert.deepEqual(data.sections[0].rows, [['Online', 1]]);
+  assert.deepEqual(data.sections[0].rows, [['Online', '192.0.2.33']]);
   assert.deepEqual(data.sections[1].rows, [['2026-11-01 01:30 (UTC-05:00)', '2026-11-01 01:30 (UTC-06:00)', '60', 'Manual']]);
   assert.deepEqual(data.sections[2].rows, [['2026-03-08', 'Monitoring']]);
   assert.deepEqual(data.sections[3].rows, [
     ['General information', 'info@example.test', ''], ['Support desk', 'support@example.test', '+1 202-555-0100']
   ]);
-  assert.doesNotMatch(JSON.stringify(data), /CANARY|192\.0\.2\.33|person@example|intranet|dispatch@example|password/i);
+  assert.doesNotMatch(JSON.stringify(data), /CANARY|person@example|intranet|dispatch@example|password/i);
   for (const [name, fields] of Object.entries({
-    Switches: ['Status'], Outages: ['Started', 'Restored', 'Source', 'Review State', 'Incident Started', 'Incident Restored'],
+    Switches: ['Status', 'IP Address'], Outages: ['Started', 'Restored', 'Source', 'Review State', 'Incident Started', 'Incident Restored'],
     'Change Log': ['Change Date', 'Status'], Contacts: ['Status', 'Email', 'Phone']
   })) {
     const headers = h.sheets.get(name).data[0];
-    assert.deepEqual(captures.get(name), fields.map(field => [headers.indexOf(field) + 1, 1]), name);
+    assert.deepEqual([...new Set(captures.get(name).map(range => JSON.stringify(range)))].map(JSON.parse),
+      fields.map(field => [headers.indexOf(field) + 1, 1]), name);
   }
 });
 
-test('Standard Playbook checks fresh caller permission before reading selected sheets and omits disabled modules', () => {
+test('Playbook checks fresh caller permission before reading selected sheets and omits disabled modules', () => {
   const h = fixture();
   h.records('SSIDs', [{ SSID: 'FIXTURE_SSID_CANARY', Status: 'Enabled', Password: 'FIXTURE_PASS_CANARY' }]);
   h.invoke('saveAppUser', [{ email: 'print-viewer@example.test', name: 'Print Fixture',
@@ -80,7 +81,7 @@ test('Standard Playbook checks fresh caller permission before reading selected s
   assert.throws(() => h.invoke('appGetStandardPlaybook', [['contacts']], { user: 'unknown@example.test' }), /Unauthorized/);
 });
 
-test('Standard Playbook omits formula-fed cells, duplicate headers, invalid organization labels and empty sections', () => {
+test('Playbook omits formula-fed cells, duplicate headers, invalid organization labels and empty sections', () => {
   const h = fixture();
   h.invoke('saveAppSettings', [{ 'organization.name': 'FIXTURE_ORG_CANARY' }]);
   const sheet = h.sheets.get('Contacts');
@@ -94,10 +95,75 @@ test('Standard Playbook omits formula-fed cells, duplicate headers, invalid orga
     return range;
   };
   const data = h.invoke('appGetStandardPlaybook', [['contacts', 'accessPoints']]);
-  assert.equal(data.organization, 'Organization display name not configured');
+  assert.equal(data.organization, undefined);
   assert.equal(data.sections.length, 1);
   assert.doesNotMatch(JSON.stringify(data), /support@example|CANARY/);
   sheet.data[0].push('Email');
   assert.equal(h.invoke('appGetStandardPlaybook', [['contacts']]).sections.length, 0);
   assert.throws(() => h.invoke('appGetStandardPlaybook', [{ contacts: true }]), /Select valid/);
+});
+
+test('one Playbook reads authorized typed fields only; never secret columns or formula values', () => {
+  const h = fixture();
+  const admin = { user: 'admin@example.test' };
+  const operator = { user: 'fixture-operator@example.test' };
+  const viewer = { user: 'viewer@example.test' };
+  const load = (keys, caller) => plain(h.invoke('appGetStandardPlaybook', [keys], caller));
+  const camera = h.sheets.get('Security Cameras');
+  camera.data.splice(1);
+  camera.data[0].push('API Key', 'Token', 'Recovery Code', 'User / Password');
+  h.records('Security Cameras', [
+    { 'Name': 'RAW_FIELD_CANARY', 'IP Address': '192.0.2.91', Username: 'camera.viewer',
+      Password: 'PASSWORD_CANARY', 'API Key': 'KEY_CANARY', Token: 'TOKEN_CANARY',
+      'Recovery Code': 'RECOVERY_CANARY', 'User / Password': 'COMBINED_CANARY', Notes: 'NOTE_CANARY' },
+    { 'IP Address': '2001:db8::92', Username: 'camera.viewer:wrong', Password: 'SECOND_PASSWORD_CANARY' },
+    { 'IP Address': '192.0.2.93', Username: 'operator', Password: 'FORMULA_ROW_CANARY' },
+    { 'IP Address': '2001:db8:::1', Username: 'sk_fixture', Notes: 'OTHER_CANARY' }
+  ]);
+  const usernameCol = camera.data[0].indexOf('Username') + 1;
+  const addressCol = camera.data[0].indexOf('IP Address') + 1;
+  const ranges = [];
+  const reads = [];
+  const getRange = camera.getRange.bind(camera);
+  camera.getRange = (row, col, height = 1, width = 1) => {
+    const range = getRange(row, col, height, width);
+    if (row < 2) return range;
+    ranges.push([col, width]);
+    const read = range.getValues.bind(range);
+    range.getValues = () => { reads.push([row, col, height]); return read(); };
+    if (row === 2 && col === addressCol) range.getFormulas = () => [[''], [''], ['=HiddenColumn'], ['']];
+    return range;
+  };
+  assert.equal(load(['securityCameras'], viewer).sections.length, 0);
+  assert.deepEqual(ranges, []);
+  h.invoke('saveAppUser', [{ email: operator.user, active: true, role: 'user', defaultPermission: 'none',
+    permissions: { securityCameras: 'edit' } }], admin);
+  const data = load(['securityCameras'], operator);
+  assert.deepEqual(data.sections[0].rows, [
+    ['192.0.2.91', 'camera.viewer'], ['2001:db8::92', ''], ['', 'operator']
+  ]);
+  assert.deepEqual(new Set(ranges.map(([col]) => col)), new Set([addressCol, usernameCol]));
+  assert.ok(ranges.every(([, width]) => width === 1));
+  assert.ok(!reads.some(([row, col, count]) => col === addressCol && row <= 4 && row + count > 4),
+    'formula-backed value must not be requested');
+  assert.doesNotMatch(JSON.stringify(data), /CANARY|192\.0\.2\.93|:::|sk_fixture|wrong/);
+  h.invoke('saveAppUser', [{ email: operator.user, active: true, role: 'user', defaultPermission: 'none',
+    permissions: { securityCameras: 'view' } }], admin);
+  assert.equal(load(['securityCameras'], operator).sections.length, 0);
+});
+
+test('typed WAN/VLAN fields keep their visibility without exporting combined or arbitrary text', () => {
+  const h = fixture();
+  h.records('Internet WAN', [{ 'Circuit ID': 'WAN-EXAMPLE', Status: 'Active', Role: 'Primary',
+    'Service Type': 'Fiber', 'Public Network / CIDR': '203.0.113.0/24', Gateway: '203.0.113.1',
+    'Public IPs': '192.0.2.20,SECRET_CANARY', Notes: 'NOTES_CANARY' }]);
+  h.records('IP Route Tables', [{ 'VLAN ID': 12, 'Network / CIDR': '2001:db8:1::/64',
+    Gateway: '2001:db8:1::1', 'DHCP Scope / Pool': 'SECRET_CANARY', 'VLAN Name': 'UNAPPROVED_CANARY' }]);
+  h.records('Access Points', [{ 'Device Label': 'Unvalidated', Status: 'Online',
+    'Virtual Controller': 'Name: SECRET_CANARY | IP: 192.0.2.77' }]);
+  const viewer = plain(h.invoke('appGetStandardPlaybook', [['routes', 'internetWan', 'accessPoints']], { user: 'viewer@example.test' }));
+  assert.deepEqual(viewer.sections.find(page => page.key === 'routes').rows, [['12', '2001:db8:1::/64', '2001:db8:1::1']]);
+  assert.ok(viewer.sections.find(page => page.key === 'internetWan').rows.some(row => row.includes('203.0.113.0/24')));
+  assert.deepEqual(viewer.sections.find(page => page.key === 'accessPoints').rows, [['Online', 1]]);
+  assert.doesNotMatch(JSON.stringify(viewer), /CANARY|192\.0\.2\.20|192\.0\.2\.77/);
 });

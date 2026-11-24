@@ -17,7 +17,7 @@
 11. **Global page-heading design:** bold, blocky sans-serif `/ Page /` headings across all pages with coherent spacing and responsive treatment.
 12. **VM Host:** allow virtual servers to associate to a host without duplicate inventory records; show useful host/guest relationships and keep existing server data intact.
 13. **Contacts directory:** maintain vendor and operational contact information useful to the district, including names, organizations, roles, emails, phones, categories, notes, and search. Do not label every vendor an 'Emergency Contact'.
-14. **Print Playbook:** binder-ready, generated **Network HQ Playbook** PDF containing actual data organized by existing Network HQ page names with section covers and print-friendly pagination. Default exclude Overview/Settings or any other unsuitable pages unless chosen. Offer **Standard** (passwords blanked/redacted) and **Confidential** (can include passwords only through an explicit, secure, authorized, audited design) versions. Treat IP addresses and other sensitive network data according to permissions. Include generated timestamp, clear classification, and sensible page/section controls. Review confidentiality threat model and safe file handling before implementing the password-inclusive mode.
+14. **Print Playbook:** one binder-ready **Network HQ Playbook** with sheet sections in app order, section covers, timestamp and print-friendly pagination. It can include typed nonsecret usernames, IPs and other structured metadata only where the requesting user has the relevant page and field permissions. Never include passwords, keys, tokens, recovery codes or other secrets. Keep those in the approved off-site vault; do not integrate the Playbook with the vault.
 
 ## Existing functionality to audit, not reimplement blindly
 
@@ -36,7 +36,7 @@
 
 **Phase 2: Operational workflows.** Items 1, 7, 8, 10, 12, and 13, adjusting to dependencies.
 
-**Phase 3: Printable playbook.** Item 14, with standard export first, then confidential mode only after security approval.
+**Phase 3: Printable playbook.** Item 14, with one permission-aware printable reference that contains no secrets.
 
 **Phase 4: Verification/release.** Regression/security coverage; README/setup/update guide; test dev Apps Script project (if architecture unchanged); document human-controlled release steps.
 

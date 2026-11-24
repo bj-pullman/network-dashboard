@@ -122,7 +122,7 @@ test('bulk closet payload projects both nested copies; source access cannot bypa
   assert.ok(flat(load(h, 'networkClosets', admin)).includes(server));
 });
 
-test('WAN, gateways and VLAN/DHCP addressing remain unchanged; approved reports still omit inventory IPs', () => {
+test('WAN, gateways and VLAN/DHCP addressing remain unchanged; Playbook respects the same viewer restriction', () => {
   const h = createHarness(); fixtures(h);
   const wan = load(h, 'internetWan');
   const routes = load(h, 'routes');
@@ -131,6 +131,6 @@ test('WAN, gateways and VLAN/DHCP addressing remain unchanged; approved reports 
     assert.ok(flat(routes).includes(value));
   }
   assert.ok(flat(routes).includes(dhcp));
-  const playbook = h.invoke('appGetStandardPlaybook', [['accessPoints', 'switches', 'servers', 'securityCameras']], admin);
+  const playbook = h.invoke('appGetStandardPlaybook', [['accessPoints', 'switches', 'servers', 'securityCameras']], viewer);
   for (const value of [sw, server, camera, controller]) assert.ok(!flat(playbook).includes(value));
 });
