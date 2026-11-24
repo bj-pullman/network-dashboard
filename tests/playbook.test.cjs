@@ -167,3 +167,27 @@ test('typed WAN/VLAN fields keep their visibility without exporting combined or 
   assert.deepEqual(viewer.sections.find(page => page.key === 'accessPoints').rows, [['Online', 1]]);
   assert.doesNotMatch(JSON.stringify(viewer), /CANARY|192\.0\.2\.20|192\.0\.2\.77/);
 });
+
+test('Playbook separates empty, failed and unavailable sections while returning eligible rows', () => {
+  const h = fixture();
+  h.invoke('saveAppUser', [{ email: 'partial-print@example.test', active: true, role: 'user',
+    defaultPermission: 'none', permissions: { switches: 'view', ssids: 'view', networkClosets: 'view', securityCameras: 'view' } }]);
+  h.sheets.get('Network Closets').getRange = () => { throw new Error('PRIVATE_ENVIRONMENT_DETAIL'); };
+  // Ensure a backing read is attempted for the failed section.
+  h.records('Network Closets', [{ 'Closet ID': 'FIXTURE', Type: 'MDF' }]);
+  const result = plain(h.invoke('appGetStandardPlaybook', [[
+    'switches', 'networkClosets', 'ssids', 'securityCameras', 'internetWan'
+  ]], { user: 'partial-print@example.test' }));
+  assert.deepEqual(result.sections.map(section => section.key), ['switches']);
+  assert.deepEqual(Object.fromEntries(result.exclusions.map(section => [section.key, section.reason])), {
+    networkClosets: 'failed', ssids: 'empty', securityCameras: 'no-eligible-fields'
+  });
+  assert.equal(result.unavailableCount, 1);
+  assert.doesNotMatch(JSON.stringify(result), /PRIVATE_ENVIRONMENT_DETAIL|Internet \/ WAN|fixture-user/);
+  assert.ok(!h.calls.some(call => ['Internet WAN', 'Security Cameras'].includes(call.sheet)));
+  // Confirm that a missing backing sheet isn't advertised as an empty section.
+  h.sheets.delete('SSIDs');
+  const missing = plain(h.invoke('appGetStandardPlaybook', [['ssids']], { user: 'partial-print@example.test' }));
+  assert.equal(missing.sections.length, 0);
+  assert.deepEqual(missing.exclusions, [{ key: 'ssids', label: 'SSIDs', reason: 'failed' }]);
+});

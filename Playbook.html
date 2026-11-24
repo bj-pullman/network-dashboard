@@ -13,6 +13,7 @@
           Passwords, keys, tokens, other secrets, and free-text notes are never included.</p>
         <div id="standardPlaybookSections" class="row row-cols-1 row-cols-sm-2 g-2" aria-label="Playbook sections"></div>
         <div id="standardPlaybookFeedback" class="mt-3 small" role="status" aria-live="polite"></div>
+        <div id="standardPlaybookWarnings" class="mt-2 small" role="status"></div>
         <div id="standardPlaybookSummary" class="mt-2"></div>
       </div>
       <div class="modal-footer">
@@ -79,6 +80,7 @@ function clearStandardPlaybookPreview_() {
   document.getElementById('standardPlaybookPrepare').disabled = false;
   document.getElementById('standardPlaybookFeedback').textContent = '';
   document.getElementById('standardPlaybookSummary').replaceChildren();
+  document.getElementById('standardPlaybookWarnings').replaceChildren();
 }
 
 function openStandardPlaybook_() {
@@ -99,6 +101,64 @@ function openStandardPlaybook_() {
   standardPlaybookModal_.show();
 }
 
+async function loadSelectedPlaybookSections_(keys, request) {
+  const slots = new Array(keys.length);
+  const labels = new Map((appBootstrap?.standardPlaybookSections || []).map(option => [option.key, option.label]));
+  let next = 0;
+  async function worker() {
+    while (request === standardPlaybookRequest_ && next < keys.length) {
+      const index = next++;
+      const key = keys[index];
+      try {
+        slots[index] = await scriptRunPromise_('playbook: ' + key,
+          runner => runner.appGetStandardPlaybook([key]));
+      } catch (error) {
+        slots[index] = { exclusions: [{ key, label: labels.get(key), reason: 'failed' }] };
+      }
+    }
+  }
+  // A slow or rejected RPC must not discard successful sibling sections.
+  await Promise.all(Array.from({ length: Math.min(3, keys.length) }, worker));
+  const replies = slots.filter(Boolean);
+  const metadata = replies.find(reply => reply.generatedLabel) || {};
+  return {
+    title: metadata.title, generatedLabel: metadata.generatedLabel,
+    sections: replies.flatMap(reply => reply.sections || []),
+    exclusions: replies.flatMap(reply => reply.exclusions || []),
+    unavailableCount: replies.reduce((sum, reply) => sum + (reply.unavailableCount || 0), 0)
+  };
+}
+
+function playbookExclusionMessages_(data) {
+  const messages = [];
+  let unavailable = data.unavailableCount || 0;
+  (data.exclusions || []).forEach(item => {
+    if (item.reason === 'unavailable') unavailable++;
+    else if (item.reason === 'empty') messages.push(item.label + ' did not have any data to show.');
+    else if (item.reason === 'no-eligible-fields') messages.push(item.label + ' had no fields eligible for your access.');
+    else messages.push((item.label || 'A selected section') + ' could not be loaded and was excluded.');
+  });
+  if (unavailable) messages.push(unavailable === 1
+    ? 'One selected section was unavailable or not permitted.'
+    : unavailable + ' selected sections were unavailable or not permitted.');
+  return messages;
+}
+
+function showPlaybookExclusions_(data) {
+  const warnings = document.getElementById('standardPlaybookWarnings');
+  warnings.replaceChildren();
+  const messages = playbookExclusionMessages_(data);
+  if (!messages.length) return;
+  const list = document.createElement('ul');
+  list.className = 'alert alert-warning mb-0 py-2 ps-4';
+  messages.forEach(message => {
+    const item = document.createElement('li');
+    item.textContent = message;
+    list.appendChild(item);
+  });
+  warnings.appendChild(list);
+}
+
 async function prepareStandardPlaybook_() {
   clearStandardPlaybookPreview_();
   const request = standardPlaybookRequest_;
@@ -112,8 +172,9 @@ async function prepareStandardPlaybook_() {
   button.disabled = true;
   feedback.textContent = 'Checking section access and preparing the Playbook…';
   try {
-    const data = await scriptRunPromise_('playbook', runner => runner.appGetStandardPlaybook(keys));
+    const data = await loadSelectedPlaybookSections_(keys, request);
     if (request !== standardPlaybookRequest_) return;
+    showPlaybookExclusions_(data);
     if (!data.sections.length) {
       feedback.textContent = 'Nothing eligible to print for this selection.';
       return;
@@ -145,8 +206,9 @@ async function printStandardPlaybook_() {
   feedback.textContent = 'Rechecking section access before printing…';
   let data;
   try {
-    data = await scriptRunPromise_('playbook print permissions', runner => runner.appGetStandardPlaybook(prepared.keys));
+    data = await loadSelectedPlaybookSections_(prepared.keys, request);
     if (request !== standardPlaybookRequest_) return;
+    showPlaybookExclusions_(data);
     if (!data.sections.length) {
       feedback.textContent = 'No selected sections are currently eligible. Refresh the preview to continue.';
       return;
@@ -155,6 +217,7 @@ async function printStandardPlaybook_() {
     if (request === standardPlaybookRequest_) feedback.textContent = 'Could not verify access. Refresh the preview and try again.';
     return;
   }
+  const omissions = playbookExclusionMessages_(data);
   const paper = document.getElementById('standardPlaybookPaper');
   paper.innerHTML = `
     <article class="playbook-cover">
@@ -164,6 +227,8 @@ async function printStandardPlaybook_() {
       <p>Passwords, keys, tokens, and other secrets are intentionally omitted.</p>
       <h3>Contents</h3>
       <ol>${data.sections.map(section => `<li>${escapeHtml(section.label)}</li>`).join('')}</ol>
+      ${omissions.length ? `<h3>Omitted sections</h3><ul>${omissions.map(message =>
+        `<li>${escapeHtml(message)}</li>`).join('')}</ul>` : ''}
     </article>
     ${data.sections.map((section, index) => `
       <article>

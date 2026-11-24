@@ -576,11 +576,22 @@ async function main() {
     assert.equal(await playbook.getByLabel('Settings', { exact: true }).count(), 0);
     const policyOptions = playbook.locator('#standardPlaybookSections input');
     for (const option of await policyOptions.all()) {
-      if (!['changeLog', 'contacts', 'networkClosets', 'intercom'].includes(await option.inputValue())) await option.uncheck();
+      if (!['changeLog', 'contacts', 'networkClosets', 'intercom', 'ssids'].includes(await option.inputValue())) await option.uncheck();
     }
+    const rejectOneSection = async route => {
+      const call = route.request().postDataJSON();
+      if (call.method === 'appGetStandardPlaybook' && call.args[0][0] === 'networkClosets') {
+        await route.fulfill({ json: { error: 'Fixture section timed out' } });
+      } else await route.continue();
+    };
+    await page.route('**/rpc', rejectOneSection);
     await playbook.locator('#standardPlaybookPrepare').click();
     await playbook.getByText('Change Log (115 rows)', { exact: true }).waitFor();
     await playbook.getByText('Contacts (1 row)', { exact: true }).waitFor();
+    await playbook.getByText('SSIDs did not have any data to show.', { exact: true }).waitFor();
+    await playbook.getByText('Network Closets could not be loaded and was excluded.', { exact: true }).waitFor();
+    assert.equal(await playbook.locator('#standardPlaybookPrint').isEnabled(), true);
+    await page.unroute('**/rpc', rejectOneSection);
     await playbook.getByText('Intercom & Bell (1 row)', { exact: true }).waitFor();
     assert.equal(await playbook.locator('#standardPlaybookSummary li').count(), 3);
     await playbook.locator('input[value="contacts"]').uncheck();
@@ -592,7 +603,8 @@ async function main() {
     const beforePrint = rpcCalls.filter(call => call.method === 'appGetStandardPlaybook').length;
     await playbook.locator('#standardPlaybookPrint').click();
     await page.waitForFunction(() => window.fixturePlaybookPrintCalls === 1);
-    assert.equal(rpcCalls.filter(call => call.method === 'appGetStandardPlaybook').length, beforePrint + 1);
+    assert.equal(rpcCalls.filter(call => call.method === 'appGetStandardPlaybook').length, beforePrint + 5);
+    assert.match(await page.locator('#standardPlaybookPaper').textContent(), /SSIDs did not have any data to show\./);
     assert.equal(await page.locator('#standardPlaybookPaper tbody tr').count(), 117);
     assert.match(await page.locator('#standardPlaybookPaper').textContent(), /192\.0\.2\.40/);
     assert.match(await page.locator('#standardPlaybookPaper').textContent(), /fixture-user/);

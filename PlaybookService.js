@@ -53,16 +53,33 @@ function appGetStandardPlaybook(sectionKeys) {
   const selected = new Set(sectionKeys);
   const policies = getStandardPlaybookPolicies_();
   const sections = [];
+  const exclusions = [];
   const visiblePages = Object.values(APP_PAGE_CONFIG).filter(page =>
     isPageEnabled_(page.key) && (access.admin || (!page.adminOnly &&
       ['view', 'edit'].includes(access.permissions[page.key]))));
-  getStandardPlaybookSectionOptions_(visiblePages).forEach(option => {
+  const options = getStandardPlaybookSectionOptions_(visiblePages);
+  const visibleKeys = new Set(options.map(option => option.key));
+  const unavailableCount = [...selected].filter(key => !visibleKeys.has(key)).length;
+  options.forEach(option => {
     if (!selected.has(option.key)) return;
-    // Check through the existing page boundary before reading any data.
-    requirePagePermission_(option.key, 'view');
-    const permission = access.admin ? 'edit' : access.permissions[option.key];
-    const result = readStandardPlaybookSection_(policies[option.key], option.key, permission);
-    if (result.rows.length) sections.push({ key: option.key, label: option.label, ...result });
+    // A forbidden or failed section cannot masquerade as an empty tab.
+    try {
+      requirePagePermission_(option.key, 'view');
+    } catch (error) {
+      exclusions.push({ key: option.key, reason: 'unavailable' });
+      return;
+    }
+    try {
+      const permission = access.admin ? 'edit' : access.permissions[option.key];
+      const result = readStandardPlaybookSection_(policies[option.key], option.key, permission);
+      if (result.rows.length) sections.push({ key: option.key, label: option.label, ...result });
+      else exclusions.push({ key: option.key, label: option.label,
+        reason: result.noEligibleFields ? 'no-eligible-fields' : 'empty' });
+    } catch (error) {
+      // Sheet/provider error details can contain environment metadata; keep
+      // the response generic and allow individually successful sections.
+      exclusions.push({ key: option.key, label: option.label, reason: 'failed' });
+    }
   });
 
   const now = new Date();
@@ -71,7 +88,9 @@ function appGetStandardPlaybook(sectionKeys) {
     classification: 'Operational reference',
     generatedAt: now.toISOString(),
     generatedLabel: formatNetworkDashboardDateTime_(now) + ' (' + getEffectiveTimezone_() + ')',
-    sections: sections
+    sections,
+    exclusions,
+    unavailableCount
   };
 }
 
@@ -85,10 +104,13 @@ function readStandardPlaybookFields_(sheetName, fields, headerRow) {
   if (!fields.length) return [];
   const sheet = getReadSheet_(sheetName);
   headerRow = headerRow || 1;
-  if (!sheet || sheet.getLastRow() <= headerRow || !sheet.getLastColumn()) return [];
+  if (!sheet || sheet.getLastRow() < headerRow || !sheet.getLastColumn()) {
+    throw new Error('A Playbook backing sheet is unavailable.');
+  }
   const headers = sheet.getRange(headerRow, 1, 1, sheet.getLastColumn()).getDisplayValues()[0]
     .map(value => String(value || '').trim());
   const rowCount = sheet.getLastRow() - headerRow;
+  if (!rowCount) return [];
   const rows = [];
   fields.forEach(field => {
     const index = headers.indexOf(field);
@@ -176,6 +198,7 @@ function readStandardPlaybookSection_(policy, pageKey, permission) {
     readStandardPlaybookFields_(sheet, fields, policy.headerRow)));
   if (policy.detail) {
     const fields = policy.detail.filter(([field, type]) => canPrintPlaybookField_(pageKey, permission, field, type));
+    if (!fields.length) return { columns: [], rows: [], noEligibleFields: true };
     if (!policy.field || fields.length > 1) {
       const rows = read(fields.map(([field]) => field))
         .map(record => fields.map(([field, type]) => safePlaybookField_(record[field], type)))
