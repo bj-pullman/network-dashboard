@@ -304,23 +304,53 @@
 </div>
 
 
-<!-- CHANGE LOG DOCUMENT IMPORT MODAL -->
-<div class="modal fade" id="changeLogImportModal" tabindex="-1" aria-hidden="true">
+<!-- CHANGE LOG DOCUMENTATION TEMPLATE -->
+<div class="modal fade" id="changeLogTemplateModal" tabindex="-1" aria-labelledby="changeLogTemplateTitle" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-scrollable">
     <div class="modal-content">
       <div class="modal-header">
         <div>
           <div class="modal-eyebrow">CHANGE LOG</div>
-          <h5 class="modal-title">Import Documentation</h5>
+          <h5 class="modal-title" id="changeLogTemplateTitle">Documentation Template</h5>
         </div>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p>Copy the template into a blank Google Doc or download it as plain text. Fill in the six labeled lines and leave the labels in place.</p>
+        <p class="small text-muted">To add a new change, use Import Documentation to review and add the completed Doc. To link a Doc to an existing change, open Edit Change and paste its URL in Documentation URL.</p>
+        <label class="form-label" for="changeLogTemplateText">Template text</label>
+        <textarea id="changeLogTemplateText" class="form-control font-monospace" rows="12" readonly></textarea>
+        <p id="changeLogTemplateFeedback" class="form-text mb-0" aria-live="polite"></p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-light border" id="changeLogTemplateCopy" onclick="copyChangeLogTemplate_()" disabled>Copy Template</button>
+        <button type="button" class="btn btn-brand" id="changeLogTemplateDownload" onclick="downloadChangeLogTemplate_()" disabled>
+          <i class="fa-solid fa-download me-2" aria-hidden="true"></i>Download Template
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- CHANGE LOG DOCUMENT IMPORT MODAL -->
+<div class="modal fade" id="changeLogImportModal" tabindex="-1" aria-labelledby="changeLogImportTitle" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <div class="modal-eyebrow">CHANGE LOG</div>
+          <h5 class="modal-title" id="changeLogImportTitle">Import Documentation</h5>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
         <label class="form-label" for="changeLogDocumentUrl">SOURCE DOCUMENT</label>
         <div class="input-group">
-          <input id="changeLogDocumentUrl" type="url" class="form-control" placeholder="Google Doc URL">
+          <input id="changeLogDocumentUrl" type="url" class="form-control" placeholder="Google Doc URL" oninput="resetChangeLogImportPreview_()">
           <button id="readChangeLogDocumentButton" type="button" class="btn btn-brand" onclick="readChangeLogDocumentation_(this)">
-            <i class="fa-solid fa-file-import me-2"></i>Read Document
+            <i class="fa-solid fa-file-import me-2" aria-hidden="true"></i>Read Document
           </button>
         </div>
         <div id="changeLogImportFeedback" class="form-text mt-2" aria-live="polite"></div>
@@ -329,7 +359,7 @@
       <div class="modal-footer">
         <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
         <button id="confirmChangeLogImportButton" type="button" class="btn btn-brand" onclick="confirmChangeLogDocumentationImport_(this)" disabled>
-          <i class="fa-solid fa-plus me-2"></i>Add to Change Log
+          <i class="fa-solid fa-plus me-2" aria-hidden="true"></i>Add to Change Log
         </button>
       </div>
     </div>

@@ -8209,6 +8209,7 @@ function appUpdateRecord(
   sourceSheetName
 ) {
   requirePagePermission_(pageKey, 'edit');
+  if (pageKey === 'changeLog') record = excludeChangeLogImportFields_(record);
   const operation = () => appUpdateRecord_(pageKey, rowNumber, record, sourceSheetName);
   return pageKey === 'servers' ? withServerInventoryLock_(operation) : operation();
 }
@@ -8536,6 +8537,7 @@ function appAddRecord(
   record
 ) {
   requirePagePermission_(pageKey, 'edit');
+  if (pageKey === 'changeLog') record = excludeChangeLogImportFields_(record);
   const operation = () => appAddRecord_(pageKey, record);
   return pageKey === 'servers' ? withServerInventoryLock_(operation) : operation();
 }

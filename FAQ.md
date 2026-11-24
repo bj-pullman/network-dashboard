@@ -18,6 +18,24 @@ The Apps Script web application provides the primary user interface.
 
 ---
 
+## How do I document a change?
+
+In **Change Log**, editors can open **Documentation Template**, copy its text into
+a blank Google Doc or download a plain-text copy. Fill in its six labeled lines;
+use a date like `2026-01-15` and keep the summary on one line. Put additional
+details in the sections below the metadata and keep passwords out of the document.
+
+- **New change:** Open **Import Documentation**, paste the completed Doc URL, and
+  choose **Read Document**. Review or fill in missing metadata before choosing
+  **Add to Change Log**. If a preview expires, read it again.
+- **Existing change:** Open **Edit Change** and paste the Doc URL in
+  **Documentation URL**. If a Doc is already linked, no separate import is needed.
+
+Network HQ does not create or share a Google Doc when you use this template;
+use your organization's existing sharing process.
+
+---
+
 ## Where is my data stored?
 
 Operational data is stored in the Google Sheet owned by your organization.

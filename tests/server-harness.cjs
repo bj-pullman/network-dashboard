@@ -13,6 +13,7 @@ function createHarness({
 } = {}) {
   const sheets = new Map();
   const cache = new Map();
+  const documents = new Map();
   const properties = new Map([['UPTIMEROBOT_API_KEY', 'fixture-only-not-a-real-key']]);
   const calls = [];
   const logs = [];
@@ -176,7 +177,7 @@ function createHarness({
   const context = vm.createContext({
     console: { log: (...args) => logs.push(args), warn: (...args) => logs.push(args) },
     SpreadsheetApp: {
-      flush() {},
+      flush() { if (scriptLock.onFlush) scriptLock.onFlush(); },
       ProtectionType: { RANGE: 'RANGE', SHEET: 'SHEET' },
       getActiveSpreadsheet() { call('getActiveSpreadsheet'); return spreadsheet; },
       newDataValidation() {
@@ -186,6 +187,12 @@ function createHarness({
         return builder;
       }
     },
+    DocumentApp: { openById(id) {
+      call('openDocument');
+      if (!documents.has(id)) throw new Error('The local fixture document is unavailable');
+      const fixture = documents.get(id);
+      return { getName: () => fixture.title, getBody: () => ({ getText: () => fixture.text }) };
+    } },
     Session: { getActiveUser: () => ({ getEmail: () => email }), getEffectiveUser: () => ({ getEmail: () => email }),
       getScriptTimeZone: () => scriptTimezone },
     CacheService: { getScriptCache: () => ({
@@ -202,7 +209,10 @@ function createHarness({
         if (scriptLock.onWait) scriptLock.onWait();
         if (scriptLock.waitError) throw scriptLock.waitError;
       },
-      releaseLock() { scriptLock.releaseCount++; }
+      releaseLock() {
+        scriptLock.releaseCount++;
+        if (scriptLock.onRelease) scriptLock.onRelease();
+      }
     }), getDocumentLock: () => ({
       waitLock(timeout) { scriptLock.waitCount++; scriptLock.timeout = timeout; },
       releaseLock() { scriptLock.releaseCount++; }
@@ -327,7 +337,7 @@ function createHarness({
     try { return context[method](...args); } finally { readOnly = false; }
   }
   return { context, evaluate, invoke, sheets, spreadsheet, cache, cacheWrites, properties, calls, logs,
-    scriptLock, triggers, records, cameraRows };
+    scriptLock, triggers, records, cameraRows, documents };
 }
 
 module.exports = { createHarness, root };

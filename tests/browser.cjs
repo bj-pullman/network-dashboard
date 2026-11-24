@@ -524,6 +524,69 @@ async function main() {
       const item = page.locator('.dashboard-recent-changes .dashboard-list-row').filter({ hasText: name });
       await item.locator(`[data-status-tone="${tone}"]`).filter({ hasText: status }).waitFor();
     }
+    console.log('Checking Change Log template download and preview-first Google Doc import');
+    await navigate('changeLog');
+    await page.getByRole('button', { name: 'Documentation Template', exact: true }).click();
+    const templateModal = page.getByRole('dialog', { name: 'Documentation Template' });
+    await templateModal.waitFor({ state: 'visible' });
+    const downloadButton = templateModal.getByRole('button', { name: 'Download Template', exact: true });
+    const downloading = page.waitForEvent('download');
+    await downloadButton.click();
+    const downloaded = await downloading;
+    assert.equal(downloaded.suggestedFilename(), 'network-hq-change-documentation-template.txt');
+    const templateText = fs.readFileSync(await downloaded.path(), 'utf8');
+    assert.equal(templateText, await templateModal.getByLabel('Template text', { exact: true }).inputValue());
+    assert.ok(templateText.includes('Summary:\n'));
+    assert.ok(templateText.includes('Implemented By:\n'));
+    await templateModal.getByRole('button', { name: 'Close', exact: true }).last().click();
+    await templateModal.waitFor({ state: 'hidden' });
+    const browserDocId = 'fixture_browser_change_doc_A0001';
+    const docUrl = 'https://docs.google.com/document/d/' + browserDocId + '/edit';
+    const browserFields = {
+      'Change Date': '2026-11-20', 'Change Name': 'Fixture Doc Import', Category: 'maintenance',
+      'System / Area': 'network', 'Implemented By': 'Fixture Operator'
+    };
+    harness.documents.set(browserDocId, { title: 'Fixture Source Doc', text: templateText
+      .replace(/^(Change Date|Change Name|Category|System \/ Area|Implemented By):$/gm,
+        (_, label) => label + ': ' + browserFields[label]) });
+    const openDocImport = page.getByRole('button', { name: 'Import Documentation', exact: true });
+    await openDocImport.click();
+    const importModal = page.getByRole('dialog', { name: 'Import Documentation' });
+    const sourceInput = importModal.locator('#changeLogDocumentUrl');
+    const readDocument = importModal.getByRole('button', { name: 'Read Document', exact: true });
+    const confirmDoc = importModal.getByRole('button', { name: 'Add to Change Log', exact: true });
+    await sourceInput.fill(docUrl);
+    const releaseStalePreview = await holdRpc('appPreviewChangeLogDocumentation');
+    await readDocument.click();
+    await sourceInput.fill('https://docs.google.com/document/d/unsent_fixture_document_B0002/edit');
+    await releaseStalePreview();
+    await readDocument.waitFor({ state: 'visible' });
+    assert.equal(await confirmDoc.isDisabled(), true);
+    assert.equal(await importModal.locator('#changeLogImportPreview').isHidden(), true);
+    await sourceInput.fill(docUrl);
+    await readDocument.click();
+    await importModal.getByText('Fixture Source Doc', { exact: true }).waitFor();
+    assert.equal(await importModal.locator('[data-import-field="Category"]').inputValue(), 'Maintenance');
+    assert.equal(await importModal.locator('[data-import-field="Change Date"]').inputValue(), '2026-11-20');
+    assert.equal(await importModal.locator('[data-import-field="Documentation URL"]').getAttribute('readonly'), '');
+    assert.equal(await importModal.locator('[data-import-field="Summary"]').evaluate(element =>
+      element.classList.contains('is-invalid')), true);
+    const numberBeforeImport = harness.sheets.get('Change Log').data.length;
+    await confirmDoc.click();
+    await importModal.getByText('Complete all required fields.', { exact: true }).waitFor();
+    assert.equal(harness.sheets.get('Change Log').data.length, numberBeforeImport);
+    await importModal.locator('[data-import-field="Summary"]').fill('Completed in the fixture preview.');
+    await confirmDoc.click();
+    await importModal.waitFor({ state: 'hidden' });
+    await page.waitForFunction(() => currentPageData.rows?.some(row => row['Change Name'] === 'Fixture Doc Import'));
+    assert.equal(harness.sheets.get('Change Log').data.length, numberBeforeImport + 1);
+    await openDocImport.click();
+    await sourceInput.fill(docUrl);
+    await readDocument.click();
+    await importModal.getByText(/Duplicate import is blocked/).waitFor();
+    assert.equal(await confirmDoc.isDisabled(), true);
+    await importModal.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await importModal.waitFor({ state: 'hidden' });
     console.log('Checking VM host picker, duplicate names, cross-view relationship and rename');
     harness.sheets.get('Servers').data.splice(1);
     harness.records('Servers', [

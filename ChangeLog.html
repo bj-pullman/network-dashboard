@@ -105,10 +105,11 @@ RECORD_PAGE_DEFINITIONS.changeLog = {
     );
   },
   actions: function(data) {
-    const importAction = data.permission === 'edit'
-      ? `<button class="btn btn-sm btn-light border" onclick="openChangeLogImport_()"><i class="fa-solid fa-file-import me-2"></i>Import Documentation</button>`
+    const documentationActions = data.permission === 'edit'
+      ? `<button class="btn btn-sm btn-light border" onclick="openChangeLogTemplate_()"><i class="fa-regular fa-file-lines me-2" aria-hidden="true"></i>Documentation Template</button>
+         <button class="btn btn-sm btn-light border" onclick="openChangeLogImport_()"><i class="fa-solid fa-file-import me-2" aria-hidden="true"></i>Import Documentation</button>`
       : '';
-    renderRecordActions_(data, importAction);
+    renderRecordActions_(data, documentationActions);
   }
 };
 
@@ -117,17 +118,80 @@ function renderChangeLogPage(data) {
 }
 
 
+let changeLogTemplate_ = null;
+let changeLogTemplateRequest_ = 0;
+
+function openChangeLogTemplate_() {
+  const request = ++changeLogTemplateRequest_;
+  changeLogTemplate_ = null;
+  const template = document.getElementById('changeLogTemplateText');
+  const feedback = document.getElementById('changeLogTemplateFeedback');
+  const copy = document.getElementById('changeLogTemplateCopy');
+  const download = document.getElementById('changeLogTemplateDownload');
+  template.value = '';
+  copy.disabled = download.disabled = true;
+  feedback.textContent = 'Loading template…';
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('changeLogTemplateModal')).show();
+  scriptRunPromise_('appGetChangeLogDocumentationTemplate', runner => runner.appGetChangeLogDocumentationTemplate())
+    .then(data => {
+      if (request !== changeLogTemplateRequest_) return;
+      changeLogTemplate_ = data;
+      template.value = data.text;
+      copy.disabled = download.disabled = false;
+      feedback.textContent = '';
+    })
+    .catch(error => {
+      if (request === changeLogTemplateRequest_) feedback.textContent = getSafeErrorMessage_(error);
+    });
+}
+
+
+async function copyChangeLogTemplate_() {
+  if (!changeLogTemplate_) return;
+  const template = document.getElementById('changeLogTemplateText');
+  const feedback = document.getElementById('changeLogTemplateFeedback');
+  try {
+    await navigator.clipboard.writeText(template.value);
+    feedback.textContent = 'Template copied.';
+  } catch (error) {
+    template.focus();
+    template.select();
+    feedback.textContent = 'Template text selected. Use your browser’s Copy command.';
+  }
+}
+
+
+function downloadChangeLogTemplate_() {
+  if (!changeLogTemplate_) return;
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(new Blob([changeLogTemplate_.text], { type: 'text/plain;charset=utf-8' }));
+  link.href = url;
+  link.download = changeLogTemplate_.filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+
 let changeLogImportPreviewData_ = null;
+let changeLogImportRequest_ = 0;
+
+function resetChangeLogImportPreview_() {
+  changeLogImportRequest_++;
+  changeLogImportPreviewData_ = null;
+  document.getElementById('changeLogImportFeedback').textContent = '';
+  document.getElementById('changeLogImportFeedback').className = 'form-text mt-2';
+  const preview = document.getElementById('changeLogImportPreview');
+  preview.hidden = true;
+  preview.replaceChildren();
+  document.getElementById('confirmChangeLogImportButton').disabled = true;
+}
 
 
 function openChangeLogImport_() {
-  changeLogImportPreviewData_ = null;
+  resetChangeLogImportPreview_();
   document.getElementById('changeLogDocumentUrl').value = '';
-  document.getElementById('changeLogImportFeedback').textContent = '';
-  document.getElementById('changeLogImportFeedback').className = 'form-text mt-2';
-  document.getElementById('changeLogImportPreview').hidden = true;
-  document.getElementById('changeLogImportPreview').innerHTML = '';
-  document.getElementById('confirmChangeLogImportButton').disabled = true;
   bootstrap.Modal.getOrCreateInstance(
     document.getElementById('changeLogImportModal')
   ).show();
@@ -142,6 +206,8 @@ function readChangeLogDocumentation_(button) {
     feedback.textContent = 'Enter a Google Doc URL.';
     return;
   }
+  resetChangeLogImportPreview_();
+  const request = changeLogImportRequest_;
   const action = setActionWorking(button, 'Reading...');
   feedback.className = 'form-text mt-2';
   feedback.textContent = 'Reading document metadata...';
@@ -150,10 +216,12 @@ function readChangeLogDocumentation_(button) {
     runner => runner.appPreviewChangeLogDocumentation(url)
   ).then(function(preview) {
     restoreAction(action);
+    if (request !== changeLogImportRequest_) return;
     changeLogImportPreviewData_ = preview;
     renderChangeLogImportPreview_(preview);
   }).catch(function(error) {
     restoreAction(action);
+    if (request !== changeLogImportRequest_) return;
     feedback.className = 'form-text mt-2 text-danger';
     feedback.textContent = getSafeErrorMessage_(error);
   });
@@ -181,7 +249,7 @@ function renderChangeLogImportPreview_(preview) {
     } else {
       const type = name === 'Change Date' ? 'date' : name === 'Documentation URL' ? 'url' : 'text';
       const inputValue = name === 'Change Date' && value ? toHtmlDateValue_(value) : value;
-      control = `<input id="${id}" type="${type}" class="form-control" data-import-field="${escapeAttribute(name)}" value="${escapeAttribute(inputValue)}" ${required.has(name) ? 'required' : ''}>`;
+      control = `<input id="${id}" type="${type}" class="form-control" data-import-field="${escapeAttribute(name)}" value="${escapeAttribute(inputValue)}" ${required.has(name) ? 'required' : 'readonly'}>`;
     }
     return `<div class="col-md-6"><label class="form-label" for="${id}">${escapeHtml(name.toUpperCase())}${required.has(name) ? ' <span class="required-marker">*</span>' : ''}</label>${control}</div>`;
   }).join('');
@@ -189,7 +257,7 @@ function renderChangeLogImportPreview_(preview) {
   const duplicate = !!preview.duplicate;
   feedback.className = 'form-text mt-2 ' + (duplicate ? 'text-danger' : 'text-success');
   feedback.textContent = duplicate
-    ? 'This Google Doc has already been imported. Duplicate import is blocked.'
+    ? 'This Google Doc is already linked to a Change Log record. Duplicate import is blocked.'
     : (preview.missingFields || []).length
       ? 'Document read. Complete the highlighted missing fields before importing.'
       : 'Document metadata is ready to review.';
@@ -202,7 +270,7 @@ function renderChangeLogImportPreview_(preview) {
     const input = container.querySelector(`[data-import-field="${CSS.escape(name)}"]`);
     if (input) input.classList.add('is-invalid');
   });
-  document.getElementById('confirmChangeLogImportButton').disabled = duplicate;
+  document.getElementById('confirmChangeLogImportButton').disabled = duplicate || !preview.previewToken;
 }
 
 
@@ -225,7 +293,8 @@ function toggleChangeLogImportOther_(select) {
 
 
 function confirmChangeLogDocumentationImport_(button) {
-  if (!changeLogImportPreviewData_ || changeLogImportPreviewData_.duplicate) return;
+  const preview = changeLogImportPreviewData_;
+  if (!preview || preview.duplicate || !preview.previewToken) return;
   const fields = {};
   const controls = document.querySelectorAll('#changeLogImportPreview [data-import-field]');
   for (const control of controls) {
@@ -249,18 +318,23 @@ function confirmChangeLogDocumentationImport_(button) {
   scriptRunPromise_(
     'appImportChangeLogDocumentation',
     runner => runner.appImportChangeLogDocumentation({
-      fileId: changeLogImportPreviewData_.fileId,
-      documentUrl: changeLogImportPreviewData_.documentUrl,
+      fileId: preview.fileId,
+      documentUrl: preview.documentUrl,
+      previewToken: preview.previewToken,
       fields: fields
     })
   ).then(function() {
     restoreAction(action);
-    bootstrap.Modal.getInstance(document.getElementById('changeLogImportModal')).hide();
+    if (preview === changeLogImportPreviewData_) {
+      resetChangeLogImportPreview_();
+      bootstrap.Modal.getInstance(document.getElementById('changeLogImportModal')).hide();
+    }
     invalidateClientPage('changeLog');
-    loadPage('changeLog', true);
+    if (currentPageKey === 'changeLog') loadPage('changeLog', true);
     showToast('Documentation added to Change Log.');
   }).catch(function(error) {
     restoreAction(action);
+    if (preview !== changeLogImportPreviewData_) return;
     const feedback = document.getElementById('changeLogImportFeedback');
     feedback.className = 'form-text mt-2 text-danger';
     feedback.textContent = getSafeErrorMessage_(error);
