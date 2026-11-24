@@ -47,6 +47,19 @@ and permissions are fixed and are not part of these lists.
 
 ---
 
+## What belongs in the Outages history?
+
+Use **Add Outage** for a confirmed manual incident, even if monitoring is disabled.
+A monitor event starts in **Needs review** and does not count toward incident totals.
+An editor can confirm the event with verified times and notes, link it to an existing
+manual incident, or dismiss it. Provider updates remain separate from confirmed details.
+
+Use **History Report** to preview, print, or download confirmed incidents matching the
+active filters. It excludes circuit and monitor details, operator notes, and credentials.
+Date filters use the organization timezone; exported timestamps are UTC.
+
+---
+
 ## Where is my data stored?
 
 Operational data is stored in the Google Sheet owned by your organization.

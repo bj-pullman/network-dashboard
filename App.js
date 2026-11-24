@@ -175,7 +175,8 @@ const APP_PAGE_CONFIG = {
       'Started',
       'Restored',
       'Duration',
-      'Status'
+      'Status',
+      '_reviewState'
     ]
   },
 

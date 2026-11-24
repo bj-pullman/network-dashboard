@@ -32,7 +32,7 @@ test('schema 11 upgrade adds IDs in place, leaves legacy formulas and legend row
   assert.throws(() => h.invoke('appUpdateRecord', ['servers', 2,
     { 'Server Name': 'Repeated Name', _vmHostName: uuid(1) }]), /Update \/ Repair/);
   h.invoke('updateNetworkDashboard', [{ silent: true }]);
-  assert.equal(h.invoke('getAppBootstrap').config.installedSchemaVersion, '12');
+  assert.equal(h.invoke('getAppBootstrap').config.installedSchemaVersion, h.context.NETWORK_DASHBOARD_SCHEMA_VERSION);
   const after = {};
   for (const [name, original] of Object.entries(originals)) {
     const sheet = h.sheets.get(name);

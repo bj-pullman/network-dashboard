@@ -270,7 +270,8 @@ function getNetworkDashboardSchema_() {
         'Started',
         'Source',
         'Status',
-        'External Event ID'
+        'External Event ID',
+        ...OUTAGE_REVIEW_FIELDS
       ],
       frozenRows: 1,
       tabColor: '#dc2626'
@@ -2893,6 +2894,12 @@ function getNetworkDashboardSchemaMigrations_() {
       // Reconciliation adds the two managed fields, then fills only blank identities.
       from: 11,
       to: 12,
+      run: function() {}
+    },
+    {
+      // The normal reconciler appends review fields without changing legacy records.
+      from: 12,
+      to: 13,
       run: function() {}
     }
   ];

@@ -52,7 +52,7 @@ test('Standard Playbook uses explicit projections, native names and sidebar orde
   ]);
   assert.doesNotMatch(JSON.stringify(data), /CANARY|192\.0\.2\.33|person@example|intranet|dispatch@example|password/i);
   for (const [name, fields] of Object.entries({
-    Switches: ['Status'], Outages: ['Started', 'Restored', 'Source'],
+    Switches: ['Status'], Outages: ['Started', 'Restored', 'Source', 'Review State', 'Incident Started', 'Incident Restored'],
     'Change Log': ['Change Date', 'Status'], Contacts: ['Status', 'Email', 'Phone']
   })) {
     const headers = h.sheets.get(name).data[0];

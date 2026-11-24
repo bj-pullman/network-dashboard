@@ -237,7 +237,7 @@ function isDateOnlyHeader_(header) {
 
 
 function isDateTimeHeader_(header) {
-  return /timestamp|(^|\s)(sync|synced|updated|created|imported|checked)(\s|$)|started|restored|offline since|^last attempt$/i
+  return /timestamp|(^|\s)(sync|synced|updated|created|imported|checked)(\s|$)|started|restored|offline since|^reviewed at$|^last attempt$/i
     .test(String(header || '').trim());
 }
 

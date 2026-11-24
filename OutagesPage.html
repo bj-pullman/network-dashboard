@@ -4,6 +4,35 @@ const OUTAGE_CIRCUIT_FILTER_STORAGE_KEY =
   'networkDashboard.outageCircuitFilter';
 
 
+let currentOutageView_ = 'incidents';
+
+function outageViewControls_(data) {
+  return [
+    ['incidents', 'Confirmed incidents', data.summary.total || 0],
+    ['review', 'Needs review', data.summary.reviewCount || 0],
+    ['monitoring', 'Monitoring log', data.summary.monitoringCount || 0]
+  ].map(([view, label, count]) =>
+    `<button type="button" class="btn btn-sm ${view === currentOutageView_ ? 'btn-brand' : 'btn-light border'}"
+      data-outage-view="${view}" aria-pressed="${view === currentOutageView_}"
+      onclick="setOutageView_('${view}')">${label} <span class="ms-1">${count}</span></button>`).join('');
+}
+
+function setOutageView_(view) {
+  if (!['incidents', 'review', 'monitoring'].includes(view)) return;
+  currentOutageView_ = view;
+  document.getElementById('outageViews').innerHTML = outageViewControls_(currentPageData);
+  applyOutageFilters();
+  if (tableInstance) tableInstance.redraw(true);
+}
+
+function outageSummaryMarkup_(summary) {
+  return [
+    outageSummaryCard('Open Incidents', summary.active, 'fa-triangle-exclamation', 'Open confirmed incidents only.'),
+    outageSummaryCard('Started Last 30 Days', summary.last30Days, 'fa-calendar-days', 'Confirmed incidents started in the rolling last 30 days.'),
+    outageSummaryCard('30 Day Downtime', summary.durationLast30Label, 'fa-clock', 'Sum of confirmed incident time across circuits. Unreviewed monitoring is excluded.')
+  ].join('');
+}
+
 function renderOutagesPage(
   data
 ) {
@@ -56,7 +85,7 @@ function renderOutagesPage(
 
   setPageHeader(
     'Outages',
-    `${data.totalCount || 0} outage records`
+    'Confirmed incident history and monitoring review'
   );
 
   document.getElementById(
@@ -94,6 +123,10 @@ function renderOutagesPage(
         : ''
     }
 
+    <button type="button" class="btn btn-sm btn-light border" onclick="openOutageHistoryReport_(this)">
+      <i class="fa-solid fa-file-lines me-2" aria-hidden="true"></i>History Report
+    </button>
+
     <button
       type="button"
       class="btn btn-sm btn-light border"
@@ -108,10 +141,9 @@ function renderOutagesPage(
     'pageContent'
   ).innerHTML = `
     <div class="outages-layout">
-      <div class="outages-summary">
-        ${outageSummaryCard('Active Outages', data.summary.active, 'fa-triangle-exclamation', 'Genuinely active manual or provider-confirmed incidents.')}
-        ${outageSummaryCard('Started Last 30 Days', data.summary.last30Days, 'fa-calendar-days', 'Number of outages that started in the rolling last 30 days.')}
-        ${outageSummaryCard('30 Day Downtime', data.summary.durationLast30Label, 'fa-clock', 'Aggregate outage time across tracked circuits during the last 30 days.')}
+      <div class="outages-summary">${outageSummaryMarkup_(data.summary)}</div>
+      <div id="outageViews" class="d-flex flex-wrap gap-2" role="group" aria-label="Outage views">
+        ${outageViewControls_(data)}
       </div>
 
       ${canAdminAction && data.summary.dataQualityCount
@@ -128,13 +160,13 @@ function renderOutagesPage(
               id="outageSearch"
               type="search"
               class="form-control"
-              placeholder="Search outages..."
+              placeholder="Search outages..." aria-label="Search outages"
               oninput="applyOutageFilters()"
             >
           </div>
 
           <select
-            id="outageCircuitFilter"
+            id="outageCircuitFilter" aria-label="Filter outages by circuit"
             class="form-select form-select-sm outage-filter"
             onchange="applyOutageFilters()"
           >
@@ -147,7 +179,7 @@ function renderOutagesPage(
           </select>
 
           <select
-            id="outageStatusFilter"
+            id="outageStatusFilter" aria-label="Filter outages by status"
             class="form-select form-select-sm outage-filter"
             onchange="applyOutageFilters()"
           >
@@ -156,13 +188,23 @@ function renderOutagesPage(
           </select>
 
           <select
-            id="outageSourceFilter"
+            id="outageSourceFilter" aria-label="Filter outages by source"
             class="form-select form-select-sm outage-filter"
             onchange="applyOutageFilters()"
           >
             <option value="">All sources</option>
             ${outageFilterOptions_(['Manual', 'UptimeRobot'])}
           </select>
+
+          <details class="outage-period-filter">
+            <summary class="btn btn-sm btn-light border">Started date range</summary>
+            <div class="d-flex flex-wrap gap-2 mt-2">
+              <label class="small">Started from <input type="date" class="form-control form-control-sm"
+                id="outageDateFrom" onchange="applyOutageFilters()"></label>
+              <label class="small">Started through <input type="date" class="form-control form-control-sm"
+                id="outageDateTo" onchange="applyOutageFilters()"></label>
+            </div>
+          </details>
 
           <div class="dropdown">
             <button
@@ -331,7 +373,10 @@ function buildOutagesTable_(
     }
   );
 
-  tableInstance.on('tableBuilt', function() { buildOutageColumnMenu_(data, columns); });
+  tableInstance.on('tableBuilt', function() {
+    buildOutageColumnMenu_(data, columns);
+    applyOutageFilters();
+  });
 
   bindColumnMenuRefresh_(
     'outageColumnMenu',
@@ -420,7 +465,7 @@ function getOutageColumns_(
       formatter: function(cell) {
         return escapeHtml(
           formatOutageDateDisplay_(
-            cell.getValue()
+            outageMonitoringDisplay_(cell.getRow().getData(), 'Started')
           )
         );
       }
@@ -430,10 +475,8 @@ function getOutageColumns_(
       field: 'Restored',
       minWidth: 165,
       formatter: function(cell) {
-        const value =
-          cell.getValue();
-
         const row = cell.getRow().getData();
+        const value = outageMonitoringDisplay_(row, 'Restored');
 
         return value
           ? escapeHtml(
@@ -441,7 +484,7 @@ function getOutageColumns_(
                 value
               )
             )
-          : row._ongoing
+          : outageMonitoringDisplay_(row, 'Status') === 'Ongoing'
             ? '<span class="outage-ongoing-text">Ongoing</span>'
             : '<span class="text-muted">Unavailable</span>';
       }
@@ -452,6 +495,12 @@ function getOutageColumns_(
       minWidth: 115,
       formatter: function(cell) {
         const row = cell.getRow().getData();
+        if (currentOutageView_ === 'monitoring' && row._monitoring) {
+          const start = Date.parse(row._monitoring.Started);
+          const end = row._monitoring.Status === 'Ongoing' ? Date.now() : Date.parse(row._monitoring.Restored);
+          return Number.isFinite(start) && end >= start
+            ? escapeHtml(formatOutageDurationClient_(Math.round((end - start) / 60000))) : 'Unknown';
+        }
         if (row._ongoing && Number(row._startedMs || 0)) {
           return escapeHtml(
             formatOutageDurationClient_(
@@ -483,8 +532,17 @@ function getOutageColumns_(
       minWidth: 120,
       formatter: function(cell) {
         return statusPill(
-          cell.getValue(), 'outage'
+          outageMonitoringDisplay_(cell.getRow().getData(), 'Status'), 'outage'
         );
+      }
+    }),
+    applyVisible({
+      title: 'Review',
+      field: '_reviewState',
+      minWidth: 125,
+      formatter: cell => {
+        const label = cell.getValue() || 'Needs review';
+        return `<span class="badge ${label === 'Needs review' ? 'text-bg-warning' : 'text-bg-light border'}">${escapeHtml(label)}</span>`;
       }
     }),
     applyVisible({
@@ -560,6 +618,7 @@ function getOutagePreferenceFields_() {
     'Source',
     'Cause / Reason',
     'Status',
+    '_reviewState',
     'UptimeRobot Monitor ID',
     'Notes',
     'Outage ID',
@@ -600,32 +659,19 @@ function createOutageActionColumn_(
       wrapper.className =
         'table-row-actions';
 
-      if (
-        !canEdit ||
-        normalizeClientKey_(
-          row.Source
-        ) !== 'manual'
-      ) {
-        const locked =
-          document.createElement(
-            'span'
-          );
-
-        locked.className =
-          'outage-action-note';
-
-        locked.title =
-          'Synchronized record';
-
-        locked.innerHTML =
-          '<i class="fa-solid fa-cloud-arrow-down"></i>';
-
-        wrapper.appendChild(
-          locked
-        );
-
+      if (!canEdit) return wrapper;
+      if (row._sourceKey === 'uptimerobot') {
+        const review = document.createElement('button');
+        review.type = 'button';
+        review.className = 'table-row-action table-row-action-review';
+        review.title = row._isConfirmed ? 'Edit reviewed incident' : 'Review monitoring event';
+        review.setAttribute('aria-label', review.title);
+        review.innerHTML = '<i class="fa-solid fa-clipboard-check" aria-hidden="true"></i>';
+        review.onclick = event => { event.stopPropagation(); openOutageReview_(row); };
+        wrapper.appendChild(review);
         return wrapper;
       }
+      if (row._sourceKey !== 'manual') return wrapper;
 
       const edit =
         document.createElement(
@@ -977,100 +1023,49 @@ function setAllOutageColumnsVisible_(
 }
 
 
-function applyOutageFilters() {
+function getOutageFilters_() {
+  const value = id => document.getElementById(id)?.value || '';
+  return {
+    search: value('outageSearch').trim().toLowerCase(), circuitId: value('outageCircuitFilter'),
+    status: value('outageStatusFilter'), source: value('outageSourceFilter'),
+    from: value('outageDateFrom'), to: value('outageDateTo')
+  };
+}
 
-  if (!tableInstance) {
-    return;
-  }
-
-  const search =
-    String(
-      document.getElementById(
-        'outageSearch'
-      ).value || ''
-    ).toLowerCase();
-
-  const circuitId =
-    document.getElementById(
-      'outageCircuitFilter'
-    ).value;
-
-  const status =
-    document.getElementById(
-      'outageStatusFilter'
-    ).value;
-
-  const source =
-    document.getElementById(
-      'outageSourceFilter'
-    ).value;
-
-  tableInstance.setFilter(function(row) {
-
-    if (
-      circuitId &&
-      row['Circuit ID'] !== circuitId
-    ) {
-      return false;
-    }
-
-    if (
-      status &&
-      row.Status !== status
-    ) {
-      return false;
-    }
-
-    if (
-      source &&
-      row.Source !== source
-    ) {
-      return false;
-    }
-
-    if (!search) {
-      return true;
-    }
-
-    return [
-      row['Outage ID'],
-      row['Circuit ID'],
-      row['Circuit Name'],
-      row['Site / Location'],
-      row.Provider,
-      row.Source,
-      row['Cause / Reason'],
-      row.Notes,
-      row.Status
-    ]
-      .join(' ')
-      .toLowerCase()
-      .includes(search);
-
-  });
+function outageMonitoringDisplay_(row, field) {
+  return currentOutageView_ === 'monitoring' && row._monitoring ? row._monitoring[field] : row[field];
 }
 
 
-function clearOutageFilters() {
-
-  [
-    'outageSearch',
-    'outageCircuitFilter',
-    'outageStatusFilter',
-    'outageSourceFilter'
-  ].forEach(id => {
-    const element =
-      document.getElementById(id);
-
-    if (element) {
-      element.value =
-        '';
+function applyOutageFilters() {
+  if (!tableInstance) return;
+  const filters = getOutageFilters_();
+  tableInstance.setFilter(row => {
+    if (currentOutageView_ === 'incidents' && !row._isConfirmed) return false;
+    if (currentOutageView_ === 'review' && row._reviewState !== 'Needs review') return false;
+    if (currentOutageView_ === 'monitoring' && row._sourceKey !== 'uptimerobot') return false;
+    const display = currentOutageView_ === 'monitoring' && row._monitoring ? row._monitoring : row;
+    if (filters.circuitId && row['Circuit ID'] !== filters.circuitId) return false;
+    if (filters.status && display.Status !== filters.status) return false;
+    if (filters.source && row.Source !== filters.source) return false;
+    if (filters.from || filters.to) {
+      const date = formatOutageDateInput_(display.Started).slice(0, 10);
+      if (!date || (filters.from && date < filters.from) || (filters.to && date > filters.to)) return false;
     }
+    return !filters.search || [
+      'Outage ID', 'Circuit ID', 'Circuit Name', 'Site / Location', 'Provider',
+      'Source', 'Cause / Reason', 'Notes', 'Status', '_reviewState'
+    ].map(field => row[field] || '').join(' ').toLowerCase().includes(filters.search);
   });
+}
 
-  if (tableInstance) {
-    tableInstance.clearFilter();
-  }
+function clearOutageFilters() {
+  ['outageSearch', 'outageCircuitFilter', 'outageStatusFilter', 'outageSourceFilter',
+    'outageDateFrom', 'outageDateTo'].forEach(id => {
+    const input = document.getElementById(id);
+    if (input) input.value = '';
+  });
+  applyOutageFilters();
 }
 
 
@@ -1167,6 +1162,25 @@ function openOutageEditRecord(
 }
 
 
+function openOutageReview_(row) {
+  editingRow = row;
+  const record = {
+    ...row,
+    'Cause / Reason': row['Incident Reason'] || '',
+    Notes: row['Incident Notes'] || ''
+  };
+  openOutageRecordModal_(row._isConfirmed ? 'Edit Reviewed Incident' : 'Review Monitoring Event', record);
+}
+
+function toggleOutageReviewFields_() {
+  const root = document.querySelector('#recordModalBody .outage-form');
+  const state = root.querySelector('[data-outage-review-state]')?.value || '';
+  root.querySelectorAll('[data-outage-confirm-only]').forEach(field => { field.hidden = state !== 'Confirmed'; });
+  const linked = root.querySelector('[data-outage-link-only]');
+  if (linked) linked.hidden = state !== 'Linked';
+}
+
+
 function openOutageRecordModal_(
   title,
   record
@@ -1193,6 +1207,9 @@ function openOutageRecordModal_(
     );
 
   const timezone = getClientRegionalPreferences_().timezone;
+  const review = record._sourceKey === 'uptimerobot';
+  const linked = review ? (currentPageData.rows || []).filter(row => row._sourceKey === 'manual' &&
+    row._incidentTimeValid && row['Circuit ID'] === record['Circuit ID'] && row['Outage ID']) : [];
   body.innerHTML = `
     <div class="form-required-note">
       <span class="required-marker">*</span> Required
@@ -1202,12 +1219,35 @@ function openOutageRecordModal_(
       <p class="internet-wan-field-full mb-0 text-muted small">
         Times are in ${escapeHtml(timezone)}.
       </p>
+      ${review ? `<div class="internet-wan-field-full alert alert-light border mb-0 small">
+        <strong>Provider event:</strong>
+        ${escapeHtml(formatOutageDateDisplay_(record._monitoring.Started))} →
+        ${escapeHtml(formatOutageDateDisplay_(record._monitoring.Restored) || record._monitoring.Status)}
+        <div>Confirm an incident only after verification. Provider updates never change confirmed times or your notes.</div>
+      </div>
+      <label class="internet-wan-field internet-wan-field-full">
+        <span>Review decision</span>
+        <select class="form-select" data-outage-review-state onchange="toggleOutageReviewFields_()">
+          <option value="">Choose a decision</option>
+          ${[['Confirmed','Confirm incident'], ['Linked','Link to existing manual incident'], ['Dismissed','Dismiss event'],
+            ['Needs review','Return to review']].map(([value, label]) =>
+              `<option value="${value}" ${value === record._reviewState && value !== 'Needs review' ? 'selected' : ''}>${label}</option>`).join('')}
+        </select>
+      </label>
+      <label class="internet-wan-field internet-wan-field-full" data-outage-link-only hidden>
+        <span>Manual incident on this circuit</span>
+        <select class="form-select" data-outage-link-id>
+          <option value="">${linked.length ? 'Choose a manual incident' : 'No manual incidents on this circuit'}</option>
+          ${linked.map(row => `<option value="${escapeAttribute(row['Outage ID'])}"
+            ${row['Outage ID'] === record['Linked Incident ID'] ? 'selected' : ''}>${escapeHtml(row['Outage ID'] + ' · ' + formatOutageDateDisplay_(row.Started))}</option>`).join('')}
+        </select>
+      </label>` : ''}
       <label class="internet-wan-field internet-wan-field-full">
         <span>Circuit <span class="required-marker">*</span></span>
         <select
           class="form-select"
           data-outage-field="Circuit ID"
-          required
+          ${review ? 'disabled' : 'required'}
         >
           <option value="">Select circuit</option>
           ${(currentPageData.circuits || []).map(circuit => `
@@ -1221,7 +1261,7 @@ function openOutageRecordModal_(
         </select>
       </label>
 
-      <label class="internet-wan-field">
+      <label class="internet-wan-field" ${review ? 'data-outage-confirm-only' : ''}>
         <span>Started <span class="required-marker">*</span></span>
         <input
           class="form-control"
@@ -1232,7 +1272,7 @@ function openOutageRecordModal_(
         >
       </label>
 
-      <label class="internet-wan-field">
+      <label class="internet-wan-field" ${review ? 'data-outage-confirm-only' : ''}>
         <span>Restored</span>
         <input
           class="form-control"
@@ -1242,7 +1282,7 @@ function openOutageRecordModal_(
         >
       </label>
 
-      <details class="internet-wan-field-full">
+      <details class="internet-wan-field-full" ${review ? 'data-outage-confirm-only' : ''}>
         <summary class="small">Repeated clock times</summary>
         <p class="small text-muted mb-2">Choose First or Second only if the same local time occurs twice when clocks move back.</p>
         ${['Started', 'Restored'].map(field => `
@@ -1282,6 +1322,7 @@ function openOutageRecordModal_(
   ).onclick =
     saveOutageFromModal;
 
+  if (review) toggleOutageReviewFields_();
   recordModal.show();
 }
 
@@ -1298,8 +1339,18 @@ function saveOutageFromModal() {
   });
 
   if (editingRow) {
-    record._row =
-      editingRow._row;
+    record._row = editingRow._row;
+    record._outageId = editingRow['Outage ID'];
+  }
+  const review = form.querySelector('[data-outage-review-state]');
+  if (review) {
+    if (!review.value) { showToast('Choose a review decision.'); return; }
+    record.state = review.value;
+    record.outageId = editingRow['Outage ID'];
+    record.externalId = editingRow['External Event ID'];
+    record.reviewedAt = editingRow['Reviewed At'];
+    record.linkedId = form.querySelector('[data-outage-link-id]').value;
+    if (record.state === 'Linked' && !record.linkedId) { showToast('Choose a manual incident.'); return; }
   }
 
   const saveButton =
@@ -1313,11 +1364,8 @@ function saveOutageFromModal() {
     );
 
   scriptRunPromise_(
-    'appSaveOutage',
-    runner =>
-      runner.appSaveOutage(
-        record
-      )
+    review ? 'appReviewOutage' : 'appSaveOutage',
+    runner => review ? runner.appReviewOutage(record) : runner.appSaveOutage(record)
   )
     .then(function(data) {
 
@@ -1339,13 +1387,8 @@ function saveOutageFromModal() {
         }
       );
 
-      renderOutagesPage(
-        data
-      );
-
-      showToast(
-        'Outage saved.'
-      );
+      updateOutagesPage_(data);
+      showToast(review ? 'Review saved.' : 'Outage saved.');
 
     })
     .catch(function(error) {
@@ -1512,14 +1555,12 @@ function formatOutageDateInput_(
 function refreshOutagesPageSummary_(data) {
   setPageHeader(
     'Outages',
-    `${data.totalCount || 0} outage records`
+    'Confirmed incident history and monitoring review'
   );
   const summary = document.querySelector('.outages-summary');
-  if (summary) summary.innerHTML = `
-        ${outageSummaryCard('Active Outages', data.summary.active, 'fa-triangle-exclamation', 'Genuinely active manual or provider-confirmed incidents.')}
-        ${outageSummaryCard('Started Last 30 Days', data.summary.last30Days, 'fa-calendar-days', 'Number of outages that started in the rolling last 30 days.')}
-        ${outageSummaryCard('30 Day Downtime', data.summary.durationLast30Label, 'fa-clock', 'Aggregate outage time across tracked circuits during the last 30 days.')}
-      `;
+  if (summary) summary.innerHTML = outageSummaryMarkup_(data.summary);
+  const views = document.getElementById('outageViews');
+  if (views) views.innerHTML = outageViewControls_(data);
 }
 
 async function updateOutagesPage_(data) {
@@ -1539,6 +1580,95 @@ async function updateOutagesPage_(data) {
     select.value = selected;
   }
   await replaceTableRows_(table, data.rows);
+  applyOutageFilters();
+}
+
+let outageReport_ = null;
+let outageReportRequest_ = 0;
+
+function openOutageHistoryReport_() {
+  const request = ++outageReportRequest_;
+  outageReport_ = null;
+  const modal = document.getElementById('outageHistoryModal');
+  const feedback = document.getElementById('outageHistoryFeedback');
+  const preview = document.getElementById('outageHistoryPreview');
+  const download = document.getElementById('outageHistoryDownload');
+  const print = document.getElementById('outageHistoryPrint');
+  const filters = getOutageFilters_();
+  preview.replaceChildren();
+  download.disabled = print.disabled = true;
+  feedback.textContent = 'Preparing history…';
+  bootstrap.Modal.getOrCreateInstance(modal).show();
+  scriptRunPromise_('appGetOutageHistory', runner => runner.appGetOutageHistory(filters))
+    .then(report => {
+      if (request !== outageReportRequest_) return;
+      outageReport_ = report;
+      feedback.textContent = report.rows.length
+        ? report.rows.length + ' confirmed record(s). Date filters use ' + report.timezone + '.'
+        : 'No confirmed records match the current filters.';
+      if (!report.rows.length) return;
+      const previewRows = report.rows.slice(0, 50);
+      preview.innerHTML = outageHistoryTable_(report.columns, previewRows) + (report.rows.length > 50
+        ? '<p class="small text-muted">Showing the first 50 rows. The download and print include every matching row.</p>' : '');
+      download.disabled = print.disabled = false;
+    }).catch(error => {
+      if (request === outageReportRequest_) feedback.textContent = getSafeErrorMessage_(error);
+    });
+}
+
+function outageHistoryTable_(columns, rows) {
+  return `<table class="table table-sm align-middle"><thead><tr>${columns.map(value =>
+    '<th scope="col">' + escapeHtml(value) + '</th>').join('')}</tr></thead><tbody>${rows.map(row =>
+      '<tr>' + row.map(value => '<td>' + escapeHtml(value || '') + '</td>').join('') + '</tr>').join('')}</tbody></table>`;
+}
+
+function downloadOutageHistory_() {
+  const report = outageReport_;
+  if (!report?.rows.length) return;
+  const cell = value => '"' + String(value ?? '').replace(/"/g, '""') + '"';
+  const csv = [report.columns, ...report.rows].map(row => row.map(cell).join(',')).join('\r\n') + '\r\n';
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'network-hq-outage-history.csv';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function printOutageHistory_() {
+  const report = outageReport_;
+  if (!report?.rows.length) return;
+  const paper = document.getElementById('outageHistoryPaper');
+  paper.innerHTML = `<h1>Confirmed Incident History</h1>
+    <p>Generated: ${escapeHtml(report.generatedAt)}. Date filters: ${escapeHtml(report.timezone)}. Times shown in UTC.</p>
+    ${outageHistoryTable_(report.columns, report.rows)}`;
+  paper.hidden = false;
+  document.body.classList.add('outage-history-print');
+  window.addEventListener('afterprint', () => {
+    document.body.classList.remove('outage-history-print');
+    paper.hidden = true;
+    paper.replaceChildren();
+  }, { once: true });
+  window.print();
 }
 
 </script>
+
+
+<style>
+.outage-form [hidden], #outageHistoryPaper { display: none !important; }
+.outage-period-filter summary { list-style: none; }
+@media print {
+  body.outage-history-print > :not(#outageHistoryPaper) { display: none !important; }
+  body.outage-history-print { overflow: visible !important; padding: 0 !important; }
+  body.outage-history-print #outageHistoryPaper {
+    display: block !important; page: outageHistory; color: #131a26; font: 10pt/1.4 Arial, sans-serif;
+  }
+  @page outageHistory { size: letter landscape; margin: .6in; }
+  #outageHistoryPaper thead { display: table-header-group; }
+  #outageHistoryPaper tr { break-inside: avoid; }
+  #outageHistoryPaper th, #outageHistoryPaper td { padding: 5pt; border-bottom: 1px solid #b2bed5; }
+}
+</style>

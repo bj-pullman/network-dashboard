@@ -42,7 +42,7 @@ function createPreviewServer() {
   html = html.replace('</head>', bridge + '</head>');
   const publicMethods = new Set(['appGetPageData', 'getAppBootstrap', 'appAddRecord', 'appUpdateRecord',
     'appDeleteRecord', 'appGetRowCredential', 'appGetCredentials', 'saveAppUser', 'deleteAppUser',
-    'saveAppSettings', 'saveIntegrationConfig', 'appSaveInternetWanCircuit', 'appSaveOutage', 'appGetStandardPlaybook',
+    'saveAppSettings', 'saveIntegrationConfig', 'appSaveInternetWanCircuit', 'appSaveOutage', 'appReviewOutage', 'appGetOutageHistory', 'appGetStandardPlaybook',
     'appGetChangeLogDocumentationTemplate', 'appPreviewChangeLogDocumentation', 'appImportChangeLogDocumentation']);
   const server = http.createServer(async (request, response) => {
     const url = new URL(request.url, 'http://localhost');

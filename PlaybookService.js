@@ -149,12 +149,18 @@ function readStandardPlaybookSection_(policy) {
   }
   if (policy.kind === 'outages') {
     const sources = getControlledOptions_('outageSource');
-    const rows = read(['Started', 'Restored', 'Source']).map(record => ({
-      started: parseNetworkDashboardTimestamp_(record.Started),
-      restored: parseNetworkDashboardTimestamp_(record.Restored),
-      source: toStandardPlaybookOption_(record.Source, sources),
-      hasEnd: record.Restored !== '' && record.Restored != null
-    })).filter(record => record.started && record.source &&
+    const rows = read(['Started', 'Restored', 'Source', 'Review State', 'Incident Started', 'Incident Restored']).map(record => {
+      const source = toStandardPlaybookOption_(record.Source, sources);
+      const reviewed = source === 'UptimeRobot' && record['Review State'] === 'Confirmed';
+      const started = reviewed ? record['Incident Started'] : record.Started;
+      const restored = reviewed ? record['Incident Restored'] : record.Restored;
+      return {
+        started: parseNetworkDashboardTimestamp_(started),
+        restored: parseNetworkDashboardTimestamp_(restored),
+        source: source === 'Manual' || reviewed ? source : '',
+        hasEnd: restored !== '' && restored != null
+      };
+    }).filter(record => record.started && record.source &&
       (!record.hasEnd || (record.restored && record.restored >= record.started)))
       .sort((left, right) => right.started - left.started)
       .map(record => [

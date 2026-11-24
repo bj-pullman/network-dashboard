@@ -372,6 +372,63 @@ async function main() {
         await modal.waitFor({ state: 'hidden' });
         await page.waitForFunction(() => currentPageData.rows[0].Notes === 'Fixture notes-only edit');
         assert.deepEqual(await readInstants(), expected);
+
+        console.log('Checking Outages review and filtered safe CSV / print');
+        harness.records('Outages', [
+          { 'Outage ID': 'OUT-0042', 'Circuit ID': 'WAN-FIXTURE-1', Source: 'UptimeRobot',
+            Started: '2026-11-05T08:00:00Z', Restored: '2026-11-05T08:30:00Z', Status: 'Restored',
+            'External Event ID': 'uptimerobot:browser-event-42', Notes: 'MONITOR_BROWSER_CANARY' },
+          { 'Outage ID': 'OUT-0043', 'Circuit ID': 'WAN-FIXTURE-1', Source: 'UptimeRobot',
+            Started: '2026-11-06T10:00:00Z', Restored: '', Status: 'Ongoing',
+            'External Event ID': 'uptimerobot:browser-event-43' }
+        ]);
+        harness.context.invalidateOutageCaches_();
+        await page.evaluate(() => refreshCurrentPage());
+        await page.waitForFunction(() => currentPageData.rows.length === 3);
+        await page.waitForFunction(() => tableInstance.getDataCount('active') === 1);
+        await page.locator('[data-outage-view="review"]').click();
+        await page.waitForFunction(() => tableInstance.getDataCount('active') === 2);
+        await page.evaluate(() => tableInstance.showColumn('Outage ID'));
+        const row42 = page.locator('.tabulator-row').filter({ hasText: 'OUT-0042' });
+        await row42.getByRole('button', { name: 'Review monitoring event' }).click();
+        await modal.waitFor({ state: 'visible' });
+        await modal.locator('[data-outage-review-state]').selectOption('Confirmed');
+        await modal.locator('[data-outage-field="Notes"]').fill('OPERATOR_BROWSER_CANARY');
+        await modal.locator('#saveRecordButton').click();
+        await modal.waitFor({ state: 'hidden' });
+        await page.waitForFunction(() => currentPageData.summary.total === 2 && tableInstance.getDataCount('active') === 1);
+        await page.locator('[data-outage-view="incidents"]').click();
+        await page.waitForFunction(() => tableInstance.getDataCount('active') === 2);
+        await page.locator('.outage-period-filter summary').click();
+        await page.locator('#outageDateFrom').fill('2026-11-05');
+        await page.locator('#outageDateTo').fill('2026-11-05');
+        await page.waitForFunction(() => tableInstance.getDataCount('active') === 1);
+        await page.getByRole('button', { name: 'History Report', exact: true }).click();
+        const history = page.getByRole('dialog', { name: 'Confirmed Incident History' });
+        await history.getByText('OUT-0042', { exact: true }).waitFor();
+        assert.doesNotMatch(await history.innerText(), /OUT-0043|CANARY|WAN-FIXTURE/);
+        const downloadHistory = page.waitForEvent('download');
+        await history.getByRole('button', { name: 'Download CSV' }).click();
+        const historyCSV = await downloadHistory;
+        assert.equal(historyCSV.suggestedFilename(), 'network-hq-outage-history.csv');
+        const csv = fs.readFileSync(await historyCSV.path(), 'utf8');
+        assert.ok(csv.includes('"OUT-0042","2026-11-05T08:00:00.000Z","2026-11-05T08:30:00.000Z","30"'));
+        assert.doesNotMatch(csv, /OUT-0043|CANARY|WAN-FIXTURE/);
+        await page.evaluate(() => { window.print = () => { window.fixturePrintedOutage = true; }; });
+        await history.getByRole('button', { name: 'Print / Save PDF' }).click();
+        assert.equal(await page.evaluate(() => window.fixturePrintedOutage), true);
+        await page.emulateMedia({ media: 'print' });
+        const paper = page.locator('#outageHistoryPaper');
+        await paper.waitFor({ state: 'visible' });
+        assert.match(await paper.textContent(), /OUT-0042/);
+        assert.doesNotMatch(await paper.textContent(), /OUT-0043|CANARY|WAN-FIXTURE/);
+        const pdf = await page.pdf({ path: path.join(output, 'outage-history.pdf'), preferCSSPageSize: true });
+        assert.ok(pdf.length > 1000);
+        await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
+        await page.emulateMedia({ media: 'screen' });
+        await history.getByRole('button', { name: 'Close', exact: true }).last().click();
+        await history.waitFor({ state: 'hidden' });
+
       }
       if (item.key === 'internetWan') {
         await page.waitForFunction(() => !document.querySelector('#toastContainer .app-toast'));

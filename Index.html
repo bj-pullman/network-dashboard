@@ -304,6 +304,33 @@
 </div>
 
 
+<!-- OUTAGE HISTORY REPORT -->
+<div class="modal fade" id="outageHistoryModal" tabindex="-1" aria-labelledby="outageHistoryTitle" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <div class="modal-eyebrow">OUTAGES</div>
+          <h5 class="modal-title" id="outageHistoryTitle">Confirmed Incident History</h5>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p>Uses the current filters and includes confirmed incidents only. Network details, monitoring identifiers,
+          operator notes, and credentials are excluded. Times are UTC to preserve the exact instants.</p>
+        <div id="outageHistoryFeedback" class="small" role="status"></div>
+        <div id="outageHistoryPreview" class="table-responsive mt-3"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-light border" id="outageHistoryDownload" onclick="downloadOutageHistory_()" disabled>Download CSV</button>
+        <button type="button" class="btn btn-brand" id="outageHistoryPrint" onclick="printOutageHistory_()" disabled>Print / Save PDF</button>
+      </div>
+    </div>
+  </div>
+</div>
+<main id="outageHistoryPaper" aria-label="Confirmed outage history print document" hidden></main>
+
 <!-- CHANGE LOG DOCUMENTATION TEMPLATE -->
 <div class="modal fade" id="changeLogTemplateModal" tabindex="-1" aria-labelledby="changeLogTemplateTitle" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-scrollable">

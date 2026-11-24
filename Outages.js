@@ -17,6 +17,14 @@ const OUTAGE_STALE_ONGOING_WARNING_DAYS =
   7;
 
 
+const OUTAGE_REVIEW_FIELDS = [
+  'Review State', 'Incident Started', 'Incident Restored', 'Incident Reason',
+  'Incident Notes', 'Linked Incident ID', 'Reviewed At', 'Reviewed By'
+];
+const OUTAGE_PROVIDER_REFRESH_FIELDS = [
+  'Started', 'Restored', 'Duration Minutes', 'Duration', 'Status'
+];
+
 function getOutageSheetHeaders_() {
 
   return [
@@ -37,7 +45,8 @@ function getOutageSheetHeaders_() {
     'Entered By',
     'Created At',
     'Updated At',
-    'External Event ID'
+    'External Event ID',
+    ...OUTAGE_REVIEW_FIELDS
   ];
 }
 
@@ -174,9 +183,7 @@ function buildDashboardOutageData_() {
       summary:
         summary,
       lastUpdated:
-        getLatestOutageUpdateStamp_(
-          rows
-        )
+        getLatestOutageUpdateStamp_(rows.filter(row => row._isConfirmed))
     };
 
   } catch (error) {
@@ -296,8 +303,6 @@ function getOutageCurrentHeaders_(
   sheet
 ) {
 
-  ensureOutagesSheet_();
-
   return sheet
     .getRange(
       1,
@@ -308,8 +313,7 @@ function getOutageCurrentHeaders_(
     .getDisplayValues()[0]
     .map(value =>
       String(value || '').trim()
-    )
-    .filter(Boolean);
+    );
 }
 
 
@@ -382,13 +386,12 @@ function readOutageRecords_(
       circuitMap
     );
 
-    rows.push(
-      row
-    );
+    decorateOutageReview_(row, circuitMap);
+    rows.push(row);
 
   });
 
-  const externalIds = {};
+  const externalIds = Object.create(null);
   rows.forEach(row => {
     const externalId = String(row['External Event ID'] || '').trim();
     if (!externalId) return;
@@ -751,6 +754,43 @@ function hydrateOutageDisplayFields_(
 }
 
 
+function decorateOutageReview_(row, circuitMap) {
+  const isProvider = row._sourceKey === 'uptimerobot';
+  const state = String(row['Review State'] || '').trim().toLowerCase();
+  row._reviewState = !isProvider ? (row._sourceKey === 'manual' ? 'Confirmed' : 'Needs review') :
+    (new Map([['confirmed', 'Confirmed'], ['dismissed', 'Dismissed'], ['linked', 'Linked']]).get(state) || 'Needs review');
+  row._isConfirmed = row._reviewState === 'Confirmed';
+  if (isProvider) {
+    row._monitoring = { Started: row.Started, Restored: row.Restored, Status: row.Status };
+    row['Incident Started'] = serializeOutageReviewTime_(row['Incident Started']);
+    row['Incident Restored'] = serializeOutageReviewTime_(row['Incident Restored']);
+    if (row._isConfirmed) {
+      const snapshot = {
+        ...row,
+        Source: OUTAGE_SOURCE_MANUAL,
+        Started: row['Incident Started'],
+        Restored: row['Incident Restored'],
+        'Duration Minutes': ''
+      };
+      hydrateOutageDisplayFields_(snapshot, circuitMap);
+      ['Started', 'Restored', 'Duration Minutes', 'Duration', 'Status', '_ongoing',
+        '_startedMs', '_restoredMs', '_effectiveRestoredMs', '_durationMinutes', '_diagnostics']
+        .forEach(field => { row[field] = snapshot[field]; });
+      row['Cause / Reason'] = row['Incident Reason'];
+      row.Notes = row['Incident Notes'];
+    }
+  }
+  row['Reviewed At'] = serializeOutageReviewTime_(row['Reviewed At']);
+  row._incidentTimeValid = !!row._startedMs && (!row.Restored ||
+    (!!row._restoredMs && row._restoredMs >= row._startedMs));
+}
+
+function serializeOutageReviewTime_(value) {
+  const ms = parseOutageTimestampMs_(value);
+  return ms ? new Date(ms).toISOString() : String(value || '');
+}
+
+
 function addOutageDiagnostic_(row, message) {
   row._diagnostics = row._diagnostics || [];
   if (!row._diagnostics.includes(message)) {
@@ -776,8 +816,9 @@ function buildOutageSummary_(
       1000;
 
   const summary = {
-    total:
-      (rows || []).length,
+    total: 0,
+    reviewCount: 0,
+    monitoringCount: 0,
     active: 0,
     last30Days: 0,
     durationLast30Minutes: 0,
@@ -791,13 +832,13 @@ function buildOutageSummary_(
   (rows || [])
     .forEach(row => {
 
-      if (row._ongoing) {
-        summary.active++;
-      }
-
-      if (row._diagnostics && row._diagnostics.length) {
-        summary.dataQualityCount++;
-      }
+      if (row._sourceKey === 'uptimerobot') summary.monitoringCount++;
+      if (row._reviewState === 'Needs review') summary.reviewCount++;
+      if (row._diagnostics && row._diagnostics.length) summary.dataQualityCount++;
+      if (!row._isConfirmed) return;
+      summary.total++;
+      if (!row._incidentTimeValid) return;
+      if (row._ongoing) summary.active++;
 
       const startedMs =
         Number(row._startedMs || 0);
@@ -837,11 +878,7 @@ function buildOutageSummary_(
           now
         );
 
-      const overlapMinutes =
-        calculateOutageDurationMinutes_(
-          overlapStart,
-          overlapEnd
-        );
+      const overlapMinutes = (overlapEnd - overlapStart) / 60000;
 
       summary.durationLast30Minutes +=
         Math.min(
@@ -865,6 +902,60 @@ function buildOutageSummary_(
 }
 
 
+// Reports are re-projected on the server; never expose arbitrary sheet columns or note text.
+function appGetOutageHistory(filters) {
+  requirePagePermission_('outages', 'view');
+  filters = filters || {};
+  const timezone = getEffectiveTimezone_();
+  const now = new Date();
+  const from = normalizeOutageHistoryDateFilter_(filters.from);
+  const to = normalizeOutageHistoryDateFilter_(filters.to);
+  if (from && to && from > to) throw new Error('Start date must be on or before end date.');
+  const search = String(filters.search || '').trim().toLowerCase().slice(0, 200);
+  const status = ['Ongoing', 'Restored'].includes(filters.status) ? filters.status : '';
+  const source = ['Manual', 'UptimeRobot'].includes(filters.source) ? filters.source : '';
+  const circuitId = String(filters.circuitId || '');
+  const rows = readOutageRecords_().filter(row => {
+    if (!row._isConfirmed || !row._incidentTimeValid ||
+        (status && row.Status !== status) || (source && row.Source !== source) ||
+        (circuitId && row['Circuit ID'] !== circuitId) ||
+        (search && !outageSearchText_(row).includes(search))) return false;
+    if (!from && !to) return true;
+    const date = Utilities.formatDate(new Date(row._startedMs), timezone, 'yyyy-MM-dd');
+    return (!from || date >= from) && (!to || date <= to);
+  }).map(row => [
+    /^OUT-\d{1,12}$/.test(row['Outage ID']) ? row['Outage ID'] : '',
+    new Date(row._startedMs).toISOString(),
+    row._ongoing ? '' : new Date(row._restoredMs).toISOString(),
+    row._ongoing ? '' : String(calculateOutageDurationMinutes_(row._startedMs, row._restoredMs)),
+    row._ongoing ? 'Open' : 'Resolved',
+    row._sourceKey === 'uptimerobot' ? 'Reviewed monitoring event' : 'Manual'
+  ]);
+  return {
+    generatedAt: now.toISOString(), timezone,
+    columns: ['Incident', 'Started (UTC)', 'Restored (UTC)', 'Elapsed minutes', 'Status', 'Origin'],
+    rows
+  };
+}
+
+
+function normalizeOutageHistoryDateFilter_(value) {
+  const text = String(value || '');
+  if (!text) return '';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text) || !parseNetworkDashboardDateOnly_(text)) {
+    throw new Error('Choose valid outage history dates.');
+  }
+  return text;
+}
+
+
+function outageSearchText_(row) {
+  return ['Outage ID', 'Circuit ID', 'Circuit Name', 'Site / Location', 'Provider',
+    'Source', 'Cause / Reason', 'Notes', 'Status', '_reviewState'].map(field => row[field] || '')
+    .join(' ').toLowerCase();
+}
+
+
 function getLatestOutageUpdateStamp_(
   rows
 ) {
@@ -872,7 +963,7 @@ function getLatestOutageUpdateStamp_(
   const stamps =
     (rows || [])
       .map(row =>
-        row['Updated At'] ||
+        (row._sourceKey === 'uptimerobot' ? row['Reviewed At'] : row['Updated At']) ||
         row['Created At'] ||
         row.Started ||
         ''
@@ -896,6 +987,39 @@ function appSaveOutage(
       'edit'
     );
 
+  withOutageWriteLock_(() => saveManualOutageRecord_(record, access));
+  return getOutagesPageData_(true);
+}
+
+function withOutageWriteLock_(operation) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const result = operation();
+    SpreadsheetApp.flush();
+    invalidateOutageCaches_();
+    return result;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function writeOutageFields_(sheet, row, headers, fields) {
+  let batch = [];
+  let firstColumn = 0;
+  const write = () => {
+    if (batch.length) sheet.getRange(row, firstColumn, 1, batch.length).setValues([batch]);
+    batch = [];
+  };
+  headers.forEach((header, index) => {
+    if (!header || !Object.prototype.hasOwnProperty.call(fields, header)) { write(); return; }
+    if (!batch.length) firstColumn = index + 1;
+    batch.push(fields[header]);
+  });
+  write();
+}
+
+function saveManualOutageRecord_(record, access) {
   const sheet =
     ensureOutagesSheet_();
 
@@ -914,6 +1038,8 @@ function appSaveOutage(
     rowNumber >= 2 &&
     rowNumber <= sheet.getLastRow();
 
+  if (record && record._row && !editing) throw new Error('This outage moved or no longer exists. Refresh and try again.');
+
   const current =
     editing
       ? getOutageRowObject_(
@@ -923,6 +1049,9 @@ function appSaveOutage(
         )
       : {};
 
+  if (editing && record._outageId && current['Outage ID'] !== record._outageId) {
+    throw new Error('This outage moved or changed. Refresh and try again.');
+  }
   if (
     editing &&
     normalizeSimpleKey_(
@@ -946,26 +1075,7 @@ function appSaveOutage(
       sheet.getLastRow() + 1;
   }
 
-  sheet
-    .getRange(
-      rowNumber,
-      1,
-      1,
-      headers.length
-    )
-    .setValues([
-      headers.map(header =>
-        normalized[header] !== undefined
-          ? normalized[header]
-          : ''
-      )
-    ]);
-
-  invalidateOutageCaches_();
-
-  return getOutagesPageData_(
-    true
-  );
+  writeOutageFields_(sheet, rowNumber, headers, normalized);
 }
 
 
@@ -978,6 +1088,11 @@ function appDeleteOutage(
     'edit'
   );
 
+  withOutageWriteLock_(() => deleteManualOutageRecord_(rowNumber));
+  return getOutagesPageData_(true);
+}
+
+function deleteManualOutageRecord_(rowNumber) {
   const sheet =
     SpreadsheetApp
       .getActiveSpreadsheet()
@@ -1021,15 +1136,15 @@ function appDeleteOutage(
     );
   }
 
+  if (current['Outage ID'] && readOutageRecords_().some(row =>
+    row._reviewState === 'Linked' && row['Linked Incident ID'] === current['Outage ID'])) {
+    throw new Error('Return linked monitoring events to review before deleting this incident.');
+  }
+
   sheet.deleteRow(
     rowNumber
   );
 
-  invalidateOutageCaches_();
-
-  return getOutagesPageData_(
-    true
-  );
 }
 
 
@@ -1069,42 +1184,7 @@ function normalizeManualOutageRecord_(
     );
   }
 
-  const timezone = getEffectiveTimezone_();
-  if (record._timezone && record._timezone !== timezone) {
-    throw new Error('The organization timezone changed. Reload the page and reopen this outage.');
-  }
-  const occurrences = record._timeOccurrences || {};
-  const started = normalizeOutageTimestamp_(record.Started, 'Started', true, timezone,
-    occurrences.Started, current.Started);
-  const restored = normalizeOutageTimestamp_(record.Restored, 'Restored', false, timezone,
-    occurrences.Restored, current.Restored);
-
-  const startedMs =
-    parseOutageTimestampMs_(
-      started
-    );
-
-  const restoredMs =
-    parseOutageTimestampMs_(
-      restored
-    );
-
-  if (
-    restoredMs &&
-    restoredMs < startedMs
-  ) {
-    throw new Error(
-      'Restored time cannot be before Started time.'
-    );
-  }
-
-  const durationMinutes =
-    restoredMs
-      ? calculateOutageDurationMinutes_(
-          startedMs,
-          restoredMs
-        )
-      : '';
+  const { started, restored, durationMinutes } = normalizeOutageIncidentTimes_(record, current);
 
   const outageId =
     current['Outage ID'] ||
@@ -1146,15 +1226,9 @@ function normalizeManualOutageRecord_(
     Source:
       OUTAGE_SOURCE_MANUAL,
     'Cause / Reason':
-      String(
-        record['Cause / Reason'] ||
-        record.Reason ||
-        ''
-      ).trim(),
+      normalizeOutageOperatorText_(record['Cause / Reason'] || record.Reason, 500),
     Notes:
-      String(
-        record.Notes || ''
-      ).trim(),
+      normalizeOutageOperatorText_(record.Notes, 3000),
     Status:
       restored
         ? 'Restored'
@@ -1170,6 +1244,121 @@ function normalizeManualOutageRecord_(
     'External Event ID':
       current['External Event ID'] || ''
   };
+}
+
+
+function normalizeOutageIncidentTimes_(record, current) {
+  const timezone = getEffectiveTimezone_();
+  if (record._timezone && record._timezone !== timezone) {
+    throw new Error('The organization timezone changed. Reload the page and reopen this outage.');
+  }
+  const occurrences = record._timeOccurrences || {};
+  const started = normalizeOutageTimestamp_(record.Started, 'Started', true, timezone,
+    occurrences.Started, current.Started);
+  const restored = normalizeOutageTimestamp_(record.Restored, 'Restored', false, timezone,
+    occurrences.Restored, current.Restored);
+
+  const startedMs =
+    parseOutageTimestampMs_(
+      started
+    );
+
+  const restoredMs =
+    parseOutageTimestampMs_(
+      restored
+    );
+
+  if (
+    restoredMs &&
+    restoredMs < startedMs
+  ) {
+    throw new Error(
+      'Restored time cannot be before Started time.'
+    );
+  }
+
+  const durationMinutes =
+    restoredMs
+      ? calculateOutageDurationMinutes_(
+          startedMs,
+          restoredMs
+        )
+      : '';
+
+  return { started, restored, durationMinutes };
+}
+
+
+function appReviewOutage(record) {
+  const access = requirePagePermission_('outages', 'edit');
+  record = record || {};
+  const review = String(record.state || '');
+  if (!['Confirmed', 'Dismissed', 'Linked', 'Needs review'].includes(review)) {
+    throw new Error('Choose a valid review decision.');
+  }
+  withOutageWriteLock_(() => {
+    const sheet = ensureOutagesSheet_();
+    const headers = getOutageCurrentHeaders_(sheet);
+    const rowNumber = Number(record._row);
+    if (!Number.isInteger(rowNumber) || rowNumber < 2 || rowNumber > sheet.getLastRow()) {
+      throw new Error('Invalid monitoring record. Refresh and try again.');
+    }
+    const current = getOutageRowObject_(sheet, rowNumber, headers);
+    if (normalizeSimpleKey_(current.Source) !== 'uptimerobot' ||
+        !record.outageId || record.outageId !== current['Outage ID'] ||
+        record.externalId !== current['External Event ID']) {
+      throw new Error('This monitoring record moved or changed. Refresh and try again.');
+    }
+    if (String(record.reviewedAt || '') !== serializeOutageReviewTime_(current['Reviewed At'])) {
+      throw new Error('This monitoring record was already reviewed or edited. Refresh and try again.');
+    }
+    const fields = {
+      'Review State': review === 'Needs review' ? '' : review,
+      'Reviewed At': new Date(Math.max(Date.now(), parseOutageTimestampMs_(current['Reviewed At']) + 1)).toISOString(),
+      'Reviewed By': access.email,
+      'Incident Reason': normalizeOutageOperatorText_(record['Cause / Reason'], 500),
+      'Incident Notes': normalizeOutageOperatorText_(record.Notes, 3000)
+    };
+    const all = readOutageRecords_();
+    if (review === 'Confirmed' || review === 'Linked') {
+      const sameEvent = all.filter(row => row._sourceKey === 'uptimerobot' &&
+        row['External Event ID'] && row['External Event ID'] === current['External Event ID']);
+      if (sameEvent.length > 1) throw new Error('This event has duplicate records. Review the source rows before confirming it.');
+    }
+    if (review === 'Confirmed') {
+      const alreadyConfirmed = current['Review State'] === 'Confirmed';
+      const previous = {
+        Started: alreadyConfirmed ? current['Incident Started'] : current.Started,
+        Restored: alreadyConfirmed ? current['Incident Restored'] : current.Restored
+      };
+      const times = normalizeOutageIncidentTimes_(record, previous);
+      const start = parseOutageTimestampMs_(times.started), end = parseOutageTimestampMs_(times.restored);
+      const overlap = all.some(row => row._row !== rowNumber && row._isConfirmed && row._incidentTimeValid &&
+        row['Circuit ID'] === current['Circuit ID'] && row._startedMs < (end || Infinity) &&
+        start < (row._restoredMs || Infinity));
+      if (overlap) throw new Error('A confirmed incident already overlaps this time on this circuit. Link the existing manual incident instead when applicable.');
+      fields['Incident Started'] = times.started;
+      fields['Incident Restored'] = times.restored;
+      fields['Linked Incident ID'] = '';
+    } else if (review === 'Linked') {
+      const matches = all.filter(row => row._sourceKey === 'manual' && row._incidentTimeValid && row['Circuit ID'] === current['Circuit ID'] &&
+        row['Outage ID'] && row['Outage ID'] === record.linkedId);
+      if (matches.length !== 1) throw new Error('Select an existing manual incident on the same circuit.');
+      fields['Linked Incident ID'] = matches[0]['Outage ID'];
+    }
+    // Inactive review states leave previous operator timestamps available for history.
+    writeOutageFields_(sheet, rowNumber, headers, fields);
+  });
+  return getOutagesPageData_(true);
+}
+
+
+function normalizeOutageOperatorText_(value, limit) {
+  const text = String(value || '').trim();
+  if (text.length > limit || text.startsWith('=')) {
+    throw new Error('Enter plain-text review details within the field length limit.');
+  }
+  return text;
 }
 
 
@@ -1231,160 +1420,67 @@ function syncUptimeRobotOutagesForMappedCircuits_(
 }
 
 
-function reconcileUptimeRobotOutageRecords_(
-  incidents,
-  mappings,
-  syncedAt
-) {
-
-  const circuitMap =
-    buildCircuitReferenceMap_(
-      mappings || []
-    );
-
-  const sheet =
-    ensureOutagesSheet_();
-
-  const headers =
-    getOutageCurrentHeaders_(
-      sheet
-    );
-
-  const existing =
-    getExistingOutagesByExternalId_(
-      sheet,
-      headers
-    );
-
-  let nextNumber =
-    getMaxOutageIdNumber_(
-      sheet,
-      headers
-    ) + 1;
-
-  const result = {
-    status: 'success',
-    message:
-      'UptimeRobot outages synchronized.',
-    fetched: 0,
-    created: 0,
-    updated: 0,
-    unchanged: 0,
-    skipped: 0,
-    diagnostics: []
-  };
-
-  (incidents || [])
-    .forEach(incident => {
-
-      const providerIncident =
-        normalizeUptimeRobotIncident_(
-          incident
-        );
-
-      const normalized =
-        normalizeUptimeRobotOutageRecord_(
-          incident,
-          circuitMap,
-          syncedAt,
-          providerIncident
-        );
-
-      if (!normalized) {
+function reconcileUptimeRobotOutageRecords_(incidents, mappings, syncedAt) {
+  const circuitMap = buildCircuitReferenceMap_(mappings || []);
+  return withOutageWriteLock_(() => {
+    const sheet = ensureOutagesSheet_();
+    const headers = getOutageCurrentHeaders_(sheet);
+    const existing = getExistingOutagesByExternalId_(sheet, headers);
+    let nextNumber = getMaxOutageIdNumber_(sheet, headers) + 1;
+    let nextRow = sheet.getLastRow() + 1;
+    // One observation per external incident: prefer a resolved event over a stale open event.
+    const incoming = new Map();
+    const result = {
+      status: 'success', message: 'UptimeRobot monitoring events synchronized.',
+      fetched: 0, created: 0, updated: 0, unchanged: 0, skipped: 0, diagnostics: []
+    };
+    (incidents || []).forEach(incident => {
+      const provider = normalizeUptimeRobotIncident_(incident);
+      const record = normalizeUptimeRobotOutageRecord_(incident, circuitMap, syncedAt, provider);
+      if (!record) {
         result.skipped++;
         result.diagnostics.push({
-          providerIncidentId:
-            providerIncident.providerIncidentId || '',
-          monitorId:
-            providerIncident.monitorId || '',
-          message:
-            providerIncident.diagnostic ||
-            'Incident does not map to a tracked Internet/WAN circuit.'
+          providerIncidentId: provider.providerIncidentId || '', monitorId: provider.monitorId || '',
+          message: provider.diagnostic || 'Incident does not map to a tracked Internet/WAN circuit.'
         });
         return;
       }
-
-      result.fetched++;
-
-      const externalId =
-        normalized['External Event ID'];
-
-      const existingRecord =
-        existing[externalId];
-
-      if (existingRecord) {
-
-        normalized['Outage ID'] =
-          existingRecord.record['Outage ID'] ||
-          normalized['Outage ID'];
-
-        normalized['Created At'] =
-          existingRecord.record['Created At'] ||
-          normalized['Created At'];
-
-        normalized['Entered By'] =
-          existingRecord.record['Entered By'] ||
-          normalized['Entered By'];
-
-        if (
-          !outageRowsDiffer_(
-            headers,
-            existingRecord.record,
-            normalized
-          )
-        ) {
-          result.unchanged++;
-          return;
-        }
-
-        sheet
-          .getRange(
-            existingRecord.row,
-            1,
-            1,
-            headers.length
-          )
-          .setValues([
-            headers.map(header =>
-              normalized[header] !== undefined
-                ? normalized[header]
-                : ''
-            )
-          ]);
-
-        result.updated++;
+      const id = record['External Event ID'];
+      const previous = incoming.get(id);
+      if (!previous || previous.Status !== 'Restored' || record.Status === 'Restored') incoming.set(id, record);
+    });
+    result.fetched = incoming.size;
+    incoming.forEach((record, id) => {
+      if (!existing.has(id)) {
+        record['Outage ID'] = formatOutageIdNumber_(nextNumber++);
+        writeOutageFields_(sheet, nextRow++, headers, record);
+        result.created++;
         return;
       }
-
-      normalized['Outage ID'] =
-        formatOutageIdNumber_(
-          nextNumber
-        );
-
-      nextNumber++;
-
-      sheet
-        .getRange(
-          sheet.getLastRow() + 1,
-          1,
-          1,
-          headers.length
-        )
-        .setValues([
-          headers.map(header =>
-            normalized[header] !== undefined
-              ? normalized[header]
-              : ''
-          )
-        ]);
-
-      result.created++;
-
+      const entry = existing.get(id);
+      if (!entry) {
+        result.skipped++;
+        result.diagnostics.push({ message: 'Duplicate stored monitoring event; existing rows were not modified.' });
+        return;
+      }
+      const current = entry.record;
+      if (normalizeSimpleKey_(current.Status) === 'restored' && record.Status === 'Ongoing') {
+        result.unchanged++;
+        return;
+      }
+      const fields = {};
+      OUTAGE_PROVIDER_REFRESH_FIELDS.forEach(field => {
+        const before = field === 'Started' || field === 'Restored'
+          ? serializeOutageReviewTime_(current[field]) : String(current[field] || '');
+        if (before !== String(record[field] || '')) fields[field] = record[field];
+      });
+      if (!Object.keys(fields).length) { result.unchanged++; return; }
+      fields['Updated At'] = syncedAt;
+      writeOutageFields_(sheet, entry.row, headers, fields);
+      result.updated++;
     });
-
-  invalidateOutageCaches_();
-
-  return result;
+    return result;
+  });
 }
 
 
@@ -1598,52 +1694,17 @@ function normalizeUptimeRobotIncident_(incident) {
 }
 
 
-function getExistingOutagesByExternalId_(
-  sheet,
-  headers
-) {
-
-  const map = {};
-
-  if (sheet.getLastRow() < 2) {
-    return map;
-  }
-
-  const values =
-    sheet
-      .getRange(
-        2,
-        1,
-        sheet.getLastRow() - 1,
-        headers.length
-      )
-      .getDisplayValues();
-
+function getExistingOutagesByExternalId_(sheet, headers) {
+  const map = new Map();
+  if (sheet.getLastRow() < 2) return map;
+  const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).getValues();
   values.forEach((row, index) => {
-
-    const record = {};
-
-    headers.forEach((header, columnIndex) => {
-      record[header] =
-        String(row[columnIndex] || '');
-    });
-
-    const externalId =
-      String(
-        record['External Event ID'] || ''
-      ).trim();
-
-    if (externalId) {
-      map[externalId] = {
-        row:
-          index + 2,
-        record:
-          record
-      };
+    const record = Object.fromEntries(headers.map((header, i) => [header, row[i]]));
+    const id = String(record['External Event ID'] || '').trim();
+    if (id && normalizeSimpleKey_(record.Source) === 'uptimerobot') {
+      map.set(id, map.has(id) ? null : { row: index + 2, record });
     }
-
   });
-
   return map;
 }
 
@@ -1664,23 +1725,6 @@ function getOutageRowObject_(
   });
 
   return record;
-}
-
-
-function outageRowsDiffer_(
-  headers,
-  current,
-  next
-) {
-
-  return (headers || [])
-    .filter(header =>
-      header !== 'Updated At'
-    )
-    .some(header =>
-      String(current[header] || '') !==
-      String(next[header] || '')
-    );
 }
 
 
