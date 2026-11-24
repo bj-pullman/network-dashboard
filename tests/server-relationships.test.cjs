@@ -138,3 +138,73 @@ test('inherit Servers authorization and use the normal create path for stable li
   assert.equal(page.rows[1]._vmHostName, 'Fixture Host');
   assert.notEqual(page.rows[1]._vmServerId, uuid(1));
 });
+
+test('Servers warm and cold paths use only one optional enablement read for a seven-row inventory', () => {
+  const h = createHarness();
+  h.records('Servers', [entry('Host One', 1), entry('Guest One', 2, 1),
+    entry('Guest Two', 3, 1), entry('Host Two', 4), entry('Guest Three', 5, 4)]);
+  h.records('Offline Servers', [entry('Offline Host', 6), entry('Offline Guest', 7, 1, {
+    'Offline Since': '2026-11-17'
+  })]);
+  const integrations = h.sheets.get('App Integrations');
+  const fields = integrations.data[0];
+  integrations.data.find(row => row[fields.indexOf('Integration ID')] === 'threatdown')[fields.indexOf('Enabled')] = true;
+
+  // The Servers page has no dependency on full integration metadata or raw dates.
+  const getDataRange = integrations.getDataRange.bind(integrations);
+  integrations.getDataRange = () => {
+    const range = getDataRange();
+    range.getValues = () => { throw new Error('Fixture integration raw read failure'); };
+    return range;
+  };
+
+  const cold = read(h, true);
+  assert.deepEqual({ ...cold.serverViews }, { active: 5, offline: 2, all: 7 });
+  assert.equal(cold.rows[6]._vmHostName, 'Host One');
+  assert.equal(cold.rows[6]['Offline Since'], '2026-11-17');
+  assert.ok(cold.headers.includes('ThreatDown Installed'));
+  assert.equal(cold.performance.dataCache, 'bypass');
+  assert.equal(h.calls.filter(call => call.name === 'getDisplayValues' && call.sheet === 'App Integrations').length, 1);
+
+  const cached = read(h, false);
+  assert.equal(cached.performance.dataCache, 'hit');
+  assert.equal(typeof cached.performance.timings.serverIntegrationVisibility, 'number');
+  assert.ok(!h.calls.some(call => call.sheet === 'Servers' || call.sheet === 'Offline Servers'));
+  assert.equal(h.calls.filter(call => call.name === 'getDisplayValues' && call.sheet === 'App Integrations').length, 1);
+});
+
+test('a failed additive integration-visibility read hides its field without breaking Servers or repeating inventory reads', () => {
+  const h = createHarness();
+  h.records('Servers', [entry('Fixture Host', 1, null, { 'ThreatDown Installed': 'Yes' })]);
+  read(h, true);
+  h.sheets.get('App Integrations').getDataRange = () => { throw new Error('Fixture optional read failure'); };
+
+  const data = read(h, false);
+  assert.equal(data.performance.status, 'success');
+  assert.equal(data.performance.dataCache, 'hit');
+  assert.equal(data.rows[0]['Server Name'], 'Fixture Host');
+  assert.equal(data.headers.includes('ThreatDown Installed'), false);
+  assert.ok(!Object.hasOwn(data.rows[0], 'ThreatDown Installed'));
+  assert.ok(!h.calls.some(call => call.sheet === 'Servers' || call.sheet === 'Offline Servers'));
+});
+
+test('a Servers cache read failure falls back to authorized inventory reads', () => {
+  const h = createHarness();
+  h.records('Servers', [entry('Fixture Host', 1, null, { 'IP Address': '203.0.113.20' })]);
+  const cache = h.context.CacheService.getScriptCache;
+  h.context.CacheService.getScriptCache = () => {
+    const live = cache();
+    const get = live.get.bind(live);
+    live.get = key => {
+      if (key === 'app_page_servers') throw new Error('Fixture Servers cache read failure');
+      return get(key);
+    };
+    return live;
+  };
+  const data = read(h, false, 'viewer@example.test');
+  assert.equal(data.performance.dataCache, 'miss');
+  assert.equal(data.totalCount, 1);
+  assert.equal(data.permission, 'view');
+  assert.ok(!data.headers.includes('IP Address'));
+  assert.ok(!JSON.stringify(data).includes('203.0.113.20'));
+});

@@ -2257,6 +2257,10 @@ function showPageError(
       ? page.label
       : 'this page';
 
+  if (page) setPageHeader(label, '');
+  const actions = document.getElementById('pageActions');
+  if (actions) actions.innerHTML = '';
+
   showPageErrorPanel_(
     'Unable to load ' + label,
     error,

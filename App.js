@@ -3203,54 +3203,40 @@ function getCombinedServersData_(
   forceRefresh
 ) {
 
-  const cache =
-    CacheService.getScriptCache();
-
-
-  const cacheKey =
-    'app_page_' + pageKey;
-
-
+  const cacheKey = 'app_page_' + pageKey;
+  let cachedData;
   if (!forceRefresh) {
-
-    const cached =
-      cache.get(
-        cacheKey
-      );
-
-
-    if (cached) {
-
-      try {
-
-        return prepareTableDataForAccess_(
-          JSON.parse(
-            cached
-          ),
-          pageKey,
-          config
-        );
-
-      } catch (error) {}
-
+    try {
+      const json = measureAppReadStep_('cacheRead', function() {
+        return CacheService.getScriptCache().get(cacheKey);
+      });
+      if (json) cachedData = JSON.parse(json);
+    } catch (error) {
+      // A cache failure is a miss, not an inventory failure.
     }
-
   }
-
+  const cacheHit = !!(cachedData && Array.isArray(cachedData.headers) &&
+    Array.isArray(cachedData.rows) && cachedData.serverViews);
+  if (APP_READ_CONTEXT) {
+    APP_READ_CONTEXT.dataCache = cacheHit ? 'hit' : forceRefresh ? 'bypass' : 'miss';
+  }
+  if (cacheHit) return prepareTableDataForAccess_(cachedData, pageKey, config);
 
   const activeSheet = getReadSheet_(config.sheet);
   const offlineSheet = getReadSheet_(config.offlineSheet);
   const activeData =
     readServerSourceSheet_(
       activeSheet,
-      'active'
+      'active',
+      config.sheet
     );
 
 
   const offlineData =
     readServerSourceSheet_(
       offlineSheet,
-      'offline'
+      'offline',
+      config.offlineSheet
     );
 
 
@@ -3445,7 +3431,8 @@ function getCombinedServersData_(
 
 function readServerSourceSheet_(
   sheet,
-  serverView
+  serverView,
+  sourceName
 ) {
 
   if (!sheet) {
@@ -3459,7 +3446,6 @@ function readServerSourceSheet_(
   }
 
 
-  const sourceName = sheet.getName();
   const values = readSheetDisplayBatch_(sheet);
 
   if (!values.length) {
@@ -3559,18 +3545,6 @@ function readServerSourceSheet_(
       ];
 
 
-    if (
-      !rowHasMeaningfulData_(
-        sourceRow,
-        rawHeaders
-      )
-    ) {
-
-      continue;
-
-    }
-
-
     const firstValue =
       String(
         sourceRow[0] || ''
@@ -3590,6 +3564,18 @@ function readServerSourceSheet_(
       ) ||
       normalizedFirst.startsWith(
         'count ='
+      )
+    ) {
+
+      continue;
+
+    }
+
+
+    if (
+      !rowHasMeaningfulData_(
+        sourceRow,
+        rawHeaders
       )
     ) {
 
@@ -3735,6 +3721,27 @@ function mergeTableCredentialColumns_() {
 }
 
 
+function readServersThreatDownColumnEnabled_() {
+  // Only enablement is needed. Do not load integration connection metadata or
+  // perform the raw-date read required by the full integration status reader.
+  try {
+    const rows = readSheetDisplayBatch_(getReadSheet_('App Integrations'));
+    if (!rows.length) return false;
+    const headers = rows[0].map(header => String(header || '').trim());
+    const id = headers.indexOf('Integration ID');
+    const enabled = headers.indexOf('Enabled');
+    if (id < 0 || enabled < 0 || id !== headers.lastIndexOf('Integration ID') ||
+        enabled !== headers.lastIndexOf('Enabled')) return false;
+    const matches = rows.slice(1).filter(row => String(row[id] || '').trim() === 'threatdown');
+    return matches.length === 1 && normalizeBooleanText_(matches[0][enabled]);
+  } catch (error) {
+    // Optional enrichment must not take down Servers. Fail closed and let
+    // the next request re-check enablement instead of caching a verdict.
+    return false;
+  }
+}
+
+
 function prepareTableDataForAccess_(
   result,
   pageKey,
@@ -3753,10 +3760,12 @@ function prepareTableDataForAccess_(
       pageKey
     );
 
-  const integrationState = pageKey === 'servers' ? readIntegrationStateMap_(false) : {};
+  const headers = result.headers || [];
+  const showThreatDown = pageKey === 'servers' &&
+    headers.some(header => /threatdown/i.test(header) && isManagedPageHeader_(pageKey, header)) &&
+    measureAppReadStep_('serverIntegrationVisibility', readServersThreatDownColumnEnabled_);
   const availableHeader = header => isManagedPageHeader_(pageKey, header) &&
-    (pageKey !== 'servers' ||
-      (!/threatdown/i.test(header) || !!(integrationState.threatdown || {}).enabled));
+    (pageKey !== 'servers' || !/threatdown/i.test(header) || showThreatDown);
   const safeHeaders =
     (result.headers || []).filter(availableHeader)
       .filter(header =>

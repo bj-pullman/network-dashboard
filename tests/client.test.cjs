@@ -286,3 +286,34 @@ test('shared status tones follow explicit context vocabulary and preserve displa
   assert.match(custom, /aria-hidden="true"/);
   assert.match(h.context.statusPill('', 'contacts', 'Not classified'), /Not classified/);
 });
+
+test('a Servers timeout shows the right page, and retry ignores the late RPC then opens Servers', async () => {
+  const h = clientHarness();
+  const failures = [];
+  h.context.handleFailure = (error, operation) => failures.push([error.message, operation]);
+  h.evaluate("appBootstrap.pages.find(page => page.key === 'servers').label = 'Servers'");
+  h.context.navigateTo('switches');
+  h.requests[0].resolve(data('switches'));
+  await flush();
+  h.context.setPageHeader('Switches', '');
+  h.context.navigateTo('servers');
+  [...h.timers.values()].find(timer => timer.delay === 60000).callback();
+  await flush();
+
+  const content = h.context.document.getElementById('pageContent');
+  assert.match(content.innerHTML, /Unable to load Servers/);
+  assert.match(content.innerHTML, /appGetPageData:servers timed out/);
+  assert.deepEqual(failures, [['appGetPageData:servers timed out.', 'page load: servers']]);
+  assert.equal(h.context.document.getElementById('pageTitleText').textContent, 'Servers');
+  assert.equal(h.context.document.getElementById('pageActions').innerHTML, '');
+  assert.match(content.innerHTML, /loadPage\('servers', true\)/);
+
+  h.context.loadPage('servers', true);
+  h.requests[1].resolve(data('servers', 'Late result'));
+  await flush();
+  assert.deepEqual(h.renders.map(item => item.key), ['switches']);
+  h.requests[2].resolve(data('servers', 'Retried result'));
+  await flush();
+  assert.equal(h.renders.at(-1).data.label, 'Retried result');
+  assert.equal(h.context.getClientCache('servers').label, 'Retried result');
+});
