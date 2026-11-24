@@ -2606,17 +2606,16 @@ function openRecordModal(
           ? currentPageData.suggestedOptions[header] || []
           : [];
 
-      const configurableSelect =
-        currentRecordDefinition &&
-        Array.isArray(currentRecordDefinition.configurableSelectFields) &&
-        currentRecordDefinition.configurableSelectFields.includes(header);
+      if ((definition.configurableSelectFields || []).includes(header) && suggestions.length) {
+        const field = createConfigurableRecordField_(header, 'recordField_' + index,
+          suggestions, record[header], !!editingRow, !!requiredFields[header]);
+        label.htmlFor = field.select.id;
+        column.append(label, field.select, field.custom);
+        row.appendChild(column);
+        return;
+      }
 
-      const selectOptions =
-        options.length
-          ? options
-          : configurableSelect
-            ? suggestions
-            : [];
+      const selectOptions = options;
 
       const credentialField =
         typeof isPasswordHeaderClient === 'function' &&
@@ -2679,7 +2678,6 @@ function openRecordModal(
 
       if (
         suggestions.length &&
-        !configurableSelect &&
         input.tagName === 'INPUT'
       ) {
         const list =
@@ -2758,21 +2756,6 @@ function openRecordModal(
         input
       );
 
-      if (configurableSelect) {
-        const custom = document.createElement('input');
-        custom.type = 'text';
-        custom.className = 'form-control mt-2';
-        custom.placeholder = 'Enter a custom value';
-        custom.dataset.customFor = header;
-        custom.hidden = input.value !== 'Other';
-        input.addEventListener('change', function() {
-          custom.hidden = input.value !== 'Other';
-          custom.required = input.required && input.value === 'Other';
-          if (!custom.hidden) custom.focus();
-        });
-        column.appendChild(custom);
-      }
-
       if (
         credentialField &&
         editingRow
@@ -2819,51 +2802,79 @@ function openRecordModal(
 }
 
 
+function createConfigurableRecordField_(header, id, values, stored, editing, required) {
+  const select = document.createElement('select');
+  select.className = 'form-select';
+  select.id = id;
+  select.dataset.header = header;
+  select.required = required;
+
+  const custom = document.createElement('input');
+  custom.type = 'text';
+  custom.className = 'form-control mt-2';
+  custom.id = id + '_custom';
+  custom.dataset.customFor = header;
+  custom.setAttribute('aria-label', 'Custom ' + header);
+  custom.placeholder = 'Enter a custom value';
+  custom.maxLength = 254;
+  custom.hidden = true;
+  custom.addEventListener('input', () => custom.setCustomValidity(''));
+
+  const add = (value, label) => {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = label;
+    select.appendChild(option);
+    return option;
+  };
+  const current = editing ? String(stored ?? '') : '';
+  const choices = values.filter(value => value.toLowerCase() !== 'other');
+  add('', required ? 'Choose an option…' : 'Not set');
+  if (current && !choices.includes(current)) add(current, current + ' (keep value)');
+  choices.forEach(value => add(value, value));
+  let otherValue = 'Other';
+  while (otherValue === current || choices.includes(otherValue)) otherValue = '_' + otherValue;
+  add(otherValue, 'Other…').dataset.customChoice = 'true';
+  select.value = current;
+  select.addEventListener('change', () => {
+    const other = isCustomRecordChoice_(select);
+    custom.hidden = !other;
+    custom.required = other;
+    custom.setCustomValidity('');
+    if (other) custom.focus();
+  });
+  return { select, custom };
+}
+
+
+function isCustomRecordChoice_(select) {
+  return select.selectedOptions?.[0]?.dataset.customChoice === 'true';
+}
+
+
 function saveRecordFromModal() {
-
-  const record =
-    {};
-
-
-  const formFields = document
-    .querySelectorAll(
-      '#recordModalBody [data-header]'
-    );
+  const record = {};
+  const formFields = document.querySelectorAll('#recordModalBody [data-header]');
 
   for (const input of formFields) {
-    if (!input.checkValidity()) {
-      input.reportValidity();
-      return;
-    }
+    const header = input.dataset.header;
     const custom = document.querySelector(
-      '#recordModalBody [data-custom-for="' + CSS.escape(input.dataset.header) + '"]'
+      '#recordModalBody [data-custom-for="' + CSS.escape(header) + '"]'
     );
-    if (input.value === 'Other' && custom && !String(custom.value || '').trim()) {
-      custom.hidden = false;
-      custom.required = true;
+    const isCustom = !!custom && isCustomRecordChoice_(input);
+    const value = isCustom ? String(custom.value || '').trim() : input.value;
+    // An existing configurable value, including a blank or old spelling, is
+    // not a proposed write unless the editor actually changes the value.
+    const unchanged = custom && editingRow && !isCustom && value === String(editingRow[header] ?? '');
+    if (unchanged) continue;
+    if (!input.checkValidity()) { input.reportValidity(); return; }
+    if (isCustom && !value) {
+      custom.setCustomValidity('Enter a custom value.');
       custom.reportValidity();
       return;
     }
+    record[header] = value;
   }
-
-  formFields.forEach(
-      input => {
-
-        const custom = document.querySelector(
-          '#recordModalBody [data-custom-for="' + CSS.escape(input.dataset.header) + '"]'
-        );
-
-        const value = input.value === 'Other' && custom
-          ? String(custom.value || '').trim()
-          : input.value;
-
-        record[
-          input.dataset.header
-        ] =
-          value;
-
-      }
-    );
 
   if (currentRecordDefinition && currentRecordDefinition.prepareEditorSubmission) {
     currentRecordDefinition.prepareEditorSubmission(record, editingRow);

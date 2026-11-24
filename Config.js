@@ -234,24 +234,7 @@ function getAppSettingDefinitions_() {
       ],
       description: 'Preferred time display format.'
     },
-    {
-      key: 'change_log.categories',
-      label: 'Change Log Categories',
-      category: 'Change Log',
-      type: 'json',
-      defaultValue: JSON.stringify(NETWORK_DASHBOARD_CHANGE_CATEGORIES),
-      editable: true,
-      description: 'Ordered JSON list used by Change Log category selectors.'
-    },
-    {
-      key: 'change_log.system_areas',
-      label: 'Change Log Systems / Areas',
-      category: 'Change Log',
-      type: 'json',
-      defaultValue: JSON.stringify(NETWORK_DASHBOARD_CHANGE_SYSTEMS),
-      editable: true,
-      description: 'Ordered JSON list used by Change Log system / area selectors.'
-    },
+    ...getDropdownSettingDefinitions_(),
     {
       key: 'change_log.documentation_folder_id',
       label: 'Documentation Folder ID',
@@ -339,42 +322,78 @@ function getDefaultTimezone_() {
 }
 
 
+function getDropdownSettingDefinitions_() {
+  return [
+    ['change_log.categories', 'Change Log Categories', ['Change Log'], 'Category', NETWORK_DASHBOARD_CHANGE_CATEGORIES],
+    ['change_log.system_areas', 'Change Log Systems / Areas', ['Change Log'], 'System / Area', NETWORK_DASHBOARD_CHANGE_SYSTEMS],
+    ['contacts.categories', 'Contact Categories', ['Contacts'], 'Category',
+      ['Vendor', 'Support', 'Contractor', 'Service Provider', 'Partner']],
+    ['servers.types', 'Server Types', ['Servers', 'Offline Servers'], 'Type',
+      ['Physical', 'Virtual', 'Cloud']]
+  ].map(([key, label, sheets, field, defaults]) => ({
+    key, label, category: sheets[0] === 'Change Log' ? 'Change Log' : 'Dropdown Lists',
+    type: 'json', defaultValue: JSON.stringify(defaults), editable: true, dropdownList: true,
+    sheets, field, description: 'Ordered choices for the ' + sheets[0] + ' ' + field + ' dropdown.'
+  }));
+}
+
+
+function cleanConfiguredOptions_(values) {
+  const seen = new Set(['other']);
+  return values.flatMap(entry => {
+    if (typeof entry !== 'string') return [];
+    const value = entry.trim();
+    const identity = value.toLowerCase();
+    if (!value || seen.has(identity)) return [];
+    seen.add(identity);
+    return [value];
+  });
+}
+
+
 function getConfiguredStringList_(key, defaults) {
   let values = [];
   try {
-    const raw = String(AppConfig.get(key) || '').trim();
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) values = parsed;
-    }
+    const parsed = JSON.parse(String(AppConfig.get(key) || '[]'));
+    if (Array.isArray(parsed)) values = cleanConfiguredOptions_(parsed);
   } catch (error) {}
+  return (values.length ? values : cleanConfiguredOptions_(defaults)).concat('Other');
+}
 
-  const seen = {};
-  const normalized = (values.length ? values : defaults || [])
-    .map(value => String(value || '').trim())
-    .filter(value => {
-      const identity = value.toLowerCase();
-      if (!value || seen[identity]) return false;
-      seen[identity] = true;
-      return true;
-    });
 
-  if (!seen.other) normalized.push('Other');
-  return normalized;
+function getConfigurableOptionsForSheet_(sheetName) {
+  return Object.fromEntries(getDropdownSettingDefinitions_()
+    .filter(definition => definition.sheets.includes(sheetName))
+    .map(definition => [definition.field, getConfiguredStringList_(definition.key, JSON.parse(definition.defaultValue))]));
 }
 
 
 function getChangeLogConfiguredOptions_() {
-  return {
-    'Category': getConfiguredStringList_(
-      'change_log.categories',
-      NETWORK_DASHBOARD_CHANGE_CATEGORIES
-    ),
-    'System / Area': getConfiguredStringList_(
-      'change_log.system_areas',
-      NETWORK_DASHBOARD_CHANGE_SYSTEMS
-    )
-  };
+  return getConfigurableOptionsForSheet_('Change Log');
+}
+
+
+function normalizeDropdownListSetting_(definition, value) {
+  let list;
+  try { list = value ? JSON.parse(value) : []; } catch (error) {}
+  if (!Array.isArray(list) || list.some(entry => typeof entry !== 'string')) {
+    throw new Error(definition.label + ': enter a list of text options.');
+  }
+  const options = cleanConfiguredOptions_(list);
+  if (options.length > 40 || options.some(option => option.length > 80 || /[\r\n]/.test(option) || option.startsWith('='))) {
+    throw new Error(definition.label + ': use at most 40 plain-text options, with no more than 80 characters per option.');
+  }
+  return JSON.stringify(options);
+}
+
+
+function normalizeConfigurableOptionSubmission_(field, value) {
+  if (value != null && typeof value !== 'string') throw new Error(field + ' must be text.');
+  const text = String(value ?? '').trim();
+  if (text.length > 254 || /[\r\n]/.test(text) || text.startsWith('=')) {
+    throw new Error(field + ' must be plain text on one line, up to 254 characters.');
+  }
+  return text;
 }
 
 
@@ -654,6 +673,8 @@ var AppConfig = (function() {
       String(rawValue == null ? '' : rawValue)
         .trim();
 
+
+    if (definition.dropdownList) return normalizeDropdownListSetting_(definition, value);
 
     if (definition.type === 'boolean') {
       return (
@@ -1303,6 +1324,8 @@ function getSettingsPageData_() {
 
   return {
     settings: {
+      dropdownLists: Object.fromEntries(getDropdownSettingDefinitions_().map(definition =>
+        [definition.key, getConfiguredStringList_(definition.key, JSON.parse(definition.defaultValue))])),
       values:
         AppConfig.getAll(),
       definitions:

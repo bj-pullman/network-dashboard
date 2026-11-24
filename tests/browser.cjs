@@ -314,7 +314,8 @@ async function main() {
         await modal.waitFor({ state: 'visible' });
         await modal.locator('[data-header="Contact Name"]').fill('New Fixture Contact');
         await modal.locator('[data-header="Organization"]').fill('Fixture Organization');
-        await modal.locator('[data-header="Category"]').fill('Installation');
+        await modal.locator('[data-header="Category"]').selectOption({ label: 'Other…' });
+        await modal.locator('[data-custom-for="Category"]').fill('Installation');
         await modal.locator('[data-header="Phone"]').fill('+1 202-555-0102');
         await modal.locator('[data-header="Notes"]').fill('Fixture note\nSecond line');
         await modal.locator('#saveRecordButton').click();
@@ -668,6 +669,67 @@ async function main() {
     await page.evaluate(() => { tableInstance.element.querySelector('.tabulator-tableholder').scrollLeft = 0; });
     await page.screenshot({ path: path.join(output, 'security-cameras-mobile.png'), fullPage: true });
     assert.equal(await page.evaluate(() => tableInstance.getDataCount()), 18);
+    console.log('Checking admin dropdown settings, legacy values and new forms');
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await navigate('settings');
+    await page.getByText('Manage dropdown options', { exact: true }).click();
+    const adminCategories = page.getByLabel('Contact Categories', { exact: true });
+    await adminCategories.fill('Response Team\n response team  \n\nCoordination');
+    await page.getByLabel('Server Types', { exact: true }).fill('Physical\nAppliance');
+    await page.getByLabel('Change Log Categories', { exact: true }).fill('Inspection\nProject');
+    await page.locator(saveSettings).click();
+    await page.waitForFunction(() => !settingsSaveInProgress && currentPageData.settings?.dropdownLists
+      ?.['contacts.categories']?.[0] === 'Response Team');
+    await page.getByText('Manage dropdown options', { exact: true }).click();
+    assert.equal(await adminCategories.inputValue(), 'Response Team\nCoordination');
+    assert.equal(await page.locator('textarea[data-option-list]').count(), 4);
+    harness.records('Contacts', [{ 'Contact Name': 'Fixture Legacy Choice', Category: 'Other', Status: 'Active' }]);
+    harness.context.invalidateAppPage_('contacts');
+    await navigate('contacts');
+    const dropdownModal = page.locator('#recordModal');
+    const legacyContact = page.locator('.tabulator-row').filter({ hasText: 'Fixture Legacy Choice' });
+    await legacyContact.locator('.table-row-action-edit').click();
+    const contactChoice = dropdownModal.locator('select[data-header="Category"]');
+    const customChoice = dropdownModal.locator('[data-custom-for="Category"]');
+    assert.equal(await contactChoice.inputValue(), 'Other');
+    assert.equal(await contactChoice.locator('option:checked').textContent(), 'Other (keep value)');
+    assert.equal(await customChoice.isHidden(), true);
+    await dropdownModal.locator('[data-header="Notes"]').fill('Only update this fixture note.');
+    await dropdownModal.locator('#saveRecordButton').click();
+    await dropdownModal.waitFor({ state: 'hidden' });
+    await page.waitForFunction(() => currentPageData.rows.some(row => row.Notes === 'Only update this fixture note.'));
+    const legacy = await page.evaluate(() => currentPageData.rows.find(row => row['Contact Name'] === 'Fixture Legacy Choice'));
+    assert.equal(legacy.Category, 'Other');
+    await page.getByRole('button', { name: /Add Contact/ }).click();
+    assert.equal(await contactChoice.inputValue(), '');
+    assert.deepEqual(await contactChoice.locator('option').allTextContents(),
+      ['Not set', 'Response Team', 'Coordination', 'Other…']);
+    await dropdownModal.locator('[data-header="Contact Name"]').fill('Fixture Custom Choice');
+    await contactChoice.selectOption({ label: 'Other…' });
+    await dropdownModal.locator('#saveRecordButton').click();
+    assert.equal(await dropdownModal.isVisible(), true, 'Other requires text even when the field is optional');
+    await customChoice.fill('Escalation Fixture');
+    await dropdownModal.locator('#saveRecordButton').click();
+    await dropdownModal.waitFor({ state: 'hidden' });
+    await page.waitForFunction(() => currentPageData.rows.some(row => row.Category === 'Escalation Fixture'));
+    await navigate('servers');
+    await page.getByRole('button', { name: /Add Record/ }).click();
+    const serverChoice = dropdownModal.locator('select[data-header="Type"]');
+    assert.deepEqual(await serverChoice.locator('option').allTextContents(), ['Not set', 'Physical', 'Appliance', 'Other…']);
+    await dropdownModal.locator('[data-header="Server Name"]').fill('Fixture Configured Type');
+    await serverChoice.selectOption('Appliance');
+    await dropdownModal.locator('#saveRecordButton').click();
+    await dropdownModal.waitFor({ state: 'hidden' });
+    await page.waitForFunction(() => currentPageData.rows.some(row =>
+      row['Server Name'] === 'Fixture Configured Type' && row.Type === 'Appliance'));
+    await navigate('changeLog');
+    await page.getByRole('button', { name: /Add Change/ }).click();
+    assert.deepEqual(await dropdownModal.locator('select[data-header="Category"] option').allTextContents(),
+      ['Not set', 'Inspection', 'Project', 'Other…']);
+    assert.deepEqual(await dropdownModal.locator('select[data-header="Status"] option').allTextContents(),
+      ['Implemented', 'Monitoring', 'Rolled Back', 'Retired']);
+    await dropdownModal.locator('.modal-footer [data-bs-dismiss="modal"]').click();
+    await dropdownModal.waitFor({ state: 'hidden' });
     assert.equal(errors.filter(error => error.includes('Fixture save rejected')).length, 2);
     assert.deepEqual(errors.filter(error => !error.includes('Fixture save rejected')), []);
     assert.deepEqual(warnings, []);

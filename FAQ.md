@@ -36,6 +36,17 @@ use your organization's existing sharing process.
 
 ---
 
+## How do I change a dropdown list?
+
+An administrator can open **Settings → Dropdown Lists → Manage dropdown options**
+to update Change Log categories and systems/areas, Contact categories, and Server
+types. Enter one option per line and save. Blank lists restore their defaults.
+Older record values stay available on those records. Choose **Other** to enter
+a one-off custom value without adding it to the shared list. Statuses, roles,
+and permissions are fixed and are not part of these lists.
+
+---
+
 ## Where is my data stored?
 
 Operational data is stored in the Google Sheet owned by your organization.

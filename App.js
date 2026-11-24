@@ -2581,14 +2581,9 @@ function getAppTableData_(
         config.sheet
       ),
 
-    suggestedOptions:
-      pageKey === 'changeLog'
-        ? Object.assign(
-            {},
-            getChangeLogConfiguredOptions_(),
-            { 'Status': getControlledOptions_('changeStatus') }
-          )
-        : config.suggestedOptions || {},
+    suggestedOptions: pageKey === 'changeLog'
+      ? { Status: getControlledOptions_('changeStatus') }
+      : config.suggestedOptions || {},
 
     centralSync:
       !!config.centralSync,
@@ -3801,6 +3796,11 @@ function prepareTableDataForAccess_(
         })
       }
     );
+
+  const configurableOptions = getConfigurableOptionsForSheet_(config.sheet);
+  if (Object.keys(configurableOptions).length) {
+    output.suggestedOptions = Object.assign({}, output.suggestedOptions || {}, configurableOptions);
+  }
 
   if (pageKey === 'servers') {
     addServerRelationshipDisplay_(output, result.vmRelationshipsReady);
@@ -8241,9 +8241,6 @@ function appUpdateRecord_(pageKey, rowNumber, record, sourceSheetName) {
     throw new Error('Server Name cannot use an inventory legend or count label.');
   }
 
-  if (pageKey === 'contacts') record = normalizeContactRecord_(record, false);
-
-
   validateRequiredRecordFields_(
     pageKey,
     record || {}
@@ -8379,9 +8376,18 @@ function appUpdateRecord_(pageKey, rowNumber, record, sourceSheetName) {
       .getDisplayValues()[0];
 
 
+  const configurableFields = getDropdownSettingDefinitions_()
+    .filter(definition => definition.sheets.includes(targetSheetName)).map(definition => definition.field);
+
   if (pageKey === 'contacts') {
     requireContactSheetHeaders_(headers);
-    updateContactSheetFields_(sheet, rowNumber, headers, record);
+    if (Object.prototype.hasOwnProperty.call(record, 'Category')) {
+      record = Object.assign({}, record);
+      const column = headers.findIndex(header => String(header || '').trim() === 'Category') + 1;
+      if (record.Category === sheet.getRange(rowNumber, column).getDisplayValue()) delete record.Category;
+      else record.Category = normalizeConfigurableOptionSubmission_('Category', record.Category);
+    }
+    updateContactSheetFields_(sheet, rowNumber, headers, normalizeContactRecord_(record, false));
     invalidateAppPage_(pageKey);
     return { status: 'success' };
   }
@@ -8402,9 +8408,11 @@ function appUpdateRecord_(pageKey, rowNumber, record, sourceSheetName) {
       .getValues()[0];
 
 
-  const originalDisplay = serverFields
+  // For these tables, don't rewrite untouched business labels, formulas, or cells.
+  const writeChangedCellsOnly = !!serverFields || pageKey === 'changeLog';
+  const originalDisplay = writeChangedCellsOnly
     ? sheet.getRange(rowNumber, 1, 1, lastColumn).getDisplayValues()[0] : null;
-  const changedServerColumns = new Set();
+  const changedColumns = new Set();
 
   const output =
     current.slice();
@@ -8427,7 +8435,7 @@ function appUpdateRecord_(pageKey, rowNumber, record, sourceSheetName) {
       if (serverFields && (name === SERVER_ID_HEADER || name === SERVER_HOST_ID_HEADER)) {
         if (Object.prototype.hasOwnProperty.call(serverFields, name)) {
           output[index] = serverFields[name];
-          changedServerColumns.add(index);
+          changedColumns.add(index);
         }
         return;
       }
@@ -8462,7 +8470,7 @@ function appUpdateRecord_(pageKey, rowNumber, record, sourceSheetName) {
         } else if (explicitlyClearedCredentials.has(name)) {
           output[index] = '';
         }
-        if (serverFields && output[index] !== current[index]) changedServerColumns.add(index);
+        if (writeChangedCellsOnly && output[index] !== current[index]) changedColumns.add(index);
 
         return;
       }
@@ -8473,9 +8481,11 @@ function appUpdateRecord_(pageKey, rowNumber, record, sourceSheetName) {
         recordHasField
       ) {
 
-        const submittedValue = record[name];
-        if (serverFields && String(submittedValue ?? '') ===
+        const rawValue = record[name];
+        if (writeChangedCellsOnly && String(rawValue ?? '') ===
             formatNetworkDashboardField_(name, originalDisplay[index])) return;
+        const submittedValue = configurableFields.includes(name)
+          ? normalizeConfigurableOptionSubmission_(name, rawValue) : rawValue;
         const controlledOptionKey =
           getControlledOptionKeyForSheetField_(
             targetSheetName,
@@ -8501,7 +8511,7 @@ function appUpdateRecord_(pageKey, rowNumber, record, sourceSheetName) {
               false
             )
           );
-        if (serverFields) changedServerColumns.add(index);
+        if (writeChangedCellsOnly) changedColumns.add(index);
 
       }
 
@@ -8509,8 +8519,8 @@ function appUpdateRecord_(pageKey, rowNumber, record, sourceSheetName) {
   );
 
 
-  if (serverFields) {
-    changedServerColumns.forEach(index => sheet.getRange(rowNumber, index + 1).setValue(output[index]));
+  if (writeChangedCellsOnly) {
+    changedColumns.forEach(index => sheet.getRange(rowNumber, index + 1).setValue(output[index]));
   } else sheet
     .getRange(
       rowNumber,
@@ -8569,6 +8579,14 @@ function appAddRecord_(pageKey, record) {
     throw new Error('Server Name cannot use an inventory legend or count label.');
   }
 
+  const configurableFields = getDropdownSettingDefinitions_()
+    .filter(definition => definition.sheets.includes(config.sheet)).map(definition => definition.field);
+  record = Object.assign({}, record);
+  configurableFields.forEach(field => {
+    if (Object.prototype.hasOwnProperty.call(record, field)) {
+      record[field] = normalizeConfigurableOptionSubmission_(field, record[field]);
+    }
+  });
   if (pageKey === 'contacts') record = normalizeContactRecord_(record, true);
 
 

@@ -291,6 +291,26 @@ function renderSettingsPage(data) {
 
 
       <section class="app-card settings-panel">
+        <div class="card-header-clean">
+          <div>
+            <h2 class="card-title-clean">Dropdown Lists</h2>
+            <div class="settings-card-subtitle">
+              Edit choices for new records. Values already saved on records are not changed.
+            </div>
+          </div>
+        </div>
+        <details>
+          <summary class="fw-semibold">Manage dropdown options</summary>
+          <p class="small text-muted mt-2">Enter one option per line, up to 40 per list. Leave a list blank to restore its defaults. Other is always available.</p>
+          <div class="settings-grid">
+            ${(data.settings?.definitions || []).filter(item => item.dropdownList)
+              .map(item => settingsDropdownListField_(item, data.settings.dropdownLists || {})).join('')}
+          </div>
+        </details>
+      </section>
+
+
+      <section class="app-card settings-panel">
 
         <div class="card-header-clean">
           <div>
@@ -602,6 +622,19 @@ function syncSettingsColorInputs(input) {
   });
 
   updateSettingsBrandPreview_();
+}
+
+
+function settingsDropdownListField_(definition, lists) {
+  const options = (lists[definition.key] || []).filter(value => value !== 'Other');
+  const id = 'dropdown-setting-' + definition.key.replace(/[^a-z0-9_-]/gi, '-');
+  return `
+    <div class="settings-field">
+      <label for="${id}"><span>${escapeHtml(definition.label)}</span></label>
+      <textarea id="${id}" class="form-control form-control-sm" rows="4" data-option-list
+        data-setting-key="${escapeAttribute(definition.key)}">${escapeHtml(options.join('\n'))}</textarea>
+    </div>
+  `;
 }
 
 
@@ -1096,6 +1129,11 @@ function collectSettingsFormValues_() {
         input.dataset.settingKey;
 
       if (!key) {
+        return;
+      }
+
+      if (input.dataset.optionList !== undefined) {
+        if (input.value !== input.defaultValue) values[key] = JSON.stringify(input.value.split(/\r?\n/));
         return;
       }
 
