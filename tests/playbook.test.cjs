@@ -44,7 +44,7 @@ test('Playbook uses explicit projections, native names and sidebar order even wh
   assert.equal(data.organization, undefined);
   assert.equal(new Date(data.generatedAt).toISOString(), data.generatedAt);
   assert.deepEqual(data.sections.map(section => section.label), ['Switches', 'Outages', 'Change Log', 'Contacts']);
-  assert.deepEqual(data.sections[0].rows, [['Online', '192.0.2.33']]);
+  assert.deepEqual(data.sections[0].rows, [['', '', 'Online', '', '', '192.0.2.33']]);
   assert.deepEqual(data.sections[1].rows, [['2026-11-01 01:30 (UTC-05:00)', '2026-11-01 01:30 (UTC-06:00)', '60', 'Manual']]);
   assert.deepEqual(data.sections[2].rows, [['2026-03-08', 'Monitoring']]);
   assert.deepEqual(data.sections[3].rows, [
@@ -52,7 +52,7 @@ test('Playbook uses explicit projections, native names and sidebar order even wh
   ]);
   assert.doesNotMatch(JSON.stringify(data), /CANARY|person@example|intranet|dispatch@example|password/i);
   for (const [name, fields] of Object.entries({
-    Switches: ['Status', 'IP Address'], Outages: ['Started', 'Restored', 'Source', 'Review State', 'Incident Started', 'Incident Restored'],
+    Switches: ['Device Label', 'Model', 'Status', 'Role', 'Port Capacity (Active)', 'IP Address'], Outages: ['Started', 'Restored', 'Source', 'Review State', 'Incident Started', 'Incident Restored'],
     'Change Log': ['Change Date', 'Status'], Contacts: ['Status', 'Email', 'Phone']
   })) {
     const headers = h.sheets.get(name).data[0];

@@ -4,7 +4,8 @@ function getStandardPlaybookPolicies_() {
   const address = ['IP Address', 'ip'];
   return {
     switches: { sheets: ['Switches'], field: 'Status', options: 'infrastructureStatus',
-      detail: [state, address] },
+      detail: [['Device Label', 'switchLabel'], ['Model', 'switchModel'], state, ['Role', 'switchRole'],
+        ['Port Capacity (Active)', 'switchPorts'], address] },
     accessPoints: { sheets: ['Access Points'], field: 'Status', options: 'infrastructureStatus',
       detail: [state, address] },
     servers: { sheets: ['Servers', 'Offline Servers'], field: 'Status', options: 'infrastructureStatus',
@@ -150,8 +151,56 @@ function safePlaybookUsername_(value) {
 }
 
 
+function safePlaybookSwitchField_(value, type) {
+  if (type === 'switchPorts') {
+    if (typeof value !== 'string' && typeof value !== 'number') return '';
+    const text = String(value).trim();
+    const match = /^(\d{1,3})(?:\s*\/\s*(\d{1,3})\s+Active)?$/i.exec(text);
+    if (!match) return '';
+    const active = Number(match[1]);
+    const total = Number(match[2] || match[1]);
+    if (total < 1 || total > 512 || active > total) return '';
+    return match[2] ? active + '/' + total + ' Active' : String(total);
+  }
+
+  if (typeof value !== 'string') return '';
+  const text = value.trim();
+  if (type === 'switchRole') {
+    return toStandardPlaybookOption_(text, ['Access', 'Core', 'Distribution', 'Standalone']) ||
+      normalizeArubaSwitchRole_(text);
+  }
+
+  if (text.length > 40 || hasStandardPlaybookSensitiveMarker_(text)) return '';
+  if (type === 'switchLabel') {
+    // A bounded switch identifier, not a location, annotation, URL, or
+    // hostname with a raw address or arbitrary opaque identifier appended.
+    const parts = text.split('-');
+    return parts.length <= 5 && !hasStandardPlaybookSensitiveMarker_(parts.join('')) &&
+      parts.some(part => /^SW(?:ITCH)?[0-9]{0,3}$/i.test(part)) &&
+      parts.filter(part => /^\d+$/.test(part)).length <= 1 &&
+      parts.every(part => /^(?:[a-z]{1,10}[0-9]{0,3}|[0-9]{1,3})$/i.test(part)) ? text : '';
+  }
+
+  if (type === 'switchModel') {
+    // Only model families and inventory SKU shapes known to the report.
+    const recognized =
+      /^(?:Aruba (?:CX )?|HPE? )(?:[1-9]\d{3}[A-Z]{0,2}|JL\d{3}[A-Z])(?:-(?:8|16|24|48)(?:P|G|T|X)?)?$/i.test(text) ||
+      /^JL\d{3}[A-Z]$/i.test(text) ||
+      /^Cisco (?:Catalyst )?C?\d{4}[A-Z]?(?:-(?:8|16|24|48)(?:P|G|T|X|U)?)?$/i.test(text) ||
+      /^Juniper EX\d{4}(?:-(?:8|16|24|48)(?:P|T|X)?)?$/i.test(text) ||
+      /^Demo (?:8|16|24|48)-port$/i.test(text);
+    return recognized ? text : '';
+  }
+
+  return '';
+}
+
+
 function safePlaybookField_(value, type) {
   if (type === 'username') return safePlaybookUsername_(value);
+  if (['switchLabel', 'switchModel', 'switchRole', 'switchPorts'].includes(type)) {
+    return safePlaybookSwitchField_(value, type);
+  }
   if (type === 'ip' || type === 'cidr') {
     if (typeof value !== 'string') return '';
     const text = value.trim();
