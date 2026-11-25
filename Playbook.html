@@ -63,6 +63,11 @@ body.standard-playbook-print #standardPlaybookPaper {
     padding: 5pt 7pt; border: 1px solid #b2bed5; vertical-align: top; overflow-wrap: anywhere; text-align: left;
   }
   #standardPlaybookPaper .playbook-data th { background: #e6eef9; font-weight: bold; }
+  #standardPlaybookPaper .playbook-data-wide { font-size: 9.5pt; }
+  #standardPlaybookPaper .playbook-data-wide th,
+  #standardPlaybookPaper .playbook-data-wide td { padding: 4pt; }
+  #standardPlaybookPaper .playbook-credential-note { font-size: 9.5pt; color: #435171; break-after: avoid; }
+
 }
 </style>
 
@@ -183,13 +188,47 @@ async function prepareStandardPlaybook_() {
     feedback.textContent = 'Ready to print. Empty or ineligible sections are omitted. In the print dialog, choose Save as PDF to keep a copy.';
     document.getElementById('standardPlaybookSummary').innerHTML = `
       <ul class="mb-0">${data.sections.map(section =>
-        `<li>${escapeHtml(section.label)} (${section.rows.length} ${section.rows.length === 1 ? 'row' : 'rows'})</li>`).join('')}</ul>`;
+        `<li>${escapeHtml(section.label)} (${countStandardPlaybookRows_(section)} ${countStandardPlaybookRows_(section) === 1 ? 'row' : 'rows'})</li>`).join('')}</ul>`;
     document.getElementById('standardPlaybookPrint').disabled = false;
   } catch (error) {
     if (request === standardPlaybookRequest_) feedback.textContent = 'The Playbook could not be prepared. Check your selections and try again.';
   } finally {
     if (request === standardPlaybookRequest_) button.disabled = false;
   }
+}
+
+function countStandardPlaybookRows_(section) {
+  return section.rows.length + (section.additionalTables || []).reduce((sum, table) => sum + table.rows.length, 0);
+}
+
+// Deliberate proportions for the widest Letter tables, keyed by printed
+// column labels so editor-only columns can be dropped without misaligning.
+const STANDARD_PLAYBOOK_PRINT_WEIGHTS_ = {
+  networkClosets: { 'Closet / Room Name': 15, Campus: 10, 'Room Number': 9, 'Closet ID': 12, Type: 9,
+    'Circuit / panel': 15, 'Outlet type': 14, 'Redundant power': 16 },
+  ups: { 'Closet ID': 12, 'UPS ID': 16, Manufacturer: 16, Model: 14, 'Capacity / VA': 10,
+    'Battery replaced': 10, 'Last Service Date': 10, 'Mgmt IP': 12 },
+  internetWan: { 'Circuit Name': 13, Site: 10, Provider: 12, Status: 8, Role: 9,
+    'Service Type': 9, Bandwidth: 11, 'Public CIDR': 16, Gateway: 12 },
+  ssids: { SSID: 16, Status: 10, 'Primary Usage': 12, 'Radio bands': 12, 'Security Level': 11,
+    'Key Management': 19, VLAN: 7, 'VLAN mode': 13 },
+  intercom: { Location: 11, 'VLAN Name': 8, 'VLAN ID': 7, 'IP Address': 11, Subnet: 16,
+    Gateway: 15, 'Subnet Mask': 15, Port: 6, Username: 11 },
+  contacts: { Organization: 18, 'Shared contact': 17, Category: 15, Email: 30, 'Business phone': 20 }
+};
+
+function renderStandardPlaybookTable_(table, sectionKey) {
+  const weights = STANDARD_PLAYBOOK_PRINT_WEIGHTS_[sectionKey];
+  const widths = weights ? table.columns.map(column => weights[column] || 1) : [];
+  const total = widths.reduce((sum, value) => sum + value, 0);
+  return `
+    <table class="playbook-data${table.columns.length > 7 ? ' playbook-data-wide' : ''}">
+      ${total ? '<colgroup>' + widths.map(width => '<col style="width:' +
+        (100 * width / total).toFixed(2) + '%">').join('') + '</colgroup>' : ''}
+      <thead><tr>${table.columns.map(column => `<th scope="col">${escapeHtml(column)}</th>`).join('')}</tr></thead>
+      <tbody>${table.rows.map(row => `<tr>${row.map(cell =>
+        `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`).join('')}</tbody>
+    </table>`;
 }
 
 async function printStandardPlaybook_() {
@@ -224,6 +263,8 @@ async function printStandardPlaybook_() {
       <p class="playbook-label">OPERATIONAL REFERENCE</p>
       <h1>${escapeHtml(data.title)}</h1>
       <p class="playbook-meta">Generated ${escapeHtml(data.generatedLabel)}</p>
+      <p>Use this dated operational reference with the disaster recovery and continuity plans.
+        Keep printed and PDF copies with authorized staff.</p>
       <p>Passwords, keys, tokens, and other secrets are intentionally omitted.</p>
       <h3>Contents</h3>
       <ol>${data.sections.map(section => `<li>${escapeHtml(section.label)}</li>`).join('')}</ol>
@@ -238,11 +279,9 @@ async function printStandardPlaybook_() {
           <p class="playbook-meta">Generated ${escapeHtml(data.generatedLabel)}</p>
         </div>
         <h3>${escapeHtml(section.label)}</h3>
-        <table class="playbook-data">
-          <thead><tr>${section.columns.map(column => `<th scope="col">${escapeHtml(column)}</th>`).join('')}</tr></thead>
-          <tbody>${section.rows.map(row => `<tr>${row.map(cell =>
-            `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`).join('')}</tbody>
-        </table>
+        ${section.credentialsOmitted === true ? '<p class="playbook-credential-note">Passwords and secrets are omitted from this printout. Refer to the Technology Bitwarden vault.</p>' : ''}
+        ${section.rows.length ? renderStandardPlaybookTable_(section, section.key) : ''}
+        ${(section.additionalTables || []).map(table => `<h3>${escapeHtml(table.label)}</h3>${renderStandardPlaybookTable_(table, table.key)}`).join('')}
       </article>`).join('')}`;
   standardPlaybookTitle_ = document.title;
   document.title = data.title;

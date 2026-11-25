@@ -39,9 +39,14 @@ async function verifyViewerInventoryExport_(browser) {
       if (await option.inputValue() !== 'securityCameras') await option.uncheck();
     }
     await playbook.locator('#standardPlaybookPrepare').click();
-    await playbook.getByText('Nothing eligible to print for this selection.', { exact: true }).waitFor();
-    assert.equal(await playbook.locator('#standardPlaybookPrint').isDisabled(), true);
-    assert.doesNotMatch(await playbook.innerText(), /192\.0\.2\.10|fixture-user/);
+    await playbook.getByText('Security Cameras (18 rows)', { exact: true }).waitFor();
+    await viewer.evaluate(() => { window.print = () => { window.fixtureViewerPrinted = true; }; });
+    await playbook.locator('#standardPlaybookPrint').click();
+    await viewer.waitForFunction(() => window.fixtureViewerPrinted === true);
+    const viewerPaper = viewer.locator('#standardPlaybookPaper');
+    assert.match(await viewerPaper.textContent(), /Fixture Camera 1/);
+    assert.doesNotMatch(await viewerPaper.textContent(), /192\.0\.2\.10|fixture-user|Username|IP Address/);
+    await viewer.evaluate(() => window.dispatchEvent(new Event('afterprint')));
     const grant = permission => harness.invoke('saveAppUser', [{
       email: 'viewer@example.test', name: 'Fixture Viewer', active: true, role: 'user', defaultPermission: 'view',
       permissions: { securityCameras: permission }
@@ -49,7 +54,7 @@ async function verifyViewerInventoryExport_(browser) {
     grant('edit');
     await playbook.locator('#standardPlaybookPrepare').click();
     await playbook.getByText('Security Cameras (18 rows)', { exact: true }).waitFor();
-    grant('view');
+    grant('none');
     await viewer.evaluate(() => { window.print = () => { window.fixtureRevokedPrint = true; }; });
     await playbook.locator('#standardPlaybookPrint').click();
     await playbook.getByText('No selected sections are currently eligible. Refresh the preview to continue.', { exact: true }).waitFor();
@@ -563,6 +568,7 @@ async function main() {
     console.log('Checking permission-aware section selection and generating one paginated Playbook PDF');
     harness.invoke('saveAppSettings', [{ 'organization.name': 'Example Operations' }]);
     harness.records('Contacts', [{ 'Contact Name': 'FIXTURE_PDF_CONTACT_CANARY', Status: 'Active',
+      Organization: 'Example Telecom', 'Role / Title': 'Priority Support', Category: 'Vendor',
       Email: 'support@example.test', Phone: '+1 202-555-0100' }]);
     harness.records('Servers', [{ 'Server Name': 'Unselected Fixture Server', Status: 'Online' }]);
     const intercomPlaybookFixture = harness.sheets.get('Intercom Bell System').data;
@@ -612,11 +618,53 @@ async function main() {
     await page.emulateMedia({ media: 'print' });
     assert.equal(await page.locator('#standardPlaybookPaper').isVisible(), true);
     assert.equal(await page.locator('#pageContent').isVisible(), false);
+    const note = 'Passwords and secrets are omitted from this printout. Refer to the Technology Bitwarden vault.';
+    const paper = page.locator('#standardPlaybookPaper');
+    assert.deepEqual(await paper.locator('.playbook-credential-note').allTextContents(), [note]);
+    assert.match(await paper.locator('article').filter({ hasText: note }).innerText(), /Intercom & Bell/);
     await page.pdf({ path: path.join(output, 'network-hq-playbook.pdf'), preferCSSPageSize: true, printBackground: true });
     await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
     await page.emulateMedia({ media: 'screen' });
-    assert.equal(await page.locator('#standardPlaybookPaper tbody tr').count(), 0);
+    assert.equal(await paper.locator('tbody tr').count(), 0);
     assert.equal(await page.locator('#pageContent').isVisible(), true);
+
+    console.log('Printing an offline recovery fixture with wide SSID, WAN and intercom tables');
+    harness.records('SSIDs', [{ SSID: 'Example-Staff', Status: 'Enabled', 'Primary Usage': 'Employee',
+      'Bands / Radio Bands': '2.4 / 5 GHz', 'Security Level': 'Enterprise', 'Key Management': 'WPA2/WPA3-Enterprise',
+      VLAN: 8, 'Client VLAN Assignment': 'Static', Password: 'PDF_WIFI_CANARY' }]);
+    harness.records('Internet WAN', [{ 'Circuit Name': 'East Fiber', 'Site / Location': 'East Campus',
+      'Provider': 'Example Telecom', 'Status': 'Active', 'Role': 'Primary', 'Service Type': 'Fiber',
+      'Bandwidth': '1 Gbps / 500 Mbps', 'Public Network / CIDR': '203.0.113.0/24', 'Gateway': '203.0.113.1' }]);
+    harness.records('Backup Schedule', [{ 'Server Name': 'Example HV01', 'Backup Job Name': 'Nightly DR',
+      'Backup Time': 'Daily at 21:30', 'Target Location': 'Offsite Vault',
+      'Wasabi Job': 'Offsite Copy', 'Wasabi Schedule': 'Daily at 02:30', Size: '1.5 TB' }]);
+    harness.records('Network Closets', [{ 'Closet ID': 'CLOSET-0003', Campus: 'East Campus', 'Closet / Room Name': 'East MDF',
+      'Room Number': 107, Type: 'MDF', 'Electrical Circuit / Panel': 'Panel A / 7', 'Outlet / Connector Type': 'L5-30R',
+      'Redundant Power Available': 'Yes' }]);
+    harness.records('Network Closet UPS', [{ 'UPS ID': 'CLOSET-0003-UPS-01', 'Closet ID': 'CLOSET-0003',
+      'Manufacturer': 'APC', Model: 'SMT3000RM2U', 'Capacity / VA': 3000, 'Management IP': '192.0.2.4' }]);
+    const printIntercom = { 'VLAN Name': 'Voice', 'VLAN ID': 8, Subnet: '2001:db8:12:34::/64',
+      Gateway: '2001:db8:12:34::1', 'Subnet Mask': '255.255.255.0', Port: 443 };
+    Object.entries(printIntercom).forEach(([key, value]) => { intercomPlaybookFixture[1][intercomPlaybookFixture[0].indexOf(key)] = value; });
+    for (const option of await policyOptions.all()) {
+      await option.setChecked(['contacts', 'networkClosets', 'intercom', 'ssids', 'internetWan', 'backups'].includes(await option.inputValue()));
+    }
+    await playbook.locator('#standardPlaybookPrepare').click();
+    await playbook.getByText('Backup Schedule (1 row)', { exact: true }).waitFor();
+    await playbook.getByText('Network Closets (2 rows)', { exact: true }).waitFor();
+    await page.evaluate(() => { window.fixturePlaybookPrintCalls = 0; });
+    await playbook.locator('#standardPlaybookPrint').click();
+    await page.waitForFunction(() => window.fixturePlaybookPrintCalls === 1);
+    assert.deepEqual(await paper.locator('.playbook-credential-note').allTextContents(), [note, note]);
+    assert.match(await paper.locator('article').filter({ hasText: /Backup Schedule.*Nightly DR/s }).last().textContent(),
+      /Offsite Copy/);
+    assert.match(await paper.locator('article').filter({ hasText: /Network Closets.*East MDF/s }).last().textContent(),
+      /UPS inventory.*SMT3000RM2U/s);
+    assert.doesNotMatch(await paper.textContent(), /CANARY/);
+    await page.emulateMedia({ media: 'print' });
+    await page.pdf({ path: path.join(output, 'network-hq-playbook-offline-reference.pdf'), preferCSSPageSize: true, printBackground: true });
+    await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
+    await page.emulateMedia({ media: 'screen' });
     await playbook.locator('.btn-close').click();
     await playbook.waitFor({ state: 'hidden' });
     console.log('Checking Change Log status tones and preservation of historical labels');

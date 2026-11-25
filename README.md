@@ -778,9 +778,13 @@ other structured inventory fields, incident and Change Log timelines, and shared
 support contacts. Device and management IPs and standalone usernames use the
 existing page Edit boundary. WAN and VLAN addressing retain their existing
 visibility. Passwords, tokens, keys and other secrets stay out of the Playbook,
-as do free text, formulas, and unvalidated combined fields. Keep secrets in your
-approved off-site vault; the Playbook does not access it. The PDF is generated
-by the browser, not stored by Network HQ.
+as do free text, formulas, and unvalidated combined fields. Printed sections
+with credential columns point to the Technology Bitwarden vault, which the
+Playbook does not access. Use the printout alongside your disaster recovery and
+continuity plans, and review it before sharing with authorized staff. See the
+[Playbook field audit](docs/PLAYBOOK_PRINT_FIELDS.md) for the per-section inventory,
+backup, contact and history fields. The browser generates the PDF; Network HQ
+does not store it.
 
 ---
 

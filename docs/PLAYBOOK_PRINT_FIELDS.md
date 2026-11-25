@@ -1,0 +1,26 @@
+# Network HQ Playbook: offline recovery field audit
+
+Use the printed Playbook **alongside** the disaster recovery and continuity of operations plans. It is a dated reference, not a recovery sequence or a substitute for those plans. Print from an authorized account and restrict physical and PDF copies to authorized staff. A blank value means no syntactically valid value was printable, not that the asset lacks one.
+
+The audit compares the Playbook allowlist with the page fields in `App.js` and the installed schema in `Setup.js`. No schema change, inventory update, vault access, or deployment is required by the audit itself.
+
+| Section | Printed recovery information when present and valid | Deliberately omitted |
+| --- | --- | --- |
+| Switches | Device label, supported model, status, role, active port capacity, device IP for editors. This preserves the earlier Switches improvement. | Notes, arbitrary stack descriptions, serials and other fields not in the switch allowlist. |
+| Access Points | Device label, campus, model, status, MAC, management mode, IP for editors. | Client counts and last sync are volatile; combined Virtual Controller strings can contain both names and restricted addresses. |
+| Servers | Active and offline inventory, name, type, status, location, closet identifier, OS, offline-since date, resolved VM host name, IP for editors. An unresolved or ambiguous host is marked unavailable. | Internal join IDs, guest list, monitoring integrations, notes and serials. VM host is derived from validated links, not an arbitrary notes field. |
+| Network Closets / UPS | Closet name and identifier, campus, room, type, circuit/panel, outlet and redundant power. A separate UPS table links by closet identifier and lists unit, manufacturer/model, capacity, service dates and management IP for editors. | Maps/URLs, location/power narratives and equipment links that could cross into restricted inventory. |
+| VLANs & Routing | Site, VLAN name/ID, network, gateway and an independently validated DHCP address, CIDR or address pair. | Purpose/notes and combined or unparsed DHCP configurations. |
+| Internet / WAN | Circuit/site/provider labels, status, role, service, bandwidth, public network and gateway. | Combined carrier circuit/account data and public-IP lists, provider monitoring identifiers, notes and integration details. Use the provider's documented support/account reference. |
+| Outages | Confirmed circuit/site/provider context, start, restore (or ongoing), calculated minutes and source. | Monitor events not confirmed as incidents, notes and incident narratives. |
+| SSIDs | Name, status, usage, bands, security mode, key-management method (not the key), VLAN and VLAN assignment mode. | Passwords, authentication servers/combined values, and notes. |
+| Security Cameras | Device/system name, asset/system label and server location; supported IP and username for editors. | Passwords, secrets and notes. |
+| Bus Cameras | Bus identifier/type, DVR type, bridge MAC; DVR and bridge addresses for editors. | Unstructured system-reference data including portal URLs, support notes, and other notes. |
+| Intercom & Bell | Location, VLAN name/ID, subnet, mask, gateway and port; device IP and standalone username for editors. | Passwords, combined usable-range data and notes. |
+| Change Log | Date, short change identifier, configured system/category and controlled status. | Narrative summaries, notes, people, links and imported-document metadata. |
+| Contacts | Organization, business role, category, shared service mailbox and formatted business phone, when associated with an active generic service/support mailbox. | Inactive contacts, named individual and alternate contact details, notes, and arbitrary text. Shared addresses are verified by format and form, not by calling the number or testing the mailbox. |
+| Backup Schedule | Server, backup job, supported schedule, target label, Wasabi job/schedule and storage size. | Backup URLs or paths, encryption/access keys, account secrets, notes and unrecognized scheduling text. Distinguish a configured schedule from independently verified restore readiness. |
+
+Dashboard, Department Workflow, Settings, Users & Permissions, and integration data are not printed: they contain a mixture of live indicators, free-form text, account/security administration or credentials, not validated offline inventory rows. Put authoritative escalation and recovery instructions in the separate plans.
+
+Secret columns are identified from headers without fetching their cell values. Printed sections with such columns carry a short vault note; the Playbook never connects to the vault. Formula results, malformed or opaque labels, URLs, raw free text and obvious secret-shaped values are excluded. A value deliberately entered in the wrong inventory column can look like an ordinary identifier; format checks cannot prove a manual label is nonsecret. Store credentials only in the approved vault and review a newly generated copy for completeness and inadvertently mislabeled data before distributing it. Empty, forbidden or failed sections are omitted and reported; viewer/editor rules for restricted device IPs and usernames are unchanged.
