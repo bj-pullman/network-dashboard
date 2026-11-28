@@ -1818,6 +1818,16 @@ function withPerformanceTiming_(
 }
 
 
+// Opt in on an isolated, fictional copy only. Merely pulling the code,
+// setting a display name, or passing a request parameter cannot turn this on.
+function isNetworkHqDemoPresentation_() {
+  const demoSheetId = String(PropertiesService.getScriptProperties()
+    .getProperty('NETWORK_HQ_DEMO_SPREADSHEET_ID') || '').trim();
+  if (!demoSheetId) return false;
+  const sheet = SpreadsheetApp.getActiveSpreadsheet();
+  return !!sheet && sheet.getId() === demoSheetId;
+}
+
 function buildAppBootstrap_(
   access,
   config
@@ -1833,6 +1843,7 @@ function buildAppBootstrap_(
   }
 
 
+  const demoPresentation = isNetworkHqDemoPresentation_();
   const pages = [];
 
 
@@ -1851,6 +1862,19 @@ function buildAppBootstrap_(
         return;
       }
 
+
+      if (demoPresentation && (key === 'settings' || key === 'users')) {
+        pages.push({
+          key: key === 'settings' ? 'demoSettings' : 'demoUsers',
+          label: config.label,
+          type: 'demoPreview',
+          icon: config.icon,
+          group: config.group,
+          centralSync: false,
+          permission: 'view'
+        });
+        return;
+      }
 
       if (
         config.adminOnly &&
@@ -1895,6 +1919,7 @@ function buildAppBootstrap_(
     },
 
     pages: pages,
+    demoPresentation: demoPresentation,
     standardPlaybookSections: getStandardPlaybookSectionOptions_(pages),
 
     modules:
@@ -1907,8 +1932,15 @@ function buildAppBootstrap_(
         access
       ),
 
-    config:
-      clientConfig
+    config: demoPresentation ? Object.assign({}, clientConfig, {
+      appName: 'Network HQ',
+      organization: { name: 'Demo School District', shortName: 'Demo' },
+      branding: {
+        logoUrl: '', faviconUrl: '',
+        primaryColor: '#17345f', secondaryColor: '#0d2342',
+        accentColor: '#f4c430', headerFontColor: '#0d2342'
+      }
+    }) : clientConfig
 
   };
 }

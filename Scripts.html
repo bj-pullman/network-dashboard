@@ -113,7 +113,8 @@ const PAGE_RENDERER_FUNCTIONS = {
   busCameras: 'renderBusCamerasPage', intercom: 'renderIntercomPage',
   backups: 'renderBackupsPage', internetWan: 'renderInternetWanPage',
   outages: 'renderOutagesPage',
-  workflow: 'renderWorkflowPage', users: 'renderUsersPage', settings: 'renderSettingsPage'
+  workflow: 'renderWorkflowPage', users: 'renderUsersPage', settings: 'renderSettingsPage',
+  demoSettings: 'renderDemoSettingsPage_', demoUsers: 'renderDemoUsersPage_'
 };
 
 const PAGE_UPDATE_FUNCTIONS = {
@@ -448,15 +449,13 @@ function applyBootstrapShell(
   document.getElementById(
     'sidebarUserName'
   ).textContent =
-    user.name ||
-    user.email ||
-    '';
+    data.demoPresentation ? 'Demo Viewer' : (user.name || user.email || '');
 
 
   document.getElementById(
     'sidebarUserRole'
   ).textContent =
-    user.admin
+    data.demoPresentation ? 'Read-only admin examples' : user.admin
       ? (
           user.breakglass
             ? 'Break-glass Administrator'
@@ -1748,7 +1747,11 @@ async function loadPage(pageKey, forceRefresh, options) {
     getPageRenderer_(pageKey);
     trace.renderer = nowClient_() - trace.started;
     let data;
-    if (entry && entry.data) {
+    if (appBootstrap.demoPresentation && page.type === 'demoPreview') {
+      // This route displays literal fictional content. Never call a Settings,
+      // Users or provider endpoint from the demo renderer.
+      data = { permission: 'view' };
+    } else if (entry && entry.data) {
       data = entry.data;
     } else {
       showPageLoading();

@@ -1,0 +1,95 @@
+<style>
+  .demo-preview-intro { padding: .85rem 1.05rem; border-left: 4px solid #3f73aa; background: #edf4fc; color: #193857; margin-bottom: 1rem; border-radius: .45rem; }
+  .demo-preview-grid { display: grid; gap: 1rem; grid-template-columns: repeat(2,minmax(0,1fr)); align-items: start; }
+  .demo-preview-wide { grid-column: 1 / -1; }
+  .demo-preview-body { padding: 1rem 1.25rem; }
+  .demo-preview-fields { display: grid; gap: .85rem; grid-template-columns: repeat(auto-fit,minmax(10rem,1fr)); margin: 0; }
+  .demo-preview-fields dt { color: #4b5b72; font-size: .8rem; }
+  .demo-preview-fields dd { color: #172d48; font-weight: 650; margin: .25rem 0 0; overflow-wrap: anywhere; }
+  .demo-preview-providers { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,16rem),1fr)); gap: .8rem; }
+  .demo-preview-provider { border: 1px solid #dbe3ee; border-radius: .65rem; padding: .9rem; }
+  .demo-preview-provider h3 { font-size: 1.08rem; font-weight: 750; }
+  .demo-preview-provider p { font-size: .9rem; color: #4b5b72; }
+  .demo-preview-provider dl { margin-bottom: 0; grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .demo-preview-example { border-top: 1px solid #dbe3ee; padding: 1rem 1.1rem; }
+  .demo-preview-example summary { color: #153c67; font-weight: 700; cursor: pointer; }
+  .demo-preview-example[open] summary { margin-bottom: .8rem; }
+  .demo-preview-table { white-space: nowrap; }
+  @media (max-width: 700px) { .demo-preview-grid { grid-template-columns: minmax(0,1fr); } }
+</style>
+<script>
+function demoFields_(pairs) {
+  return '<dl class="demo-preview-fields">' + pairs.map(([label, value]) =>
+    '<div><dt>' + escapeHtml(label) + '</dt><dd>' + escapeHtml(value) + '</dd></div>'
+  ).join('') + '</dl>';
+}
+
+function demoPanel_(title, body, wide) {
+  return '<section class="app-card' + (wide ? ' demo-preview-wide' : '') + '">' +
+    '<div class="card-header-clean"><h2 class="card-title-clean">' + escapeHtml(title) +
+    '</h2></div><div class="demo-preview-body">' + body + '</div></section>';
+}
+
+function demoPreviewFrame_(title, subtitle, body) {
+  setPageHeader(title, subtitle);
+  document.getElementById('pageActions').innerHTML = '';
+  document.getElementById('pageContent').innerHTML =
+    '<div class="demo-preview-intro"><strong>Demo School District · Read-only preview</strong>' +
+    '<div>Fictional examples only. Nothing on this page changes users, settings, or provider connections.</div></div>' +
+    '<div class="demo-preview-grid">' + body + '</div>';
+}
+
+function renderDemoSettingsPage_() {
+  const providers = [
+    ['Aruba Central', 'Synchronizes switch and access point inventory; supports running configuration lookup.',
+      'Enabled', 'Configured', 'Connected', 'Synced', 'Demo: Oct 8, 8:10 AM', '12 switches · 34 access points'],
+    ['UptimeRobot', 'Reads monitor health and available incident history for mapped WAN circuits.',
+      'Enabled', 'Configured', 'Connected', 'Synced', 'Demo: Oct 8, 8:15 AM', '4 mapped monitors'],
+    ['ThreatDown', 'Partial integration: matches endpoint inventory to Server records and updates installation status.',
+      'Disabled', 'Missing', 'Not tested', 'Not synced', 'Never', '0 matched servers']
+  ];
+  const cards = providers.map(([name, desc, enablement, config, connection, data, last, records]) =>
+    '<article class="demo-preview-provider"><h3>' + escapeHtml(name) + '</h3><p>' + escapeHtml(desc) + '</p>' +
+    demoFields_([['Enablement', enablement], ['Configuration', config], ['Connection', connection],
+      ['Data', data], ['Last Successful Sync', last], ['Records', records]]) + '</article>'
+  ).join('');
+
+  demoPreviewFrame_('Settings', 'District identity, modules, user policy, and integrations',
+    demoPanel_('General & Branding', demoFields_([
+      ['Application Name', 'Network HQ'], ['Organization Name', 'Demo School District'],
+      ['Organization Short Name', 'Demo'], ['Theme', 'Navy and gold']
+    ])) +
+    demoPanel_('Regional & User Policy', demoFields_([
+      ['Timezone', 'America/Chicago'], ['Date Format', 'MM/dd/yyyy'],
+      ['Time Format', 'h:mm a'], ['Allowed Email Domain', 'demo.example']
+    ])) +
+    demoPanel_('Modules', '<p class="mb-2">Choose what your staff can access. Disabling a module does not delete existing records.</p>' +
+      demoFields_([['Switches', 'Enabled'], ['Outages', 'Enabled'], ['Change Log', 'Enabled'], ['Fleet Cameras', 'Optional']])) +
+    demoPanel_('Documentation & Validation', '<p class="mb-0">Add district FAQ, setup, and maintenance links. Use Validate in a full installation to check setup without changing data.</p>') +
+    demoPanel_('Integrations',
+      '<p>In a full installation, add credentials in Apps Script Script Properties, then use Test and Sync Now where supported. Required-property status never shows the secret values.</p>' +
+      '<p class="small fw-semibold">Enabled, Configured, Connected, and Synced describe different things. The statuses below are examples, not live connections.</p>' +
+      '<div class="demo-preview-providers">' + cards + '</div>', true));
+}
+
+function renderDemoUsersPage_() {
+  const users = [
+    ['Demo Administrator', 'admin@demo.example', 'Admin', 'Full access', 'Active'],
+    ['Demo Technician', 'technician@demo.example', 'User', 'None', 'Active'],
+    ['Demo Viewer', 'viewer@demo.example', 'User', 'View', 'Active'],
+    ['Demo Former Staff', 'former.staff@demo.example', 'User', 'View', 'Disabled']
+  ];
+  const rows = users.map(row => '<tr>' + row.map(value => '<td>' + escapeHtml(value) + '</td>').join('') + '</tr>').join('');
+  demoPreviewFrame_('Users & Permissions', 'Role-based access control for Demo School District',
+    demoPanel_('Authorized Users',
+      '<div class="table-responsive"><table class="table table-hover align-middle demo-preview-table">' +
+      '<thead><tr><th scope="col">Name</th><th scope="col">Workspace email</th><th scope="col">Role</th>' +
+      '<th scope="col">Default permission</th><th scope="col">Status</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+      '<details class="demo-preview-example"><summary>View Demo Technician’s page overrides</summary>' +
+      demoFields_([['Dashboard', 'View'], ['Switches', 'Edit'], ['Security Cameras', 'None'], ['All other pages', 'Default → None']]) +
+      '<p class="mt-3 mb-0">This technician can see the Dashboard and maintain Switches without getting access to other pages.</p></details>', true) +
+    demoPanel_('How page access works', '<p class="mb-0">Admin is the application administrator role. For a User, View allows reading, Edit allows permitted changes, and None blocks access. Default inherits the user’s default permission.</p>') +
+    demoPanel_('Identity & recovery', '<p class="mb-2">Google Workspace sign-in and Network HQ page permissions are separate. The district may restrict which email domain can be added.</p>' +
+      '<p class="mb-0"><strong>Example break-glass administrator:</strong> recovery@demo.example. In a full installation, designated break-glass access is independent of ordinary page permissions.</p>'));
+}
+</script>

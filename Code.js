@@ -41,20 +41,20 @@ function doGet() {
 
     template.userEmail = userEmail;
     template.userAccess = access;
-    template.appName = config.appName;
+    template.appName = bootstrap.config.appName;
 
     template.initialBootstrapJson =
       safeJsonForHtml_(bootstrap);
 
     const output = template
       .evaluate()
-      .setTitle(config.appName)
+      .setTitle(bootstrap.config.appName)
       .addMetaTag(
         'viewport',
         'width=device-width, initial-scale=1'
       );
 
-    return applyAppFavicon_(output, faviconUrl);
+    return applyAppFavicon_(output, bootstrap.config.branding.faviconUrl);
 
   });
 }

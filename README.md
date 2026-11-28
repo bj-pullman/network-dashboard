@@ -481,6 +481,12 @@ Disabling a module does not delete its existing Sheet data.
 
 ---
 
+## Isolated fictional demo
+
+[Demo setup and rollout checklist](docs/DEMO_PRESENTATION.md) covers the read-only Settings and Users & Permissions previews for a separate fictional deployment. No production access or settings change is required.
+
+---
+
 ## User Management and RBAC
 
 Network HQ includes its own application authorization layer.

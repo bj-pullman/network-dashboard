@@ -101,7 +101,9 @@ RECORD_PAGE_DEFINITIONS.changeLog = {
   header: function(data) {
     setPageHeader(
       data.label,
-      'Infrastructure and application change-record index'
+      appBootstrap?.demoPresentation
+        ? 'Manual log of what changed, when, who made the change, and its status.'
+        : 'Infrastructure and application change-record index'
     );
   },
   actions: function(data) {

@@ -168,6 +168,7 @@ function createHarness({
     getSheetByName(name) { call('getSheetByName', name); return sheets.get(name) || null; },
     getSheets() { return [...sheets.values()]; },
     insertSheet(name) { write('insertSheet', name); return makeSheet(name, []); },
+    getId() { return 'fixture-spreadsheet'; },
     getUrl() { return 'https://docs.google.com/spreadsheets/d/fixture-spreadsheet/edit'; },
     getSpreadsheetTimeZone() { return spreadsheetTimezone; }
   };

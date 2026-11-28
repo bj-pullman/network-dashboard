@@ -3,8 +3,9 @@ const http = require('node:http');
 const path = require('node:path');
 const { createHarness, root } = require('./server-harness.cjs');
 
-function createPreviewServer({ user } = {}) {
+function createPreviewServer({ user, demo = false } = {}) {
   const harness = createHarness();
+  if (demo) harness.properties.set('NETWORK_HQ_DEMO_SPREADSHEET_ID', harness.spreadsheet.getId());
   const rpcCalls = [];
   const invoke = (method, args = []) => harness.invoke(method, args, user ? { user } : undefined);
   const bootstrap = invoke('getAppBootstrap');

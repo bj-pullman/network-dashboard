@@ -85,7 +85,9 @@ function renderOutagesPage(
 
   setPageHeader(
     'Outages',
-    'Confirmed incident history and monitoring review'
+    appBootstrap?.demoPresentation
+      ? 'Downtime log. Link UptimeRobot and map active monitors to supported WAN circuits to sync available incident history; review imported events before confirming outages.'
+      : 'Confirmed incident history and monitoring review'
   );
 
   document.getElementById(
@@ -1555,7 +1557,9 @@ function formatOutageDateInput_(
 function refreshOutagesPageSummary_(data) {
   setPageHeader(
     'Outages',
-    'Confirmed incident history and monitoring review'
+    appBootstrap?.demoPresentation
+      ? 'Downtime log. Link UptimeRobot and map active monitors to supported WAN circuits to sync available incident history; review imported events before confirming outages.'
+      : 'Confirmed incident history and monitoring review'
   );
   const summary = document.querySelector('.outages-summary');
   if (summary) summary.innerHTML = outageSummaryMarkup_(data.summary);
